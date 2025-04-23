@@ -19,6 +19,7 @@ using osu.Game.Rulesets.Mania.Scoring;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Rulesets.Objects;
 using osu.Game.Rulesets.Scoring;
+using StarRatingRebirth;
 
 namespace osu.Game.Rulesets.Mania.Difficulty
 {
@@ -44,9 +45,35 @@ namespace osu.Game.Rulesets.Mania.Difficulty
             HitWindows hitWindows = new ManiaHitWindows();
             hitWindows.SetDifficulty(beatmap.Difficulty.OverallDifficulty);
 
+            double starRating = 0.0;
+            if (isForCurrentRuleset)
+            {
+                var data = new ManiaData
+                {
+                    OD = beatmap.Difficulty.OverallDifficulty,
+                    CS = ((ManiaBeatmap)beatmap).TotalColumns
+                };
+
+                foreach (ManiaHitObject obj in beatmap.HitObjects.Cast<ManiaHitObject>())
+                {
+                    data.Notes.Add(new StarRatingRebirth.Note
+                    {
+                        Key = obj.Column,
+                        Head = (int)obj.StartTime,
+                        Tail = obj is HoldNote hold ? (int)hold.EndTime : -1
+                    });
+                }
+                data = data.ChangeRate(1.0 / clockRate);
+                starRating = SRCalculator.Calculate(data);
+            }
+            else
+            {
+                starRating = skills.OfType<Strain>().Single().DifficultyValue() * difficulty_multiplier;
+            }
+
             ManiaDifficultyAttributes attributes = new ManiaDifficultyAttributes
             {
-                StarRating = skills.OfType<Strain>().Single().DifficultyValue() * difficulty_multiplier,
+                StarRating = starRating,
                 Mods = mods,
                 MaxCombo = beatmap.HitObjects.Sum(maxComboForObject),
             };
