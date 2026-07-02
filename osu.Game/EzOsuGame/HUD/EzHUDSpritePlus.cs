@@ -21,8 +21,8 @@ using osu.Game.EzOsuGame.Screens;
 using osu.Game.Localisation.SkinComponents;
 using osu.Game.Overlays.Settings;
 using osu.Game.Skinning;
-using osu.Game.Utils;
 using osu.Game.Rulesets.Difficulty.Utils;
+using osu.Game.Utils;
 using osuTK;
 
 namespace osu.Game.EzOsuGame.HUD
@@ -181,7 +181,7 @@ namespace osu.Game.EzOsuGame.HUD
                 if (bpm > 0)
                 {
                     int division = Math.Clamp(BeatDivision.Value, 1, 32);
-                    return DifficultyCalculationUtils.BPMToMilliseconds(bpm, division);
+                    return DiffUtils.BPMToMilliseconds(bpm, division);
                 }
             }
 

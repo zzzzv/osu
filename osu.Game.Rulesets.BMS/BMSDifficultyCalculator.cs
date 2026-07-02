@@ -7,6 +7,7 @@ using osu.Game.Rulesets.Difficulty;
 using osu.Game.Rulesets.Difficulty.Preprocessing;
 using osu.Game.Rulesets.Difficulty.Skills;
 using osu.Game.Rulesets.Mods;
+using osu.Game.Utils;
 
 namespace osu.Game.Rulesets.BMS
 {
@@ -17,7 +18,7 @@ namespace osu.Game.Rulesets.BMS
         {
         }
 
-        protected override DifficultyAttributes CreateDifficultyAttributes(IBeatmap beatmap, Mod[] mods, Skill[] skills, double clockRate)
+        protected override DifficultyAttributes CreateDifficultyAttributes(IBeatmap beatmap, Mod[] mods, Skill[] skills)
         {
             // Simple difficulty calculation based on note density
             int noteCount = beatmap.HitObjects.Count;
@@ -31,9 +32,10 @@ namespace osu.Game.Rulesets.BMS
             };
         }
 
-        protected override IEnumerable<DifficultyHitObject> CreateDifficultyHitObjects(IBeatmap beatmap, double clockRate)
+        protected override IEnumerable<DifficultyHitObject> CreateDifficultyHitObjects(IBeatmap beatmap, Mod[] mods)
         {
             var hitObjects = beatmap.HitObjects.OfType<BMSHitObject>().ToList();
+            double clockRate = ModUtils.CalculateRateWithMods(mods);
 
             for (int i = 1; i < hitObjects.Count; i++)
             {
@@ -41,7 +43,7 @@ namespace osu.Game.Rulesets.BMS
             }
         }
 
-        protected override Skill[] CreateSkills(IBeatmap beatmap, Mod[] mods, double clockRate)
+        protected override Skill[] CreateSkills(IBeatmap beatmap, Mod[] mods)
         {
             return Array.Empty<Skill>();
         }
