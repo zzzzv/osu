@@ -252,6 +252,10 @@ namespace osu.Game.Scoring
         /// </summary>
         public void Recalculate(ScoreInfo scoreInfo)
         {
+            double? accuracy = null;
+            ScoreRank? rank = null;
+            long? updatedTotalScore = null;
+
             Realm.Write(realm =>
             {
                 var managed = realm.Find<ScoreInfo>(scoreInfo.ID);
@@ -265,9 +269,10 @@ namespace osu.Game.Scoring
                 var ruleset = managed.Ruleset.CreateInstance();
                 var processor = ruleset.CreateScoreProcessor();
 
-                double accuracy = StandardisedScoreMigrationTools.ComputeAccuracy(stats, maxStats, processor);
-                managed.Accuracy = accuracy;
-                managed.Rank = StandardisedScoreMigrationTools.ComputeRank(accuracy, stats, managed.Mods, processor);
+                accuracy = StandardisedScoreMigrationTools.ComputeAccuracy(stats, maxStats, processor);
+                managed.Accuracy = accuracy.Value;
+                rank = StandardisedScoreMigrationTools.ComputeRank(accuracy.Value, stats, managed.Mods, processor);
+                managed.Rank = rank.Value;
 
                 if (managed.TotalScoreWithoutMods > 0)
                 {
@@ -283,7 +288,24 @@ namespace osu.Game.Scoring
                     managed.OnlineID = -1;
                     managed.LegacyOnlineID = -1;
                 }
+
+                updatedTotalScore = managed.TotalScore;
             });
+
+            // Also update the caller's snapshot so that in-memory UI references see the new values.
+            if (accuracy != null && rank != null)
+            {
+                scoreInfo.Accuracy = accuracy.Value;
+                scoreInfo.Rank = rank.Value;
+                scoreInfo.TotalScore = updatedTotalScore ?? scoreInfo.TotalScore;
+                scoreInfo.TotalScoreVersion = LegacyScoreEncoder.LATEST_VERSION;
+
+                if (scoreInfo.OnlineID > 0 || scoreInfo.LegacyOnlineID > 0)
+                {
+                    scoreInfo.OnlineID = -1;
+                    scoreInfo.LegacyOnlineID = -1;
+                }
+            }
         }
 
         /// <summary>
