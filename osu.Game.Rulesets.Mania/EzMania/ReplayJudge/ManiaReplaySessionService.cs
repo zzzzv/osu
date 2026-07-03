@@ -17,6 +17,17 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
     /// </summary>
     public sealed class ManiaReplaySessionService : EzReplaySession
     {
+        public ManiaReplaySessionService()
+        {
+            // Race Timeline: register a direct synchronous builder (not via service)
+            // to avoid any async/caching issues for ghost score HUDs.
+            EzScoreTimelineBridge.RegisterManiaTimelineBuilder((score, beatmap, cancellationToken) =>
+            {
+                var environment = GlobalConfigStore.EzConfig.ResolveForReplay(null, ReplayRunPurpose.ForLive);
+                return ManiaReplaySession.RunTimeline(score, beatmap, environment, cancellationToken);
+            });
+        }
+
         protected override async Task<Score> RunScoreAsyncFunc(Score score, IBeatmap beatmap, IGameplayEnvironment? environment, CancellationToken cancellationToken)
         {
             var ruleset = new ManiaRuleset();

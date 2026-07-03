@@ -3,10 +3,13 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using osu.Game.Beatmaps;
+using osu.Game.Rulesets.Scoring;
 using osu.Game.Scoring;
 
 namespace osu.Game.EzOsuGame.Scoring
@@ -40,6 +43,14 @@ namespace osu.Game.EzOsuGame.Scoring
                 CombinedCache,
                 BuildCacheKey($"combined:{request.Purpose}", request.Score, request.Beatmap, request.Environment),
                 () => RunCombinedAsyncFunc(request, cancellationToken));
+
+        public virtual async Task<List<HitEvent>?> RunHitEventsAsync(Score score, IBeatmap beatmap, CancellationToken cancellationToken = default)
+        {
+            // Default: run session and extract HitEvents.
+            // Subclasses (e.g. ManiaReplaySessionService) may override for a more direct path.
+            var result = await RunScoreAsyncFunc(score, beatmap, null, cancellationToken).ConfigureAwait(false);
+            return result.ScoreInfo.HitEvents.ToList();
+        }
 
         protected static Task<T> GetOrCreate<T>(ConcurrentDictionary<string, Lazy<Task<T>>> cache, string cacheKey, Func<Task<T>> factory)
         {

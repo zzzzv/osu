@@ -17,7 +17,6 @@ using osu.Game.Beatmaps;
 using osu.Game.Database;
 using osu.Game.Extensions;
 using osu.Game.EzOsuGame.Scoring;
-using osu.Game.EzOsuGame.Statistics;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Containers;
 using osu.Game.Graphics.UserInterface;
@@ -121,7 +120,7 @@ namespace osu.Game.Screens.Ranking.Statistics
             var workingBeatmap = beatmapManager.GetWorkingBeatmap(newScore.BeatmapInfo);
 
             // Todo: The placement of this is temporary. Eventually we'll both generate the playable beatmap _and_ run through it in a background task to generate the hit events.
-            Task.Run(() =>
+            Task.Run(async () =>
             {
                 // 结算后加载一次分数，后台计算
                 var playable = workingBeatmap.GetPlayableBeatmap(newScore.Ruleset, newScore.Mods);
@@ -136,8 +135,7 @@ namespace osu.Game.Screens.Ranking.Statistics
                     if (databasedScore != null)
                     {
                         // 非游戏结束立即进入结算的场景下，HitEvents 都是空的，需要定量补充。
-                        EzScoreReloadBridge.InitializeAllGenerators();
-                        generatedHitEvents = EzScoreReloadBridge.TryGenerate(databasedScore, playable, loadCancellation.Token);
+                        generatedHitEvents = await ReplaySession.RunHitEventsAsync(databasedScore, playable, loadCancellation.Token).ConfigureAwait(true);
                     }
 
                     if (generatedHitEvents != null)

@@ -68,12 +68,12 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
             originalTotalScore = score.TotalScore;
 
             // 帧量化检测：若所有 HitEvent 的 TimeOffset 都是帧间隔（约 16.67ms）的整数倍，
-            // 说明 HitEvents 已被帧量化污染，需要用 EzScoreReloadBridge 重新生成精确版本。
+            // 说明 HitEvents 已被帧量化污染，需要用 ManiaScoreHitEventGenerator 重新生成精确版本。
             originalHitEventsOverride = tryDetectAndRegenerateFrameQuantizedEvents(score, beatmap);
         }
 
         /// <summary>
-        /// 检测 HitEvents 是否被帧量化污染，若污染则通过 <see cref="EzScoreReloadBridge"/>
+        /// 检测 HitEvents 是否被帧量化污染，若污染则通过 <see cref="ManiaScoreHitEventGenerator"/>
         /// 重新生成精确 HitEvents（不写回 <c>ScoreInfo</c>）。
         /// </summary>
         private static IReadOnlyList<HitEvent>? tryDetectAndRegenerateFrameQuantizedEvents(ScoreInfo score, IBeatmap beatmap)
@@ -91,13 +91,17 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
             if (!allFrameQuantized)
                 return null;
 
-            // 帧量化版本 → 尝试用 EzScoreReloadBridge 重新生成精确事件
+            // 帧量化版本 → 用 ManiaScoreHitEventGenerator 重新生成精确事件
             try
             {
                 var scoreForBridge = new Score { ScoreInfo = score };
-                var precise = EzScoreReloadBridge.TryGenerate(scoreForBridge, beatmap);
-                if (precise != null && precise.Count > 0)
-                    return precise;
+
+                if (ManiaScoreHitEventGenerator.Instance.Validate(scoreForBridge))
+                {
+                    var precise = ManiaScoreHitEventGenerator.Instance.Generate(scoreForBridge, beatmap);
+                    if (precise.Count > 0)
+                        return precise;
+                }
             }
             catch
             {

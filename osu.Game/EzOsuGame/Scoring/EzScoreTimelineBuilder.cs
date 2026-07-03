@@ -6,9 +6,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
+using System.Threading.Tasks;
 using osu.Game.Beatmaps;
 using osu.Game.EzOsuGame.Configuration;
-using osu.Game.EzOsuGame.Statistics;
 using osu.Game.Rulesets;
 using osu.Game.Rulesets.Judgements;
 using osu.Game.Rulesets.Mods;
@@ -34,7 +34,16 @@ namespace osu.Game.EzOsuGame.Scoring
     // TODO(EZ-SR-TL-020): Osu Session 对齐后更新类注释，移除 HitEvents 重放描述。
     public static class EzScoreTimelineBuilder
     {
-        private static bool generatorsInitialised;
+        private static Func<Score, IBeatmap, CancellationToken, (List<HitEvent>? hitEvents, bool offsetsRelativeToEnd)>? hitEventFallback;
+
+        /// <summary>
+        /// 注册一个 HitEvents 生成回退函数，供尚无 IEzReplaySession 的规则集（如 Osu）使用。
+        /// 注册在静态构造函数中，在 tryBuild 首次被调用前生效。
+        /// </summary>
+        public static void RegisterHitEventFallback(Func<Score, IBeatmap, CancellationToken, (List<HitEvent>? hitEvents, bool offsetsRelativeToEnd)> fallback)
+        {
+            hitEventFallback = fallback;
+        }
 
         /// <summary>
         /// 创建一个进程内 in-memory 缓存实例，绑定到调用方生命周期。
@@ -52,8 +61,6 @@ namespace osu.Game.EzOsuGame.Scoring
             ArgumentNullException.ThrowIfNull(scoreManager);
             ArgumentNullException.ThrowIfNull(beatmaps);
             ArgumentNullException.ThrowIfNull(scoreInfo);
-
-            ensureGeneratorsInitialised();
 
             var timelineMode = EzScoreRaceRulesetSupport.GetGhostTimelineMode(scoreInfo.Ruleset);
 
@@ -172,7 +179,21 @@ namespace osu.Game.EzOsuGame.Scoring
             if (databasedScore.ScoreInfo.HitEvents.Count > 0)
                 return (databasedScore.ScoreInfo.HitEvents.ToList(), true);
 
-            return (EzScoreReloadBridge.TryGenerate(databasedScore, playableBeatmap, cancellationToken), false);
+            // 尝试通过 session 生成（Mania 走 ManiaSession 路径，不会进这里；Osu 无 session 时回退到注册的 fallback）。
+            var ruleset = databasedScore.ScoreInfo.Ruleset.CreateInstance();
+            var session = ruleset.CreateEzReplaySession();
+
+            if (session != null)
+            {
+                var task = session.RunHitEventsAsync(databasedScore, playableBeatmap, cancellationToken);
+                var hitEvents = Task.Run(() => task, cancellationToken).GetAwaiter().GetResult();
+                return (hitEvents, false);
+            }
+
+            if (hitEventFallback != null)
+                return hitEventFallback(databasedScore, playableBeatmap, cancellationToken);
+
+            return (null, false);
         }
 
         // TODO(EZ-SR-TL-011): Osu Session 完成后删除 buildFromHitEvents 及 BuildFromHitEventsForTesting。
@@ -440,15 +461,6 @@ namespace osu.Game.EzOsuGame.Scoring
                 return $"id:{scoreInfo.ID}";
 
             return null;
-        }
-
-        private static void ensureGeneratorsInitialised()
-        {
-            if (generatorsInitialised)
-                return;
-
-            generatorsInitialised = true;
-            EzScoreReloadBridge.InitializeAllGenerators();
         }
     }
 }

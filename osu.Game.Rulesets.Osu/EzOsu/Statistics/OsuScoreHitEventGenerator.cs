@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using osu.Game.Beatmaps;
-using osu.Game.EzOsuGame.Statistics;
+using osu.Game.EzOsuGame.Scoring;
 using osu.Game.Rulesets.Objects;
 using osu.Game.Rulesets.Osu.Objects;
 using osu.Game.Rulesets.Osu.Replays;
@@ -21,7 +21,7 @@ namespace osu.Game.Rulesets.Osu.EzOsu.Statistics
     /// 通过分析回放帧和谱面对象计算命中判定。
     /// </summary>
     // TODO(EZ-SR-TL-001): 新增 OsuReplaySession（对标 ManiaReplaySession），作为判定与 timeline 唯一源。
-    public sealed class OsuScoreHitEventGenerator : IScoreHitEventGenerator
+    public sealed class OsuScoreHitEventGenerator
     {
         private readonly struct ReplayPressEvent
         {
@@ -40,14 +40,16 @@ namespace osu.Game.Rulesets.Osu.EzOsu.Statistics
         /// </summary>
         public static OsuScoreHitEventGenerator Instance { get; } = new OsuScoreHitEventGenerator();
 
-        /// <summary>
-        /// 静态构造函数在类首次使用时自动执行，注册此生成器。
-        /// </summary>
         static OsuScoreHitEventGenerator()
         {
-            EzScoreReloadBridge.RegisterImplementation("osu", Instance);
-            EzScoreReloadBridge.RegisterImplementation("0", Instance);
-            // TODO(EZ-SR-TL-004): 注册 OsuReplaySession.RunTimeline 到 EzScoreTimelineBridge（对称 ManiaScoreHitEventGenerator）。
+            // Register fallback for EzScoreTimelineBuilder until OsuReplaySession is created.
+            EzScoreTimelineBuilder.RegisterHitEventFallback((score, beatmap, ct) =>
+            {
+                if (Instance.Validate(score))
+                    return (Instance.Generate(score, beatmap, ct), false);
+
+                return (null, false);
+            });
         }
 
         /// <summary>
