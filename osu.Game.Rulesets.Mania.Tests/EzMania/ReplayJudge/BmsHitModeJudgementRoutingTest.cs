@@ -5,10 +5,10 @@ using System.Collections.Generic;
 using NUnit.Framework;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.Rulesets.Mania.EzMania.Helper;
+using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings;
 using osu.Game.Rulesets.Mania.Objects;
 using osu.Game.Rulesets.Scoring;
-using static osu.Game.Rulesets.Mania.EzMania.ReplayJudge.ManiaColumnSimulator;
 
 namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
 {

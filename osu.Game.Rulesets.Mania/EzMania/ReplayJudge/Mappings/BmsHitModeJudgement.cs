@@ -9,7 +9,6 @@ using osu.Game.Rulesets.Mania.Objects;
 using osu.Game.Rulesets.Mania.Scoring;
 using osu.Game.Rulesets.Objects;
 using osu.Game.Rulesets.Scoring;
-using static osu.Game.Rulesets.Mania.EzMania.ReplayJudge.ManiaColumnSimulator;
 
 namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
 {

@@ -11,25 +11,25 @@ using osu.Game.Rulesets.Scoring;
 
 namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 {
+    internal sealed class LaneTargetState
+    {
+        public HitObject Target { get; }
+
+        public bool IsTail => Target is TailNote;
+
+        public bool Judged { get; set; }
+
+        public BmsHitModeJudgement.BmsRouteState BmsRoute { get; } = new BmsHitModeJudgement.BmsRouteState();
+
+        public bool HoldBroken { get; set; }
+
+        public HitResult Result { get; set; }
+
+        public LaneTargetState(HitObject target) => Target = target;
+    }
+
     internal static class ManiaColumnSimulator
     {
-        internal sealed class LaneTargetState
-        {
-            public HitObject Target { get; }
-
-            public bool IsTail => Target is TailNote;
-
-            public bool Judged { get; set; }
-
-            public BmsHitModeJudgement.BmsRouteState BmsRoute { get; } = new BmsHitModeJudgement.BmsRouteState();
-
-            public bool HoldBroken { get; set; }
-
-            public HitResult Result { get; set; }
-
-            public LaneTargetState(HitObject target) => Target = target;
-        }
-
         internal static bool IsHittableEarliest(IReadOnlyList<LaneTargetState> column, int index, double time)
         {
             for (int i = index + 1; i < column.Count; i++)
