@@ -198,6 +198,28 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                     environment.ManiaHitMode,
                     timelineRecorder);
 
+                // After tail judgement, also apply HoldNote parent and Body auxiliary results
+                // to match live play behaviour (DrawableHoldNote.CheckForResult + DrawableHoldNoteBody.TriggerResult).
+                // These produce IgnoreHit / ComboBreak / IgnoreMiss entries in ScoreResultCounts
+                // that affect displayed statistics but not score, accuracy, or combo.
+                if (target is TailNote judgedTail
+                    && headByTail.TryGetValue(judgedTail, out var tailLinkedHead)
+                    && holdByHead.TryGetValue(tailLinkedHead, out var tailHold))
+                {
+                    // HoldNoteBody: IgnoreHit on hit, ComboBreak on miss
+                    // (matches DrawableHoldNoteBody.TriggerResult → ApplyMaxResult/ApplyMinResult)
+                    if (tailHold.Body != null)
+                    {
+                        HitResult bodyResult = result.IsHit() ? HitResult.IgnoreHit : HitResult.ComboBreak;
+                        ApplyAuxiliaryResult(scoreProcessor, tailHold.Body, bodyResult, input.Time, gameplayRate, timelineRecorder);
+                    }
+
+                    // HoldNote parent: IgnoreHit on hit, IgnoreMiss on miss
+                    // (matches DrawableHoldNote.CheckForResult → ApplyMaxResult/MissForcefully)
+                    HitResult holdAuxResult = result.IsHit() ? HitResult.IgnoreHit : HitResult.IgnoreMiss;
+                    ApplyAuxiliaryResult(scoreProcessor, tailHold, holdAuxResult, input.Time, gameplayRate, timelineRecorder);
+                }
+
                 if (target is HeadNote head)
                     headWasHit[head] = result.IsHit();
             }
@@ -452,6 +474,28 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
             JudgementResultTimingHelper.ApplyTiming(judgementResult, timeOffset, gameplayRate);
 
+            scoreProcessor.ApplyResult(judgementResult);
+            timelineRecorder?.Record(scoreProcessor, eventTime, gameplayRate);
+        }
+
+        /// <summary>
+        /// Applies an auxiliary (non-gameplay-affecting) judgement result for HoldNote parent or HoldNoteBody,
+        /// matching live play behaviour where these produce IgnoreHit/ComboBreak/IgnoreMiss entries
+        /// in ScoreResultCounts despite having no effect on score, accuracy, or combo.
+        /// </summary>
+        internal static void ApplyAuxiliaryResult(
+            ScoreProcessor scoreProcessor,
+            HitObject target,
+            HitResult result,
+            double eventTime,
+            double gameplayRate,
+            ManiaReplayTimelineRecorder? timelineRecorder)
+        {
+            var judgementResult = new JudgementResult(target, target.Judgement)
+            {
+                Type = result,
+            };
+            JudgementResultTimingHelper.ApplyTiming(judgementResult, 0, gameplayRate);
             scoreProcessor.ApplyResult(judgementResult);
             timelineRecorder?.Record(scoreProcessor, eventTime, gameplayRate);
         }

@@ -88,23 +88,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             var targets = buildTargets(beatmap);
             alignHitWindows(beatmap, environment);
 
-            if (score.Replay.Frames.Count == 0)
-            {
-                // Zero frames: still need to generate all-miss HitEvents
-                // so that extended statistics can display.
-                var emptyPressTimes = new Dictionary<int, List<double>>();
-                applyForcedMisses(scoreProcessor, targets, emptyPressTimes, environment.ManiaHitMode, gameplayRate, CancellationToken.None, recorder);
-                scoreProcessor.PopulateScore(score.ScoreInfo);
-
-                return (scoreProcessor, recordTimeline ? new EzScoreTimeline(Array.Empty<EzScoreTimelineSnapshot>()) : null);
-            }
-
-            var noteStrategy = ManiaJudgementRegistry.GetNoteStrategy(environment);
-
-            var holdStrategy = ManiaJudgementRegistry.GetHoldStrategy(environment);
-
-            buildColumnMaps(targets, out var pressColumns, out var releaseColumns);
-
             var holdByHead = new Dictionary<HeadNote, HoldNote>();
             var headByTail = new Dictionary<TailNote, HeadNote>();
 
@@ -116,6 +99,23 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                     holdByHead[hold.Head] = hold;
                 }
             }
+
+            if (score.Replay.Frames.Count == 0)
+            {
+                // Zero frames: still need to generate all-miss HitEvents
+                // so that extended statistics can display.
+                var emptyPressTimes = new Dictionary<int, List<double>>();
+                applyForcedMisses(scoreProcessor, targets, emptyPressTimes, holdByHead, headByTail, environment.ManiaHitMode, gameplayRate, CancellationToken.None, recorder);
+                scoreProcessor.PopulateScore(score.ScoreInfo);
+
+                return (scoreProcessor, recordTimeline ? new EzScoreTimeline(Array.Empty<EzScoreTimelineSnapshot>()) : null);
+            }
+
+            var noteStrategy = ManiaJudgementRegistry.GetNoteStrategy(environment);
+
+            var holdStrategy = ManiaJudgementRegistry.GetHoldStrategy(environment);
+
+            buildColumnMaps(targets, out var pressColumns, out var releaseColumns);
 
             var inputData = parseReplay(score.Replay);
 
@@ -134,7 +134,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 recorder,
                 cancellationToken);
 
-            applyForcedMisses(scoreProcessor, targets, inputData.PressTimesByColumn, environment.ManiaHitMode, gameplayRate, cancellationToken, recorder);
+            applyForcedMisses(scoreProcessor, targets, inputData.PressTimesByColumn, holdByHead, headByTail, environment.ManiaHitMode, gameplayRate, cancellationToken, recorder);
 
             return (scoreProcessor, recorder?.Build());
         }
@@ -251,6 +251,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             ScoreProcessor scoreProcessor,
             List<LaneTargetState> targets,
             Dictionary<int, List<double>> pressTimesByColumn,
+            Dictionary<HeadNote, HoldNote> holdByHead,
+            Dictionary<TailNote, HeadNote> headByTail,
             EzEnumHitMode hitMode,
             double gameplayRate,
             CancellationToken cancellationToken,
@@ -276,6 +278,17 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                     gameplayRate,
                     hitMode,
                     recorder);
+
+                // For forced-missed tail notes, also apply HoldNote parent and Body
+                // auxiliary results so statistics match live play.
+                if (state.Target is TailNote tailNote && headByTail.TryGetValue(tailNote, out var linkedHead)
+                    && holdByHead.TryGetValue(linkedHead, out var hold))
+                {
+                    if (hold.Body != null)
+                        ManiaReplaySessionSimulator.ApplyAuxiliaryResult(scoreProcessor, hold.Body, HitResult.ComboBreak, missEventTime, gameplayRate, recorder);
+
+                    ManiaReplaySessionSimulator.ApplyAuxiliaryResult(scoreProcessor, hold, HitResult.IgnoreMiss, missEventTime, gameplayRate, recorder);
+                }
             }
         }
 
