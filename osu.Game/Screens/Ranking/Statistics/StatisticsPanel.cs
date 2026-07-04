@@ -133,9 +133,7 @@ namespace osu.Game.Screens.Ranking.Statistics
                     var databasedScore = scoreManager.GetScore(newScore);
 
                     if (databasedScore != null)
-                    {
                         generatedHitEvents = await ReplaySession.RunHitEventsAsync(databasedScore, playable, loadCancellation.Token).ConfigureAwait(true);
-                    }
 
                     if (generatedHitEvents != null)
                         newScore.HitEvents = generatedHitEvents;

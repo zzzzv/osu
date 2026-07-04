@@ -54,9 +54,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
         [Resolved]
         private Ez2ConfigManager ezConfig { get; set; } = null!;
 
-        // TODO(EZ-SR-TL-025): Phase 1.5 — resolveSessionInputScore 改 RunRequestAsync(ForLive)（见 EZ-SR-TL-REGISTRY.md）。
-        // TODO(P3-Rest): resolveSessionInputScore() 应移除，改为通过 IEzReplaySession.RunRequestAsync(ForLive)
-        // 当前临时方案：保留 scoreManager 用于获取 databased score
         [Resolved]
         private ScoreManager scoreManager { get; set; } = null!;
 
@@ -375,12 +372,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
 
         protected override IGameplayEnvironment CreateLiveAnalysisEnvironment() => GlobalConfigStore.EzConfig.ResolveForReplay(null, ReplayRunPurpose.ForLive);
 
-        // P3-Rest 前过渡：通过 scoreManager 获取 databased score
-        // TODO(P3-Rest): resolveSessionInputScore() 移除，改为通过 IEzReplaySession
-        protected override Score? ResolveInputScore() => resolveSessionInputScore();
-
-        // TODO(P3-Rest): resolveSessionInputScore() 移除，改为通过 IEzReplaySession
-        private Score? resolveSessionInputScore() => scoreManager.GetScore(Score);
+        protected override Score? ResolveInputScore() => scoreManager.GetScore(Score);
 
         private Dictionary<HitResult, int> extractDisplayCounts(IReadOnlyDictionary<HitResult, int> statistics) => ExtractDisplayCounts(statistics, currentHitMode);
 

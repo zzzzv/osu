@@ -64,7 +64,7 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | 消费场景 | 所需出口 | Mania | Osu | 原则 |
 |----------|----------|-------|-----|------|
 | Realm 持久化 | Statistics / Acc / TotalScore | ✓ | ✓ | HitEvents `[Ignored]` |
-| StatisticsPanel 补 HitEvents | HitEvents | `ReplaySession.RunHitEventsAsync` ✓ | **路由缺口 TL-023**（Osu 误走 Mania 单例） | 调用方不增 API；按 ruleset 解析 Session |
+| StatisticsPanel 补 HitEvents | HitEvents | `ReplaySession.RunHitEventsAsync` ✓ | 无 Session 时 null | Router 按 ruleset 分发 |
 | Graph Original | Realm 静态 | ✓ | — | 不跑 Session |
 | Graph Now 基线 | 完整 Score | RunAsync(ForLive) | — | 共享 base cache |
 | Graph offset | C / D | ✓ | — | 不污染 base |
@@ -92,7 +92,7 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | Phase | 范围 | 状态 |
 |-------|------|------|
 | **1** | Mania Session + Timeline + Race | 基本完成 |
-| **1.5** | Graph Now；P3-Rest → RunRequestAsync（TL-024/025） | 进行中 |
+| **1.5** | Graph Now；RunRequestAsync(ForLive)（TL-024/025） | 基本完成 |
 | **1.5b** | TL-026 单次 run 多出口 | blocked |
 | **2** | Mania 环境分层；Session 零 GlobalConfig | 文档预览 |
 | **3** | Osu/Taiko/Catch Session | Osu **blocked** |
@@ -113,17 +113,17 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | TL-007 | blocked | Osu | Osu Session 后再删 HitEvents 路径 |
 | TL-008 | blocked | Osu | Osu 缓存键策略 |
 | TL-009 | reserved | — | （未使用） |
-| TL-010~015 | active→legacy | Osu | HitEvents 重放 → `EzScoreTimelineHitEventsLegacy` |
+| TL-010~015 | **done** | Osu | HitEvents 重放 → `EzScoreTimelineHitEventsLegacy`（PR-B） |
 | TL-016 | reserved | — | （未使用） |
-| TL-017 | active→legacy | Osu | `EzScoreTimelineJudgementTime` 迁入 legacy |
+| TL-017 | **done** | Osu | `EzScoreTimelineJudgementTime` 标注 Osu-only（PR-B） |
 | TL-018 | blocked | Osu | 删 press 匹配 |
 | TL-019 | blocked | Osu | OsuSession 枚举名 |
 | TL-020 | **done** | All | Builder 类注释 → 指向本 REGISTRY |
 | TL-021 | doc-only | All | 动态变速 Mod ghost 时钟 — 见 wiki 角逐服务 |
 | TL-022 | reserved | — | 已合并至 **TL-023**（勿在 StatisticsPanel 加 per-ruleset API） |
-| TL-023 | active | All | `OsuGameBase`：`ReplaySession` 按 `score.Ruleset` → `CreateEzReplaySession()` 分发；现「第一个非 null」单例 |
-| TL-024 | active | Mania | EzScoreGraphBase P3-Rest |
-| TL-025 | active | Mania | EzScoreGraphMania P3-Rest |
+| TL-023 | **done** | All | `EzReplaySessionRouter` 实现 `IEzReplaySession`，按 ruleset 分发 |
+| TL-024 | **done** | Mania | EzScoreGraphBase → RunRequestAsync(ForLive) |
+| TL-025 | **done** | Mania | EzScoreGraphMania ResolveInputScore 简化 |
 | TL-026 | blocked | Mania | RunCombined 单次 run 多出口 |
 
 维护：新增 `TODO(EZ-SR-TL-*)` 须先在本表加行；PR 合并时更新 status。
@@ -149,6 +149,6 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | Phase-0 | 本 REGISTRY + TODO 标记 | TL-023~025 |
 | PR-A | Mania Builder → IEzReplaySession；删 Bridge | TL-005 |
 | PR-B | Osu legacy 模块；删 Mania HitEvents 补丁 | TL-010~017 |
-| PR-C | wiki TL-021、REGISTRY 维护说明 | TL-020/021 |
+| PR-C | wiki TL-021、Osu blocked 文案、REGISTRY 状态 | TL-020/021 |
 
-分支 `ez/sr-tl-arch` 按上表分步提交。
+分支 `ez/sr-tl-arch`：Phase-0 / PR-A / PR-B / PR-C 已合并。Wiki 对齐见 Ez2Lazer.wiki `6ceebf4`。

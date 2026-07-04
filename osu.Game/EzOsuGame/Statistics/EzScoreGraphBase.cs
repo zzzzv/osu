@@ -69,9 +69,7 @@ namespace osu.Game.EzOsuGame.Statistics
         // Graph-UX: 双轨刷新状态管理
         // displayOffset 由 RefreshDisplayOnly 管理（拖动时），RefreshFromService 成功后重置为 0
         protected Score? CommittedNowScore;
-#pragma warning disable IDE0051 // committedEnvironment 为 P3-Rest 阶段预留，当前暂未使用
         private IGameplayEnvironment? committedEnvironment;
-#pragma warning restore IDE0051
         protected double DisplayOffset;
 
         // Debounce 控制 — offset 拖动时仅展示，落定后触发 Session
@@ -481,17 +479,17 @@ namespace osu.Game.EzOsuGame.Statistics
 
             try
             {
-                // TODO(EZ-SR-TL-024): Phase 1.5 — 改用 ReplayRunRequest(ForLive) + RunRequestAsync（见 EZ-SR-TL-REGISTRY.md）。
-                // TODO(P3-Rest): 应使用 ReplayRunRequest(ForLive) 统一入口
-                // 当前暂时直接调用 RunAsync，P3-Rest 阶段改为 RunRequestAsync
-                if (committedEnvironment != null)
-                {
-                    CommittedNowScore = await ReplaySession.RunAsync(
-                        inputScore.DeepClone(),
-                        Beatmap,
-                        committedEnvironment
-                    ).ConfigureAwait(false);
-                }
+                if (committedEnvironment == null)
+                    return;
+
+                var result = await ReplaySession.RunRequestAsync(
+                    new ReplayRunRequest(inputScore.DeepClone(), Beatmap, committedEnvironment, ReplayRunPurpose.ForLive)
+                ).ConfigureAwait(false);
+
+                if (!result.IsValidReplay)
+                    return;
+
+                CommittedNowScore = result.Score;
 
                 DisplayOffset = 0; // 重置展示 offset
 
