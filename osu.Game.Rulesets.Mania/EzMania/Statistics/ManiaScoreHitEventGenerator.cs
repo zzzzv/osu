@@ -5,8 +5,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using osu.Game.Beatmaps;
-using osu.Game.EzOsuGame.Configuration;
-using osu.Game.EzOsuGame.Scoring;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
 using osu.Game.Rulesets.Mania.Replays;
 using osu.Game.Rulesets.Scoring;
@@ -15,11 +13,13 @@ using osu.Game.Scoring;
 namespace osu.Game.Rulesets.Mania.EzMania.Statistics
 {
     /// <summary>
-    /// Mania 成绩 <see cref="HitEvent"/> 生成器；委托 <see cref="ManiaReplaySession"/> 作为唯一判定源。
+    /// Mania 成绩 <see cref="HitEvent"/> 生成器；委托 <see cref="ManiaReplaySessionService.RunHitEventsAsync"/> 作为唯一判定源。
     /// </summary>
     public sealed class ManiaScoreHitEventGenerator
     {
         public static ManiaScoreHitEventGenerator Instance { get; } = new ManiaScoreHitEventGenerator();
+
+        private static readonly ManiaReplaySessionService session_service = new ManiaReplaySessionService();
 
         public bool Validate(Score score)
         {
@@ -36,8 +36,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
 
         public List<HitEvent> Generate(Score score, IBeatmap playableBeatmap, CancellationToken cancellationToken = default)
         {
-            var environment = GlobalConfigStore.EzConfig.ResolveForReplay(score.ScoreInfo, ReplayRunPurpose.ForStored);
-            return ManiaReplaySession.Run(score, playableBeatmap, environment, cancellationToken).ScoreInfo.HitEvents.ToList();
+            return session_service.RunHitEventsAsync(score, playableBeatmap, cancellationToken).GetAwaiter().GetResult()
+                   ?? new List<HitEvent>();
         }
     }
 }

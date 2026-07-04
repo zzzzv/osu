@@ -13,7 +13,6 @@ using osu.Framework.Logging;
 using osu.Game.Beatmaps;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Extensions;
-using osu.Game.EzOsuGame.Scoring;
 using osu.Game.EzOsuGame.Statistics;
 using osu.Game.Rulesets.Mania.EzMania.Helper;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
@@ -369,8 +368,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
 
             return hitEvent.Result;
         }
-
-        protected override IGameplayEnvironment CreateLiveAnalysisEnvironment() => GlobalConfigStore.EzConfig.ResolveForReplay(null, ReplayRunPurpose.ForLive);
 
         protected override Score? ResolveInputScore() => scoreManager.GetScore(Score);
 

@@ -125,7 +125,7 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 
 以下**刻意不在** Phase 0–1.5b 分析定稿内展开，见 §4 Phase 2/3：
 
-- Mania `ResolveEnvironment`、Session 零 `GlobalConfig` 读（Phase 2）
+- Mania `ResolveEnvironment`、Ruleset 级环境转换（Phase 3 各 ruleset Session 时再评估）
 - Osu/Taiko/Catch `OsuReplaySession`、角逐改 `OsuSession`（Phase 3）
 - Osu timeline 缓存键 TL-008（随 Osu Session 一并定）
 
@@ -166,7 +166,7 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | **1** | Mania Session + Timeline + Race | 基本完成 |
 | **1.5** | Graph Now；RunRequestAsync(ForLive)（TL-024/025） | 基本完成 |
 | **1.5b** | TL-026 单次 run 多出口 | 基本完成 |
-| **2** | Mania 环境分层；Session 零 GlobalConfig | 文档预览 |
+| **2** | API 收敛：optional env + Session 统一 ResolveForReplay；删重复/dead API | 基本完成 |
 | **3** | Osu/Taiko/Catch Session | Osu **blocked** |
 | **Osu 过渡** | `EzScoreTimelineHitEventsLegacy` + 角逐 ghost | 当前 |
 
@@ -197,6 +197,9 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | TL-024 | **done** | Mania | EzScoreGraphBase → RunRequestAsync(ForLive) |
 | TL-025 | **done** | Mania | EzScoreGraphMania ResolveInputScore 简化 |
 | TL-026 | **done** | Mania | `RunWithTimeline` + `sessionRunCache` 多出口 |
+| TL-027 | **done** | Mania | IEzReplaySession optional env；Session purpose 贯通 + cache key 修复 |
+| TL-028 | **done** | Mania | 删 Graph CreateLiveAnalysisEnvironment / committedEnvironment / RunReplayAsync |
+| TL-029 | **done** | Mania | 调用方传 null env；Generator → ManiaReplaySessionService |
 
 维护：新增 `TODO(EZ-SR-TL-*)` 须先在本表加行；PR 合并时更新 status。
 
@@ -222,5 +225,6 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | PR-A | Mania Builder → IEzReplaySession；删 Bridge | TL-005 |
 | PR-B | Osu legacy 模块；删 Mania HitEvents 补丁 | TL-010~017 |
 | PR-C | wiki TL-021、Osu blocked 文案、REGISTRY 状态 | TL-020/021 |
+| PR-D | Phase 2 API 收敛 + 删重复 | TL-027~029 |
 
 分支 `ez/sr-tl-arch`：Phase-0 / PR-A / PR-B / PR-C 已合并。Wiki 对齐见 Ez2Lazer.wiki `6ceebf4`。

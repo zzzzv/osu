@@ -51,6 +51,7 @@ namespace osu.Game.Benchmarks
                 score.DeepClone(),
                 beatmap,
                 environment,
+                ReplayRunPurpose.ForStored,
                 CancellationToken.None
             ).ConfigureAwait(true);
         }
@@ -62,6 +63,7 @@ namespace osu.Game.Benchmarks
                 score.DeepClone(),
                 beatmap,
                 environment,
+                ReplayRunPurpose.ForStored,
                 CancellationToken.None
             ).ConfigureAwait(true);
         }

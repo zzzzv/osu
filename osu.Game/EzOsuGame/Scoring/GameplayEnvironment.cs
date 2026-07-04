@@ -7,7 +7,7 @@ namespace osu.Game.EzOsuGame.Scoring
 {
     /// <summary>
     /// 单局游玩环境快照（纯数据 record）。
-    /// 环境构建由 <c>Ez2ConfigManager.GetGameplayEnvironment()</c> / <c>ResolveForReplay()</c> 负责。
+    /// 环境构建由 <c>Ez2ConfigManager.ResolveForReplay()</c> 负责；Session 在 environment 为 null 时统一解析。
     /// </summary>
     public sealed record GameplayEnvironment : IGameplayEnvironment
     {

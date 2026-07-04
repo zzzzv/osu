@@ -20,26 +20,31 @@ namespace osu.Game.EzOsuGame.Scoring
         protected readonly ConcurrentDictionary<string, Lazy<Task<EzScoreTimeline>>> TimelineCache = new ConcurrentDictionary<string, Lazy<Task<EzScoreTimeline>>>();
         protected readonly ConcurrentDictionary<string, Lazy<Task<ReplayRunResult>>> CombinedCache = new ConcurrentDictionary<string, Lazy<Task<ReplayRunResult>>>();
 
-        protected abstract Task<Score> RunScoreAsyncFunc(Score score, IBeatmap beatmap, IGameplayEnvironment? environment, CancellationToken cancellationToken);
+        protected abstract Task<Score> RunScoreAsyncFunc(Score score, IBeatmap beatmap, IGameplayEnvironment? environment, ReplayRunPurpose purpose,
+                                                         CancellationToken cancellationToken);
 
-        protected abstract Task<EzScoreTimeline> RunTimelineAsyncFunc(Score score, IBeatmap beatmap, IGameplayEnvironment? environment, CancellationToken cancellationToken);
+        protected abstract Task<EzScoreTimeline> RunTimelineAsyncFunc(Score score, IBeatmap beatmap, IGameplayEnvironment? environment, ReplayRunPurpose purpose,
+                                                                      CancellationToken cancellationToken);
 
         protected abstract Task<ReplayRunResult> RunCombinedAsyncFunc(ReplayRunRequest request, CancellationToken cancellationToken);
 
-        public virtual Task<Score> RunAsync(Score score, IBeatmap beatmap, IGameplayEnvironment environment, CancellationToken cancellationToken = default)
+        public virtual Task<Score> RunAsync(Score score, IBeatmap beatmap, IGameplayEnvironment? environment = null, ReplayRunPurpose purpose = ReplayRunPurpose.ForStored,
+                                            CancellationToken cancellationToken = default)
             => GetOrCreate(
                 ScoreCache,
-                BuildCacheKey("score", score, beatmap, environment),
-                () => RunScoreAsyncFunc(score, beatmap, environment, cancellationToken));
+                BuildCacheKey($"score:{purpose}", score, beatmap, environment),
+                () => RunScoreAsyncFunc(score, beatmap, environment, purpose, cancellationToken));
 
-        public virtual Task<EzScoreTimeline> RunTimelineAsync(Score score, IBeatmap beatmap, IGameplayEnvironment environment, CancellationToken cancellationToken = default)
+        public virtual Task<EzScoreTimeline> RunTimelineAsync(Score score, IBeatmap beatmap, IGameplayEnvironment? environment = null,
+                                                              ReplayRunPurpose purpose = ReplayRunPurpose.ForStored, CancellationToken cancellationToken = default)
             => GetOrCreate(
                 TimelineCache,
-                BuildCacheKey("timeline", score, beatmap, environment),
-                () => RunTimelineAsyncFunc(score, beatmap, environment, cancellationToken));
+                BuildCacheKey($"timeline:{purpose}", score, beatmap, environment),
+                () => RunTimelineAsyncFunc(score, beatmap, environment, purpose, cancellationToken));
 
-        public virtual Task<EzScoreTimeline> RunTimelineDirectAsync(Score score, IBeatmap beatmap, IGameplayEnvironment environment, CancellationToken cancellationToken = default)
-            => RunTimelineAsyncFunc(score, beatmap, environment, cancellationToken);
+        public virtual Task<EzScoreTimeline> RunTimelineDirectAsync(Score score, IBeatmap beatmap, IGameplayEnvironment? environment = null,
+                                                                    ReplayRunPurpose purpose = ReplayRunPurpose.ForLive, CancellationToken cancellationToken = default)
+            => RunTimelineAsyncFunc(score, beatmap, environment, purpose, cancellationToken);
 
         public virtual Task<ReplayRunResult> RunRequestAsync(ReplayRunRequest request, CancellationToken cancellationToken = default)
             => GetOrCreate(
@@ -47,11 +52,9 @@ namespace osu.Game.EzOsuGame.Scoring
                 BuildCacheKey($"combined:{request.Purpose}", request.Score, request.Beatmap, request.Environment),
                 () => RunCombinedAsyncFunc(request, cancellationToken));
 
-        public virtual async Task<List<HitEvent>?> RunHitEventsAsync(Score score, IBeatmap beatmap, CancellationToken cancellationToken = default)
+        public virtual async Task<List<HitEvent>> RunHitEventsAsync(Score score, IBeatmap beatmap, CancellationToken cancellationToken = default)
         {
-            // Default: run session and extract HitEvents.
-            // Subclasses (e.g. ManiaReplaySessionService) may override for a more direct path.
-            var result = await RunScoreAsyncFunc(score, beatmap, null, cancellationToken).ConfigureAwait(false);
+            var result = await RunScoreAsyncFunc(score, beatmap, null, ReplayRunPurpose.ForStored, cancellationToken).ConfigureAwait(false);
             return result.ScoreInfo.HitEvents.ToList();
         }
 
@@ -69,7 +72,7 @@ namespace osu.Game.EzOsuGame.Scoring
             string envKey;
 
             if (environment == null)
-                envKey = "env:null";
+                envKey = "env:unresolved";
             else
             {
                 string bmsPoorKey = environment.BmsPoorHitResultEnable.ToString();

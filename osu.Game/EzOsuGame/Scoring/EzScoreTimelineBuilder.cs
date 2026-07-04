@@ -76,7 +76,7 @@ namespace osu.Game.EzOsuGame.Scoring
             }
 
             string? cacheKey = beatmapForFingerprint != null
-                ? getCacheKey(scoreInfo, timelineMode, environment ?? GlobalConfigStore.EzConfig.GetGameplayEnvironment(), beatmapForFingerprint)
+                ? getCacheKey(scoreInfo, timelineMode, environment ?? GlobalConfigStore.EzConfig.ResolveForReplay(scoreInfo, ReplayRunPurpose.ForLive), beatmapForFingerprint)
                 : null;
 
             if (!string.IsNullOrEmpty(cacheKey) && cache.TryGet(cacheKey, out var cached))
@@ -127,7 +127,6 @@ namespace osu.Game.EzOsuGame.Scoring
             {
                 case EzScoreRaceGhostTimelineMode.ManiaSession:
                 {
-                    var resolvedEnv = environment ?? GlobalConfigStore.EzConfig.ResolveForReplay(scoreInfo, ReplayRunPurpose.ForLive);
                     var session = ruleset.CreateEzReplaySession();
 
                     if (session == null)
@@ -136,7 +135,7 @@ namespace osu.Game.EzOsuGame.Scoring
                         break;
                     }
 
-                    timeline = session.RunTimelineDirectAsync(databasedScore, playableBeatmap, resolvedEnv, cancellationToken)
+                    timeline = session.RunTimelineDirectAsync(databasedScore, playableBeatmap, environment, ReplayRunPurpose.ForLive, cancellationToken)
                                       .ConfigureAwait(false).GetAwaiter().GetResult();
                     break;
                 }

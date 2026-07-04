@@ -82,9 +82,7 @@ Drawable replay 播放时，`ManiaEzDrawableJudgement` 优先从 `DrawableRulese
 | JudgePrecedence / OffsetPlusMania  | 当前全局配置（`FromLive` fallback）                                                          |
 | **BmsPoorHitResultEnable (KPoor)** | **当前全局配置**（未写入 ScoreInfo；统计重算沿用打开成绩时的全局 KPoor 开关，与当时游玩可能不一致）                         |
 
-生产入口：`StatisticsPanel` → `EzScoreReloadBridge` → `ManiaScoreHitEventGenerator` → `ManiaReplaySession`。
-
-`ManiaRuleset.RunReplayAsync` 为无 UI 公开 API，返回 `Run` 填充后的 `Score`，与 Generator 同源。
+生产入口：`StatisticsPanel` / `ManiaScoreHitEventGenerator` → `ManiaReplaySessionService`（ForStored，env 由 Session 内 `ResolveForReplay` 解析）。
 
 ### 分数时间线（角逐 HUD 等下游消费）
 
@@ -126,11 +124,11 @@ public static EzScoreTimeline RunTimeline(...);
 
 `Run` 末尾：`scoreProcessor.PopulateScore(score.ScoreInfo); return score;`
 
-**Phase 1 刻意保留（Phase 2 再改）**：
+**Phase 2 已完成（API 收敛）**：
 
-- Session 仍接受现有 `IGameplayEnvironment`（不新建 `IGameplayEnvironment`）
-- `ManiaReplaySessionSimulator` 内 `BmsPoorHitResultEnable` 读 `GlobalConfigStore` — 已知技术债
-- Generator / Graph 仍在调用侧 `FromScore` / `FromLive`（不经 Ruleset ResolveEnvironment）
+- `IEzReplaySession`：`environment` optional，null 时 Session 内 `Ez2ConfigManager.ResolveForReplay`
+- Graph / Race / Builder / Generator 传 null env + 正确 `ReplayRunPurpose`
+- 删 `CreateLiveAnalysisEnvironment`、`ManiaRuleset.RunReplayAsync` 等重复/dead API
 
 ---
 
@@ -184,10 +182,10 @@ flowchart LR
     P1B["Graph Now / Generator\n读 score.ScoreInfo"]
     P1C["跨源测试绿"]
   end
-  subgraph phase2 [Phase 2 后续 - Mania 服务纯度]
-    P2A["IGameplayEnvironment"]
-    P2B["Session 不读 GlobalConfig\nKPoor 等经 env 传入"]
-    P2C["ManiaRuleset 环境转换入口"]
+  subgraph phase2 [Phase 2 已完成 - API 收敛]
+    P2A["optional env + Purpose"]
+    P2B["Session 统一 ResolveForReplay"]
+    P2C["删重复调用/dead API"]
   end
   subgraph phase3 [Phase 3 远期 - 全模式]
     P3A["osu.Game EzReplayServer"]
@@ -200,12 +198,10 @@ flowchart LR
 |---------------|----------------------------------------------------------------------|
 | **Phase 1**   | #66 UX：同环境 Realm ≡ Graph Original ≡ Graph Now；API 去臃肿（`Run → Score`） |
 | **Phase 1.5** | Graph Now 完整 Score；miss 真实 TimeOffset；OffsetPlusMania UI 快路径         |
-| **Phase 2**   | Mania 环境分层、Session 零全局读、Ruleset 统一 ResolveEnvironment                |
+| **Phase 2**   | API 收敛：optional env + Session 统一 ResolveForReplay；删重复/dead API                |
 | **Phase 3**   | `osu.Game` EzReplayServer 框架 + Osu/Taiko/Catch/Mania 各模式 Session     |
 
-**Phase 2 预览**：新增 `IGameplayEnvironment : IGameplayEnvironment`（含 `BmsPoorHitResultEnable` 等）；`ManiaRuleset.ResolveEnvironment` 在规则集边界转换；Session / Simulator 零 `GlobalConfigStore`。
-
-**Phase 3 预览**：`osu.Game/EzOsuGame/Replay/`（或等价路径）统一 `RunReplay(Score, IBeatmap, IGameplayEnvironment) → Score`；规则集注册 `IReplaySession` / 环境转换器；Mania 为首个完整实现。
+**Phase 3 预览**：`osu.Game/EzOsuGame/Replay/`（或等价路径）统一 Session 框架；各 ruleset 注册 `CreateEzReplaySession`；Osu/Taiko/Catch Session 实现；届时再评估 ruleset 级 `ResolveEnvironment` 是否值得。
 
 ---
 

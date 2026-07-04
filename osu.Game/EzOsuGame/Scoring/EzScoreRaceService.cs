@@ -181,7 +181,6 @@ namespace osu.Game.EzOsuGame.Scoring
                 if (scoreInfos.Count == 0)
                     return;
 
-                var environment = GlobalConfigStore.EzConfig.GetGameplayEnvironment();
                 var rulesetInfo = beatmapInfo.Ruleset;
                 var results = new EzScoreTimeline?[scoreInfos.Count];
 
@@ -209,7 +208,7 @@ namespace osu.Game.EzOsuGame.Scoring
                             scoreInfo,
                             taskBeatmap,
                             timelineCache,
-                            environment,
+                            null,
                             token);
                     });
                 }, token).ConfigureAwait(false);

@@ -12,7 +12,6 @@ using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Lines;
 using osu.Framework.Graphics.Shapes;
 using osu.Game.Beatmaps;
-using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Scoring;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Sprites;
@@ -69,7 +68,6 @@ namespace osu.Game.EzOsuGame.Statistics
         // Graph-UX: 双轨刷新状态管理
         // displayOffset 由 RefreshDisplayOnly 管理（拖动时），RefreshFromService 成功后重置为 0
         protected Score? CommittedNowScore;
-        private IGameplayEnvironment? committedEnvironment;
         protected double DisplayOffset;
 
         // Debounce 控制 — offset 拖动时仅展示，落定后触发 Session
@@ -471,7 +469,6 @@ namespace osu.Game.EzOsuGame.Statistics
         /// </summary>
         protected async Task RefreshFromService()
         {
-            committedEnvironment = CreateLiveAnalysisEnvironment();
             var inputScore = ResolveInputScore();
 
             if (inputScore == null)
@@ -479,11 +476,8 @@ namespace osu.Game.EzOsuGame.Statistics
 
             try
             {
-                if (committedEnvironment == null)
-                    return;
-
                 var result = await ReplaySession.RunRequestAsync(
-                    new ReplayRunRequest(inputScore.DeepClone(), Beatmap, committedEnvironment, ReplayRunPurpose.ForLive)
+                    new ReplayRunRequest(inputScore.DeepClone(), Beatmap, null, ReplayRunPurpose.ForLive)
                 ).ConfigureAwait(false);
 
                 if (!result.IsValidReplay)
@@ -504,16 +498,9 @@ namespace osu.Game.EzOsuGame.Statistics
             {
                 // Session 失败时清空 committedNowScore
                 CommittedNowScore = null;
-                committedEnvironment = null;
                 Schedule(Refresh);
             }
         }
-
-        /// <summary>
-        /// 创建 ForLive 环境（offset=0）
-        /// 子类应重写以提供规则集特定的环境解析
-        /// </summary>
-        protected virtual IGameplayEnvironment CreateLiveAnalysisEnvironment() => GlobalConfigStore.EzConfig.ResolveForReplay(null, ReplayRunPurpose.ForLive);
 
         /// <summary>
         /// 解析输入 Score（用于 Session 运行）

@@ -5,7 +5,6 @@ using System;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using osu.Game.Beatmaps;
-using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Scoring;
 using osu.Game.Rulesets;
 using osu.Game.Rulesets.Mania;
@@ -54,7 +53,7 @@ namespace osu.Game.Tests.EzOsuGame.Scoring
             var score = new Score { ScoreInfo = new ScoreInfo { Ruleset = new RulesetInfo { OnlineID = -1, ShortName = "unknown" } } };
 
             Assert.ThrowsAsync<InvalidOperationException>(async () =>
-                await router.RunAsync(score, new Beatmap(), GlobalConfigStore.EzConfig.ResolveForReplay(null, ReplayRunPurpose.ForStored)));
+                await router.RunAsync(score, new Beatmap()));
         }
 
         private static EzReplaySessionRouter createRouter()
