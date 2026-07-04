@@ -6,17 +6,14 @@ using System.Linq;
 using System.Threading;
 using osu.Game.Beatmaps;
 using osu.Game.EzOsuGame.Configuration;
-using osu.Game.Rulesets;
 using osu.Game.Rulesets.Mods;
-using osu.Game.Rulesets.Scoring;
 using osu.Game.Scoring;
 
 namespace osu.Game.EzOsuGame.Scoring
 {
     /// <summary>
     /// 从本地 replay 构建分数时间线。
-    /// Mania：<see cref="IEzReplaySession.RunTimelineDirectAsync"/>（replay 一遍 SP 快照）。
-    /// Osu：过渡路径 <see cref="EzScoreTimelineHitEventsLegacy"/>（F 类，待 OsuReplaySession）。
+    /// Mania / Osu：<see cref="IEzReplaySession.RunTimelineDirectAsync"/>（replay 一遍 SP 快照）。
     /// 架构详见 <see cref="EZ_SR_TL_REGISTRY"/>（同目录 EZ-SR-TL-REGISTRY.md）。
     /// </summary>
     public static class EzScoreTimelineBuilder
@@ -142,18 +139,16 @@ namespace osu.Game.EzOsuGame.Scoring
 
                 case EzScoreRaceGhostTimelineMode.OsuSession:
                 {
-                    // TODO(EZ-SR-OSL-006): blocked: Osu Session 架构就绪后改 OsuReplaySession.RunTimelineDirectAsync。
-                    var (hitEvents, offsetsRelativeToEnd) = EzScoreTimelineHitEventsLegacy.ResolveHitEvents(
-                        databasedScore, playableBeatmap, hitEventFallback, cancellationToken);
+                    var session = ruleset.CreateEzReplaySession();
 
-                    if (hitEvents == null || hitEvents.Count == 0)
+                    if (session == null)
                     {
-                        if (!string.IsNullOrEmpty(cacheKey))
-                            cache.Store(cacheKey, EzScoreTimeline.EMPTY);
-                        return null;
+                        timeline = null;
+                        break;
                     }
 
-                    timeline = EzScoreTimelineHitEventsLegacy.BuildFromHitEvents(ruleset, playableBeatmap, scoreInfo, hitEvents, offsetsRelativeToEnd);
+                    timeline = session.RunTimelineDirectAsync(databasedScore, playableBeatmap, environment, ReplayRunPurpose.ForLive, cancellationToken)
+                                      .ConfigureAwait(false).GetAwaiter().GetResult();
                     break;
                 }
 

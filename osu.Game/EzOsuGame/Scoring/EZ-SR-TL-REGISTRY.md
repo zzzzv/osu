@@ -262,8 +262,8 @@ flowchart LR
 | OSL-002 | **done** | Osu | `EzScoreRaceGhostTimelineMode.OsuSession` |
 | OSL-003 | **done** | Osu | `EzScoreRaceRulesetSupport` — Osu 返回 `OsuSession` |
 | OSL-004 | blocked | Osu | 删 `EzScoreTimelineJudgementTime.cs` |
-| OSL-005 | blocked | Osu | `OsuScoreHitEventGenerator.Generate` → Session.Run HitEvents |
-| OSL-006 | blocked | Osu | `EzScoreTimelineBuilder` — HitEvents 分支 → `RunTimelineDirectAsync` |
+| OSL-005 | **done** | Osu | `OsuScoreHitEventGenerator.Generate` → Session.Run HitEvents |
+| OSL-006 | **done** | Osu | `EzScoreTimelineBuilder` — OsuSession → `RunTimelineDirectAsync` |
 | OSL-007 | **done** | Osu | `OsuReplaySession` + Service + `CreateEzReplaySession` |
 | OSL-008 | blocked | Osu | 删 `EzScoreTimelineHitEventsLegacy` + fallback 注册 |
 | OSL-009 | blocked | Osu | 删 press 匹配 / 精简 Generator |

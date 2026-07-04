@@ -14,7 +14,7 @@ namespace osu.Game.EzOsuGame.Scoring
 {
     /// <summary>
     /// 进程内 <see cref="IEzReplaySession"/> 门面：按 <see cref="ScoreInfo.Ruleset"/> 分发到各 ruleset 的 Session 单例。
-    /// 无 Session 的规则集（如 Osu 过渡）在 <see cref="RunHitEventsAsync"/> 返回 null。
+    /// 无 Session 的规则集在 <see cref="RunHitEventsAsync"/> 返回 null。
     /// </summary>
     public sealed class EzReplaySessionRouter : IEzReplaySession
     {
@@ -58,7 +58,7 @@ namespace osu.Game.EzOsuGame.Scoring
             var session = tryResolve(score);
 
             if (session == null)
-                return Task.FromResult<List<HitEvent>?>(null);
+                return Task.FromResult(new List<HitEvent>());
 
             return session.RunHitEventsAsync(score, beatmap, cancellationToken);
         }
