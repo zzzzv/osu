@@ -2,57 +2,50 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using System.Threading.Tasks;
 using osu.Game.Beatmaps;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.Rulesets;
-using osu.Game.Rulesets.Judgements;
 using osu.Game.Rulesets.Mods;
-using osu.Game.Rulesets.Objects;
-using osu.Game.Rulesets.Objects.Types;
 using osu.Game.Rulesets.Scoring;
 using osu.Game.Scoring;
 
 namespace osu.Game.EzOsuGame.Scoring
 {
     /// <summary>
-    /// 从本地 replay 构建分数时间线。Mania 走 Session 一遍 SP 快照；其他规则集暂用 HitEvents 重放（仅非 Mania）。
-    ///
-    /// 缓存策略：原进程级 <c>timeline_cache</c> 已废弃，改由调用方通过 <see cref="IEzScoreTimelineCache"/> 注入
-    /// Session 作用域缓存。这样可以避免不同上下文（HitMode / HealthMode / JudgePrecedence / Beatmap 难度）、
-    /// 不同 Player（皮肤编辑器嵌入 Player / 真实 Player）之间互相污染缓存。
-    /// 重启进程即清空所有 cache（无磁盘持久化）。
-    ///
-    /// 设计选择：timeline 与 <see cref="ScoreInfo.TotalScore"/> 解耦。调用方对同一条 ScoreInfo 调
-    /// <see cref="osu.Game.Scoring.ScoreManager.Recalculate"/> / <see cref="osu.Game.Scoring.ScoreManager.RenamePlayer"/>
-    /// 后，cache 仍命中，UI 上 ghost 终局分可能与 ScoreInfo 终局分不一致 — 视为可接受。
+    /// 从本地 replay 构建分数时间线。
+    /// Mania：<see cref="IEzReplaySession.RunTimelineDirectAsync"/>（replay 一遍 SP 快照）。
+    /// Osu：过渡路径 <see cref="EzScoreTimelineHitEventsLegacy"/>（F 类，待 OsuReplaySession）。
+    /// 架构详见 <see cref="EZ_SR_TL_REGISTRY"/>（同目录 EZ-SR-TL-REGISTRY.md）。
     /// </summary>
-    // TODO(EZ-SR-TL-020): Osu Session 对齐后更新类注释，移除 HitEvents 重放描述。
     public static class EzScoreTimelineBuilder
     {
-        private static Func<Score, IBeatmap, CancellationToken, (List<HitEvent>? hitEvents, bool offsetsRelativeToEnd)>? hitEventFallback;
+        private static Func<Score, IBeatmap, CancellationToken, (System.Collections.Generic.List<HitEvent>? hitEvents, bool offsetsRelativeToEnd)>? hitEventFallback;
 
         /// <summary>
-        /// 注册一个 HitEvents 生成回退函数，供尚无 IEzReplaySession 的规则集（如 Osu）使用。
-        /// 注册在静态构造函数中，在 tryBuild 首次被调用前生效。
+        /// 注册 HitEvents 生成回退（Osu 过渡）。见 OsuScoreHitEventGenerator 静态构造。
         /// </summary>
-        public static void RegisterHitEventFallback(Func<Score, IBeatmap, CancellationToken, (List<HitEvent>? hitEvents, bool offsetsRelativeToEnd)> fallback)
+        public static void RegisterHitEventFallback(Func<Score, IBeatmap, CancellationToken, (System.Collections.Generic.List<HitEvent>? hitEvents, bool offsetsRelativeToEnd)> fallback)
         {
             hitEventFallback = fallback;
         }
 
         /// <summary>
         /// 创建一个进程内 in-memory 缓存实例，绑定到调用方生命周期。
-        /// 通常由调用方持有。
         /// </summary>
         public static IEzScoreTimelineCache CreateSessionCache() => new EzScoreTimelineCache();
+
+        /// <summary>架构注册表 markdown 文件名（文档用）。</summary>
+        public const string EZ_SR_TL_REGISTRY = "EZ-SR-TL-REGISTRY.md";
 
         public static EzScoreTimeline? TryBuild(ScoreManager scoreManager, BeatmapManager beatmaps, ScoreInfo scoreInfo, IBeatmap? sharedPlayableBeatmap = null,
                                                 IEzScoreTimelineCache? cache = null, IGameplayEnvironment? environment = null, CancellationToken cancellationToken = default)
             => tryBuild(scoreManager, beatmaps, scoreInfo, sharedPlayableBeatmap, cache ?? NullEzScoreTimelineCache.INSTANCE, environment, cancellationToken);
+
+        internal static EzScoreTimeline BuildFromHitEventsForTesting(Ruleset ruleset, IBeatmap beatmap, ScoreInfo scoreInfo, System.Collections.Generic.IReadOnlyList<HitEvent> hitEvents,
+                                                                     bool offsetsRelativeToEnd = false)
+            => EzScoreTimelineHitEventsLegacy.BuildFromHitEventsForTesting(ruleset, beatmap, scoreInfo, hitEvents, offsetsRelativeToEnd);
 
         private static EzScoreTimeline? tryBuild(ScoreManager scoreManager, BeatmapManager beatmaps, ScoreInfo scoreInfo, IBeatmap? sharedPlayableBeatmap,
                                                  IEzScoreTimelineCache cache, IGameplayEnvironment? environment, CancellationToken cancellationToken)
@@ -93,10 +86,8 @@ namespace osu.Game.EzOsuGame.Scoring
 
             var databasedScore = scoreManager.GetScore(scoreInfo);
 
-            // 唯一门槛：磁盘/库内是否有可读的 replay 帧（不依赖 ScoreInfo.Files 元数据）。
             if (databasedScore?.Replay == null || databasedScore.Replay.Frames.Count == 0)
             {
-                // 显式缓存 null 结果（以 Empty sentinel 形式），避免后续每帧反复走这条路径。
                 if (!string.IsNullOrEmpty(cacheKey))
                     cache.Store(cacheKey, EzScoreTimeline.EMPTY);
                 return null;
@@ -146,13 +137,15 @@ namespace osu.Game.EzOsuGame.Scoring
                     }
 
                     timeline = session.RunTimelineDirectAsync(databasedScore, playableBeatmap, resolvedEnv, cancellationToken)
-                                       .ConfigureAwait(false).GetAwaiter().GetResult();
+                                      .ConfigureAwait(false).GetAwaiter().GetResult();
                     break;
                 }
 
                 case EzScoreRaceGhostTimelineMode.HitEvents:
-                    // TODO(EZ-SR-TL-007): 改走 OsuReplaySession + Bridge，勿再 resolveHitEvents/buildFromHitEvents。
-                    var (hitEvents, offsetsRelativeToEnd) = resolveHitEvents(databasedScore, playableBeatmap, cancellationToken);
+                {
+                    // TODO(EZ-SR-TL-007): blocked: Osu Session 架构就绪后改 OsuReplaySession.RunTimelineDirectAsync。
+                    var (hitEvents, offsetsRelativeToEnd) = EzScoreTimelineHitEventsLegacy.ResolveHitEvents(
+                        databasedScore, playableBeatmap, hitEventFallback, cancellationToken);
 
                     if (hitEvents == null || hitEvents.Count == 0)
                     {
@@ -161,8 +154,9 @@ namespace osu.Game.EzOsuGame.Scoring
                         return null;
                     }
 
-                    timeline = buildFromHitEvents(ruleset, playableBeatmap, scoreInfo, hitEvents, offsetsRelativeToEnd);
+                    timeline = EzScoreTimelineHitEventsLegacy.BuildFromHitEvents(ruleset, playableBeatmap, scoreInfo, hitEvents, offsetsRelativeToEnd);
                     break;
+                }
 
                 default:
                     if (!string.IsNullOrEmpty(cacheKey))
@@ -183,243 +177,6 @@ namespace osu.Game.EzOsuGame.Scoring
             return timeline;
         }
 
-        // TODO(EZ-SR-TL-010): Osu Session 完成后删除；角逐 timeline 不再二次从 HitEvents 构建。
-        private static (List<HitEvent>? hitEvents, bool offsetsRelativeToEnd) resolveHitEvents(Score databasedScore, IBeatmap playableBeatmap, CancellationToken cancellationToken)
-        {
-            // 统计页打开时 ScoreInfo 上可能有临时 HitEvents（[Ignored]，不持久化）。
-            if (databasedScore.ScoreInfo.HitEvents.Count > 0)
-                return (databasedScore.ScoreInfo.HitEvents.ToList(), true);
-
-            // 尝试通过 session 生成（Mania 走 ManiaSession 路径，不会进这里；Osu 无 session 时回退到注册的 fallback）。
-            var ruleset = databasedScore.ScoreInfo.Ruleset.CreateInstance();
-            var session = ruleset.CreateEzReplaySession();
-
-            if (session != null)
-            {
-                var task = session.RunHitEventsAsync(databasedScore, playableBeatmap, cancellationToken);
-                var hitEvents = Task.Run(() => task, cancellationToken).GetAwaiter().GetResult();
-                return (hitEvents, false);
-            }
-
-            if (hitEventFallback != null)
-                return hitEventFallback(databasedScore, playableBeatmap, cancellationToken);
-
-            return (null, false);
-        }
-
-        // TODO(EZ-SR-TL-011): Osu Session 完成后删除 buildFromHitEvents 及 BuildFromHitEventsForTesting。
-        internal static EzScoreTimeline BuildFromHitEventsForTesting(Ruleset ruleset, IBeatmap beatmap, ScoreInfo scoreInfo, IReadOnlyList<HitEvent> hitEvents,
-                                                                     bool offsetsRelativeToEnd = false)
-            => buildFromHitEvents(ruleset, beatmap, scoreInfo, hitEvents, offsetsRelativeToEnd);
-
-        private static EzScoreTimeline buildFromHitEvents(Ruleset ruleset, IBeatmap beatmap, ScoreInfo scoreInfo, IReadOnlyList<HitEvent> hitEvents, bool offsetsRelativeToEnd)
-        {
-            double fallbackMissWindow = resolveFallbackMissWindow(beatmap);
-
-            var scoreProcessor = ruleset.CreateScoreProcessor();
-            applyScoreProcessorContext(scoreProcessor, scoreInfo);
-            scoreProcessor.ApplyBeatmap(beatmap);
-            scoreProcessor.Mods.Value = scoreInfo.Mods;
-
-            foreach (var mod in scoreInfo.Mods.OfType<IApplicableToScoreProcessor>())
-                mod.ApplyToScoreProcessor(scoreProcessor);
-
-            // 构建 HitObject 引用字典，将 O(N×M) 的线性查找优化为 O(1) 字典查找。
-            var hitObjectMap = buildHitObjectReferenceMap(beatmap);
-
-            var snapshots = new List<EzScoreTimelineSnapshot>();
-            double lastClockTime = double.NegativeInfinity;
-
-            foreach (var hitEvent in hitEvents.OrderBy(e => getJudgementTime(e, offsetsRelativeToEnd, beatmap, fallbackMissWindow, null, hitObjectMap)))
-            {
-                var beatmapHitObject = findBeatmapHitObject(beatmap, hitEvent.HitObject, hitObjectMap);
-                ensureHitWindows(beatmap, beatmapHitObject);
-
-                scoreProcessor.ApplyResult(new JudgementResult(hitEvent.HitObject, hitEvent.HitObject.CreateJudgement())
-                {
-                    Type = hitEvent.Result,
-                    TimeOffset = hitEvent.TimeOffset,
-                });
-
-                double clockTime = getJudgementTime(hitEvent, offsetsRelativeToEnd, beatmap, fallbackMissWindow, beatmapHitObject, hitObjectMap);
-
-                // 保持时间线严格单调，避免同一时刻多条快照导致查询抖动。
-                if (clockTime <= lastClockTime)
-                    clockTime = lastClockTime + 0.001;
-
-                lastClockTime = clockTime;
-                snapshots.Add(EzScoreTimelineSnapshot.Create(clockTime, scoreProcessor, hitEvent.GameplayRate ?? 1.0));
-            }
-
-            if (snapshots.Count == 0)
-                snapshots.Add(EzScoreTimelineSnapshot.Create(0, scoreProcessor));
-            else if (snapshots[0].ClockTime > 0)
-                snapshots.Insert(0, new EzScoreTimelineSnapshot { ClockTime = 0 });
-
-            return new EzScoreTimeline(snapshots);
-        }
-
-        /// <summary>
-        /// 构建 beatmap 所有 HitObject（含嵌套）的引用字典，用于 O(1) 查找。
-        /// </summary>
-        private static Dictionary<HitObject, HitObject> buildHitObjectReferenceMap(IBeatmap beatmap)
-        {
-            var map = new Dictionary<HitObject, HitObject>(ReferenceEqualityComparer.Instance);
-
-            foreach (var ho in beatmap.HitObjects)
-                collectHitObjectReferences(ho, map);
-
-            return map;
-        }
-
-        private static void collectHitObjectReferences(HitObject hitObject, Dictionary<HitObject, HitObject> map)
-        {
-            map.TryAdd(hitObject, hitObject);
-
-            foreach (var nested in hitObject.NestedHitObjects)
-                collectHitObjectReferences(nested, map);
-        }
-
-        // TODO(EZ-SR-TL-012): Osu Session 完成后删除；仅 HitEvents 重放路径使用。
-        private static double getJudgementTime(HitEvent hitEvent, bool offsetsRelativeToEnd, IBeatmap beatmap, double fallbackMissWindow, HitObject? beatmapHitObject = null, Dictionary<HitObject, HitObject>? hitObjectMap = null)
-        {
-            beatmapHitObject ??= findBeatmapHitObject(beatmap, hitEvent.HitObject, hitObjectMap);
-            return EzScoreTimelineJudgementTime.Get(hitEvent, offsetsRelativeToEnd, beatmapHitObject, fallbackMissWindow);
-        }
-
-        // TODO(EZ-SR-TL-013): Osu Session 完成后删除 HitObject 查找补丁（findBeatmapHitObject 等）。
-        private static HitObject findBeatmapHitObject(IBeatmap beatmap, HitObject hitObject, Dictionary<HitObject, HitObject>? hitObjectMap = null)
-        {
-            // O(1) 字典查找：覆盖绝大多数情况（replay HitObject 与 beatmap 共享引用）。
-            if (hitObjectMap != null && hitObjectMap.TryGetValue(hitObject, out var mapped))
-                return mapped;
-
-            // 回退：线性扫描 + 属性匹配（仅在 replay 使用不同 HitObject 实例时触发）。
-            foreach (var candidate in beatmap.HitObjects)
-            {
-                if (ReferenceEquals(candidate, hitObject))
-                    return candidate;
-
-                var nested = findNestedBeatmapHitObject(candidate, hitObject);
-                if (nested != null)
-                    return nested;
-            }
-
-            foreach (var candidate in beatmap.HitObjects)
-            {
-                if (objectsMatchForLookup(candidate, hitObject))
-                    return candidate;
-
-                var nested = findNestedBeatmapHitObject(candidate, hitObject);
-                if (nested != null)
-                    return nested;
-            }
-
-            return hitObject;
-        }
-
-        private static HitObject? findNestedBeatmapHitObject(HitObject parent, HitObject hitObject)
-        {
-            foreach (var nested in parent.NestedHitObjects)
-            {
-                if (ReferenceEquals(nested, hitObject))
-                    return nested;
-
-                var deeper = findNestedBeatmapHitObject(nested, hitObject);
-                if (deeper != null)
-                    return deeper;
-            }
-
-            foreach (var nested in parent.NestedHitObjects)
-            {
-                if (objectsMatchForLookup(nested, hitObject))
-                    return nested;
-            }
-
-            return null;
-        }
-
-        private static bool objectsMatchForLookup(HitObject candidate, HitObject hitObject)
-        {
-            if (candidate.StartTime != hitObject.StartTime || candidate.GetType() != hitObject.GetType())
-                return false;
-
-            if (hitObject is IHasColumn hitColumn)
-            {
-                if (candidate is IHasColumn candidateColumn)
-                    return candidateColumn.Column == hitColumn.Column;
-
-                return false;
-            }
-
-            return true;
-        }
-
-        // TODO(EZ-SR-TL-014): Osu Session 完成后删除；Mania TimelineHitModeOverride 已在 ManiaReplaySession 内设置。
-        private static void applyScoreProcessorContext(ScoreProcessor scoreProcessor, ScoreInfo scoreInfo)
-        {
-            if (scoreInfo.IsLegacyScore)
-                scoreProcessor.IsLegacyScore = true;
-
-            EzScoreTimelineBridge.ApplyHitEventsScoreProcessorContext(scoreProcessor, scoreInfo);
-        }
-
-        // TODO(EZ-SR-TL-015): Osu Session 完成后删除 ensureHitWindows/resolveFallbackMissWindow 等 HitEvents 专用辅助。
-        private static void ensureHitWindows(IBeatmap? beatmap, HitObject hitObject)
-        {
-            if (beatmap == null)
-                return;
-
-            if (hitObject.HitWindows != null && hitObject.HitWindows != HitWindows.Empty)
-                return;
-
-            if (hitObject.NestedHitObjects.Count > 0)
-                return;
-
-            hitObject.ApplyDefaults(beatmap.ControlPointInfo, beatmap.BeatmapInfo.Difficulty);
-        }
-
-        private static double resolveFallbackMissWindow(IBeatmap? beatmap)
-        {
-            if (beatmap == null)
-                return 0;
-
-            foreach (var hitObject in beatmap.HitObjects)
-            {
-                var windows = findFirstNonEmptyHitWindows(hitObject);
-                if (windows != null)
-                    return windows.WindowFor(HitResult.Miss);
-            }
-
-            foreach (var hitObject in beatmap.HitObjects)
-            {
-                if (hitObject.NestedHitObjects.Count > 0)
-                    continue;
-
-                hitObject.ApplyDefaults(beatmap.ControlPointInfo, beatmap.BeatmapInfo.Difficulty);
-
-                if (hitObject.HitWindows != null && hitObject.HitWindows != HitWindows.Empty)
-                    return hitObject.HitWindows.WindowFor(HitResult.Miss);
-            }
-
-            return 0;
-        }
-
-        private static HitWindows? findFirstNonEmptyHitWindows(HitObject hitObject)
-        {
-            if (hitObject.HitWindows != null && hitObject.HitWindows != HitWindows.Empty)
-                return hitObject.HitWindows;
-
-            foreach (var nested in hitObject.NestedHitObjects)
-            {
-                var windows = findFirstNonEmptyHitWindows(nested);
-                if (windows != null)
-                    return windows;
-            }
-
-            return null;
-        }
-
         private static string? getCacheKey(ScoreInfo? scoreInfo, EzScoreRaceGhostTimelineMode timelineMode, IGameplayEnvironment environment, IBeatmap? beatmap)
         {
             string? identity = getScoreIdentity(scoreInfo);
@@ -435,13 +192,10 @@ namespace osu.Game.EzOsuGame.Scoring
             switch (timelineMode)
             {
                 case EzScoreRaceGhostTimelineMode.ManiaSession:
-                {
-                    // 与角逐 HUD 一致：全局 HitMode/HealthMode/JudgePrecedence，不读成绩嵌入字段。
                     return $"{identity}|m|{modFp}|{beatmapFp}|hm{(int)environment.ManiaHitMode}|hh{(int)environment.ManiaHealthMode}|jp{(int)environment.JudgePrecedence}";
-                }
 
                 case EzScoreRaceGhostTimelineMode.HitEvents:
-                    // TODO(EZ-SR-TL-008): Osu Session 对齐后定义 Osu 缓存键策略（参照 ManiaSession 环境键）。
+                    // TODO(EZ-SR-TL-008): blocked: Osu Session 对齐后定义 Osu 缓存键策略。
                     return $"{identity}|h|{modFp}|{beatmapFp}";
 
                 default:
@@ -449,7 +203,7 @@ namespace osu.Game.EzOsuGame.Scoring
             }
         }
 
-        private static string getModFingerprint(IReadOnlyList<Mod> mods)
+        private static string getModFingerprint(System.Collections.Generic.IReadOnlyList<Mod> mods)
             => string.Join(',', mods.OrderBy(m => m.Acronym).Select(m => m.Acronym));
 
         private static string? getScoreIdentity(ScoreInfo? scoreInfo)
