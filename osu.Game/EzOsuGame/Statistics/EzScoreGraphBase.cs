@@ -481,6 +481,7 @@ namespace osu.Game.EzOsuGame.Statistics
 
             try
             {
+                // TODO(EZ-SR-TL-024): Phase 1.5 — 改用 ReplayRunRequest(ForLive) + RunRequestAsync（见 EZ-SR-TL-REGISTRY.md）。
                 // TODO(P3-Rest): 应使用 ReplayRunRequest(ForLive) 统一入口
                 // 当前暂时直接调用 RunAsync，P3-Rest 阶段改为 RunRequestAsync
                 if (committedEnvironment != null)

@@ -134,7 +134,6 @@ namespace osu.Game.Screens.Ranking.Statistics
 
                     if (databasedScore != null)
                     {
-                        // 非游戏结束立即进入结算的场景下，HitEvents 都是空的，需要定量补充。
                         generatedHitEvents = await ReplaySession.RunHitEventsAsync(databasedScore, playable, loadCancellation.Token).ConfigureAwait(true);
                     }
 

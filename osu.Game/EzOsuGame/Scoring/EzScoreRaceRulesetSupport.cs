@@ -8,7 +8,7 @@ namespace osu.Game.EzOsuGame.Scoring
     public enum EzScoreRaceGhostTimelineMode
     {
         None,
-        // TODO(EZ-SR-TL-019): Osu Session 对齐后改为 OsuSession 并删除 HitEvents 枚举名。
+        // TODO(EZ-SR-TL-019): blocked: Osu Session 架构就绪后改为 OsuSession 并删除 HitEvents 枚举名。
         HitEvents,
         ManiaSession,
     }
@@ -32,7 +32,7 @@ namespace osu.Game.EzOsuGame.Scoring
                     return EzScoreRaceGhostTimelineMode.ManiaSession;
 
                 case 0:
-                    // TODO(EZ-SR-TL-006): 返回 OsuSession，改走 Bridge + OsuReplaySession.RunTimeline。
+                    // TODO(EZ-SR-TL-006): blocked: Osu Session 架构就绪后返回 OsuSession + RunTimelineDirectAsync。
                     return EzScoreRaceGhostTimelineMode.HitEvents;
 
                 default:

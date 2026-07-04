@@ -54,6 +54,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
         [Resolved]
         private Ez2ConfigManager ezConfig { get; set; } = null!;
 
+        // TODO(EZ-SR-TL-025): Phase 1.5 — resolveSessionInputScore 改 RunRequestAsync(ForLive)（见 EZ-SR-TL-REGISTRY.md）。
         // TODO(P3-Rest): resolveSessionInputScore() 应移除，改为通过 IEzReplaySession.RunRequestAsync(ForLive)
         // 当前临时方案：保留 scoreManager 用于获取 databased score
         [Resolved]

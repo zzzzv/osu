@@ -354,7 +354,8 @@ namespace osu.Game
             dependencies.CacheAs<RulesetStore>(RulesetStore = new RealmRulesetStore(realm, Storage));
             dependencies.CacheAs<IRulesetStore>(RulesetStore);
 
-            // 通过 Ruleset 工厂获取正确的 IEzReplaySession 实现（类似 ScoreProcessor 模式）
+            // TODO(EZ-SR-TL-023): ReplaySession 应按 score.Ruleset 解析 IEzReplaySession（Ruleset.CreateEzReplaySession），
+            // 勿固定「第一个非 null」单例。调用方（StatisticsPanel 等）继续 RunHitEventsAsync，不膨胀 per-ruleset API。
             foreach (var rulesetInfo in RulesetStore.AvailableRulesets)
             {
                 var rulesetInstance = rulesetInfo.CreateInstance();
