@@ -24,11 +24,10 @@ namespace osu.Game.EzOsuGame.Scoring
     /// Osu 角逐过渡：从 HitEvents 列表二次喂 SP 构建 <see cref="EzScoreTimeline"/>。
     /// Mania 不得调用；Mania 使用 <see cref="IEzReplaySession.RunTimelineDirectAsync"/>。
     /// </summary>
-    // TODO(EZ-SR-TL-010): Osu Session 完成后删除本模块。
-    // TODO(EZ-SR-TL-011): 删除 BuildFromHitEventsForTesting 及 BuildFromHitEvents。
+    // TODO(EZ-SR-OSL-008): Osu Session 完成后删除本模块（原 TL-010~015）。
     internal static class EzScoreTimelineHitEventsLegacy
     {
-        // TODO(EZ-SR-TL-010): Osu Session 完成后删除。
+        // TODO(EZ-SR-OSL-008): Osu Session 完成后删除。
         internal static (List<HitEvent>? hitEvents, bool offsetsRelativeToEnd) ResolveHitEvents(
             Score databasedScore,
             IBeatmap playableBeatmap,
@@ -121,7 +120,7 @@ namespace osu.Game.EzOsuGame.Scoring
                 collectHitObjectReferences(nested, map);
         }
 
-        // TODO(EZ-SR-TL-012): Osu Session 完成后删除。
+        // TODO(EZ-SR-OSL-008): Osu Session 完成后删除。
         private static double getJudgementTime(HitEvent hitEvent, bool offsetsRelativeToEnd, IBeatmap beatmap, double fallbackMissWindow, HitObject? beatmapHitObject = null,
                                                Dictionary<HitObject, HitObject>? hitObjectMap = null)
         {
@@ -129,7 +128,7 @@ namespace osu.Game.EzOsuGame.Scoring
             return EzScoreTimelineJudgementTime.Get(hitEvent, offsetsRelativeToEnd, beatmapHitObject, fallbackMissWindow);
         }
 
-        // TODO(EZ-SR-TL-013): Osu Session 完成后删除。
+        // TODO(EZ-SR-OSL-008): Osu Session 完成后删除。
         private static HitObject findBeatmapHitObject(IBeatmap beatmap, HitObject hitObject, Dictionary<HitObject, HitObject>? hitObjectMap = null)
         {
             if (hitObjectMap != null && hitObjectMap.TryGetValue(hitObject, out var mapped))
@@ -201,7 +200,7 @@ namespace osu.Game.EzOsuGame.Scoring
                 scoreProcessor.IsLegacyScore = true;
         }
 
-        // TODO(EZ-SR-TL-015): Osu Session 完成后删除。
+        // TODO(EZ-SR-OSL-008): Osu Session 完成后删除。
         private static void ensureHitWindows(IBeatmap? beatmap, HitObject hitObject)
         {
             if (beatmap == null)

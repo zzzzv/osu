@@ -8,7 +8,7 @@ using osu.Game.Rulesets.Scoring;
 namespace osu.Game.EzOsuGame.Scoring
 {
     // OSU-TRANSITIONAL: 仅 EzScoreTimelineHitEventsLegacy 使用。
-    // TODO(EZ-SR-TL-017): blocked: Osu Session 架构就绪后删除整文件。
+    // TODO(EZ-SR-OSL-004): blocked: Osu Session 架构就绪后删除整文件。
     internal static class EzScoreTimelineJudgementTime
     {
         public static double Get(HitEvent hitEvent, bool offsetsRelativeToEnd, HitObject? beatmapHitObject = null, double fallbackMissWindow = 0)

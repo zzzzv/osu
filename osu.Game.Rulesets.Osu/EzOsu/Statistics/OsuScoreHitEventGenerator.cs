@@ -21,7 +21,7 @@ namespace osu.Game.Rulesets.Osu.EzOsu.Statistics
     /// 通过分析回放帧和谱面对象计算命中判定。
     /// </summary>
     // OSU-TRANSITIONAL: F 类 — press 匹配生成 HitEvents，供 EzScoreTimelineHitEventsLegacy 使用。
-    // TODO(EZ-SR-TL-001): blocked: Osu Session 架构就绪后新增 OsuReplaySession。
+    // TODO(EZ-SR-OSL-007): blocked: Osu Session 架构就绪后新增 OsuReplaySession。
     public sealed class OsuScoreHitEventGenerator
     {
         private readonly struct ReplayPressEvent
@@ -43,7 +43,7 @@ namespace osu.Game.Rulesets.Osu.EzOsu.Statistics
 
         static OsuScoreHitEventGenerator()
         {
-            // OSU-TRANSITIONAL: 注册 F 类 HitEvents fallback，直至 OsuReplaySession（TL-001）。
+            // OSU-TRANSITIONAL: 注册 F 类 HitEvents fallback，直至 OsuReplaySession（OSL-007）。
             EzScoreTimelineBuilder.RegisterHitEventFallback((score, beatmap, ct) =>
             {
                 if (Instance.Validate(score))
@@ -83,7 +83,7 @@ namespace osu.Game.Rulesets.Osu.EzOsu.Statistics
         /// <param name="playableBeatmap">与分数关联的可玩谱面</param>
         /// <param name="cancellationToken">用于停止生成的取消令牌</param>
         /// <returns>生成的命中事件列表，若无法生成则返回 null</returns>
-        // TODO(EZ-SR-TL-003): blocked: Osu Session 架构就绪后改为 OsuReplaySession.Run(...).HitEvents。
+        // TODO(EZ-SR-OSL-005): blocked: Osu Session 架构就绪后改为 OsuReplaySession.Run(...).HitEvents。
         public List<HitEvent>? Generate(Score score, IBeatmap playableBeatmap, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -168,7 +168,7 @@ namespace osu.Game.Rulesets.Osu.EzOsu.Statistics
         /// <summary>
         /// 收集需要判定的所有目标对象（Circle、Slider、Spinner）。
         /// </summary>
-        // TODO(EZ-SR-TL-018): blocked: Osu Session 架构就绪后删除 press 匹配遗留逻辑。
+        // TODO(EZ-SR-OSL-009): blocked: Osu Session 架构就绪后删除 press 匹配遗留逻辑。
         private static List<HitObject> collectJudgementTargets(IBeatmap beatmap, CancellationToken cancellationToken)
         {
             var targets = new List<HitObject>();

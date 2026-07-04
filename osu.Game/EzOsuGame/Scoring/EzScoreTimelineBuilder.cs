@@ -142,7 +142,7 @@ namespace osu.Game.EzOsuGame.Scoring
 
                 case EzScoreRaceGhostTimelineMode.HitEvents:
                 {
-                    // TODO(EZ-SR-TL-007): blocked: Osu Session 架构就绪后改 OsuReplaySession.RunTimelineDirectAsync。
+                    // TODO(EZ-SR-OSL-006): blocked: Osu Session 架构就绪后改 OsuReplaySession.RunTimelineDirectAsync。
                     var (hitEvents, offsetsRelativeToEnd) = EzScoreTimelineHitEventsLegacy.ResolveHitEvents(
                         databasedScore, playableBeatmap, hitEventFallback, cancellationToken);
 
@@ -194,7 +194,7 @@ namespace osu.Game.EzOsuGame.Scoring
                     return $"{identity}|m|{modFp}|{beatmapFp}|hm{(int)environment.ManiaHitMode}|hh{(int)environment.ManiaHealthMode}|jp{(int)environment.JudgePrecedence}";
 
                 case EzScoreRaceGhostTimelineMode.HitEvents:
-                    // TODO(EZ-SR-TL-008): blocked: Osu Session 对齐后定义 Osu 缓存键策略。
+                    // TODO(EZ-SR-OSL-001): blocked: Osu Session 对齐后定义 Osu 缓存键策略。
                     return $"{identity}|h|{modFp}|{beatmapFp}";
 
                 default:
