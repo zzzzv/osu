@@ -59,18 +59,90 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 
 ---
 
+## §1.7 分析定稿（只读，2026-07）
+
+本节固化架构讨论结论，避免后续阶段重复梳理。§1.5 表格为摘要；此处补「为什么」。
+
+### 1.7a 什么叫多余计算
+
+| 调用 | 是否浪费 | 说明 |
+|------|----------|------|
+| 只调 `Run` | 否 | 出口为 Score/HitEvents/Statistics |
+| 只调 `RunTimeline` / `RunTimelineDirectAsync` | 否 | 出口为 Timeline；内部仍完整 replay 仿真，**不是**「少算了一截」 |
+| 同 score+env 先 `Run` 再 `RunTimeline` 各一遍 | **是** | 同输入同 env，结果应对齐 → 第二遍纯浪费（TL-026 已用 `RunWithTimeline` + `sessionRunCache` 消除） |
+| Graph offset 拖动（C） | 否 | 不跑 Session，UI 层平移已有 HitEvents |
+| Graph offset 落定（D） | 否 | **新 env**（含 committed offset）→ 新 cache key，合理的精确二次 Session |
+
+**定音**：要优化的是「同 key 双倍完整仿真」，不是否定 `RunTimeline` 单次成本。
+
+### 1.7b ForStored / ForLive 与 cache key
+
+环境由 `ReplayRunPurpose` + `ResolveForReplay(score, purpose)` 解析。**Purpose 不同 → env 不同 → cache key 不同**；不强行合并，但各自 key 内仍须一遍 SP 多出口。
+
+| 消费方 | Purpose | env 语义 | 与谁可共 cache |
+|--------|---------|----------|----------------|
+| StatisticsPanel 补 HitEvents | ForStored | 成绩嵌入 HitMode/HealthMode（有则 FromScore） | 同 score、同 ForStored 解析结果的 Graph/Panel |
+| Graph Now 基线 | ForLive | 当前全局 HitMode/HealthMode 等 | 同 score、同 ForLive 的 `RunAsync` / `RunRequestAsync` |
+| 角逐 ghost Timeline | ForLive | 与 HUD 一致，**不**读成绩嵌入 HitMode | 同 score+ForLive 的 Graph Now（若同时需要 Score+Timeline，走 `RunRequestAsync` 一次） |
+| Graph offset 落定（D） | ForLive | env 含 offset → **新 key** | 不与 base ForLive 共用 |
+
+### 1.7c 共出口分组（Mania，已实现）
+
+同一 `score + 解析后 environment` → `sessionRunCache` 一条目 → `RunWithTimeline` 一次仿真 → 多出口：
+
+| 出口 | 典型消费方 |
+|------|------------|
+| `Score`（含 HitEvents、Statistics） | Graph Now、`RunAsync` |
+| `EzScoreTimeline` | `RunTimelineAsync`、`RunTimelineDirectAsync`（角逐 Builder，不经 TimelineCache） |
+| `ReplayRunResult`（Score + Timeline） | `RunRequestAsync(ForLive)`（Graph TL-024） |
+
+**读法差异，不是算法差异**：StatisticsPanel 只 patch `HitEvents` 子集；Graph 读完整 `Score`；Race 读 `Timeline.QueryAtTime`——三者可共享底层 Run，**禁止**为不同出口各跑一遍仿真。
+
+**Osu**：无 Session；角逐 F 类 legacy 不参与 `sessionRunCache`（generator → `buildFromHitEvents`，非 replay 一遍视图）。
+
+### 1.7d C / D / E / F 易混澄清
+
+| 代号 | 是什么 | 是不是工作项 |
+|------|--------|--------------|
+| **C** | Graph 拖 offset → `RefreshDisplayOnly` | 已实现 UX，本 epic 不改 |
+| **D** | offset debounce → `RefreshFromService` | 已实现，新 env 精确 Session |
+| **E** | Mania 已有 Session 输出，却再 `buildFromHitEvents` 建 Timeline | **否** — 仅文档禁令；Mania 必须用 `RunTimeline` / `RunWithTimeline` |
+| **F** | Osu：`OsuScoreHitEventGenerator` → legacy 喂 SP | **是过渡** — Phase 3 `OsuReplaySession` 后删除 |
+
+**Graph 改 offset = C/D，与 E/F 无关。** PR-B 把 legacy **只留给 Osu** 即落实「Mania 禁止 F 类」。
+
+### 1.7e HitEvents vs 完整 Score（场景原则）
+
+| 问题 | 结论 |
+|------|------|
+| 何时「只补 HitEvents」就够 | StatisticsPanel：内存 patch，不覆盖 Realm Statistics；数据来自同一 Run 的 HitEvents 子集 |
+| 何时必须要完整 Score | Graph Now、Parity 测试、跨源不变量（HitEvents 聚合 ≡ Statistics） |
+| 何时用 Timeline 而非 Score | 角逐 HUD 实时分；**禁止**用终局 `TotalScore` 充当时钟查询结果 |
+| Mania 能否 HitEvents→SP 建 Timeline | **禁止**（F/E 类）；Timeline 必须 replay 一遍 SP 快照 |
+| Osu 角逐 | F 类过渡；精度上限由 generator 决定，不对标 Mania Session |
+
+### 1.7f 本分析 epic 边界（未展开部分）
+
+以下**刻意不在** Phase 0–1.5b 分析定稿内展开，见 §4 Phase 2/3：
+
+- Mania `ResolveEnvironment`、Session 零 `GlobalConfig` 读（Phase 2）
+- Osu/Taiko/Catch `OsuReplaySession`、角逐改 `OsuSession`（Phase 3）
+- Osu timeline 缓存键 TL-008（随 Osu Session 一并定）
+
+---
+
 ## §2 消费场景矩阵
 
-| 消费场景 | 所需出口 | Mania | Osu | 原则 |
-|----------|----------|-------|-----|------|
-| Realm 持久化 | Statistics / Acc / TotalScore | ✓ | ✓ | HitEvents `[Ignored]` |
-| StatisticsPanel 补 HitEvents | HitEvents | `ReplaySession.RunHitEventsAsync` ✓ | 无 Session 时 null | Router 按 ruleset 分发 |
-| Graph Original | Realm 静态 | ✓ | — | 不跑 Session |
-| Graph Now 基线 | 完整 Score | RunAsync(ForLive) | — | 共享 base cache |
-| Graph offset | C / D | ✓ | — | 不污染 base |
-| 角逐 Timeline | EzScoreTimeline | RunTimelineDirect | F 类 legacy | Mania 一遍 SP |
-| 角逐 HUD 实时分 | Timeline 快照 | ✓ | ✓ | 不用终局 TotalScore |
-| Parity | Score + HitEvents 字段级 | Drawable ≡ Session | 未建立 | REPLAY_JUDGE_MERGE |
+| 消费场景 | 所需出口 | Purpose | Mania | Osu | 原则 |
+|----------|----------|---------|-------|-----|------|
+| Realm 持久化 | Statistics / Acc / TotalScore | — | ✓ | ✓ | HitEvents `[Ignored]` |
+| StatisticsPanel 补 HitEvents | HitEvents | ForStored | Router ✓ | 无 Session → null | 只 patch HitEvents；见 §1.7b/c |
+| Graph Original | Realm 静态 | — | ✓ | — | 不跑 Session |
+| Graph Now 基线 | 完整 Score | ForLive | RunRequestAsync ✓ | — | 与 Panel **可**共 key（若 purpose/env 一致） |
+| Graph offset | C / D | ForLive（D 为新 env） | ✓ | — | 不污染 base；见 §1.7d |
+| 角逐 Timeline | EzScoreTimeline | ForLive | RunTimelineDirect | F 类 legacy | 一遍 SP；Osu 见 §1.7e |
+| 角逐 HUD 实时分 | Timeline 快照 | — | ✓ | ✓ | 不用终局 TotalScore |
+| Parity | Score + HitEvents 字段级 | ForStored/ForLive | Drawable ≡ Session | 未建立 | REPLAY_JUDGE_MERGE |
 
 ---
 
@@ -135,7 +207,7 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | Cache | 持有者 | 用途 |
 |-------|--------|------|
 | `IEzScoreTimelineCache` | EzScoreRaceService / Player | 角逐 timeline 结果 |
-| `EzReplaySession` Score/Timeline/Combined | Session Service | Panel / Graph / RunRequest |
+| `EzReplaySession` `sessionRunCache` / Score/Timeline/Combined | Session Service | Panel / Graph / RunRequest（§1.7c） |
 | Graph offset debounce | 新 env key | 精确重算，独立条目 |
 
 角逐 Builder **不**经 Session TimelineCache（`RunTimelineDirectAsync`）。
