@@ -112,6 +112,8 @@ namespace osu.Game.EzOsuGame.HUD
         private EzScoreRaceState? boundState2;
 
         private bool refreshScheduled;
+        private long lastNowBarScore = long.MinValue;
+        private double lastProcessorUpdateTime;
 
         [Resolved]
         private OsuColour colours { get; set; } = null!;
@@ -210,11 +212,12 @@ namespace osu.Game.EzOsuGame.HUD
             updateCurrentAndTheoreticalBars();
             base.CornerRadius = CornerRadius.Value * Math.Min(DrawWidth, DrawHeight);
 
-            // 对齐官方 MultiSpectatorLeaderboardProvider：每帧驱动 processor 的 UpdateScore。
-            // 不做节流：QueryAtTime 是 O(log n) 二分查找，开销可忽略；
-            // 框架 Bindable.Value setter 内置去重，值不变时不触发下游事件链。
-            ghostProcessor1?.UpdateScore();
-            ghostProcessor2?.UpdateScore();
+            if (Time.Current - lastProcessorUpdateTime >= 50)
+            {
+                ghostProcessor1?.UpdateScore();
+                ghostProcessor2?.UpdateScore();
+                lastProcessorUpdateTime = Time.Current;
+            }
         }
 
         protected override void OnGameplayClockResolved(GameplayClockContainer clock)
@@ -285,7 +288,11 @@ namespace osu.Game.EzOsuGame.HUD
             long barScoreScale = getBarScoreScale();
             long nowBarScore = GetLiveDisplayScore();
 
-            bars[0].UpdateValues(EzHUDStrings.SCORE_COMPARE_NOW_LABEL, formatScore(nowBarScore), nowBarScore, barScoreScale, getBarColour(isCurrent: true));
+            if (nowBarScore != lastNowBarScore)
+            {
+                bars[0].UpdateValues(EzHUDStrings.SCORE_COMPARE_NOW_LABEL, formatScore(nowBarScore), nowBarScore, barScoreScale, getBarColour(isCurrent: true));
+                lastNowBarScore = nowBarScore;
+            }
 
             if (CompareCondition1Setting.Value == EzScoreRaceMetric.TheoreticalMaxScore)
                 updateTheoreticalCompareBar(bars[1], CompareCondition1Setting.Value, barScoreScale);

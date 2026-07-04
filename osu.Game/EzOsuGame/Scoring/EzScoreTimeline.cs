@@ -41,13 +41,49 @@ namespace osu.Game.EzOsuGame.Scoring
             FinalTotalScore = this.snapshots[^1].TotalScore;
         }
 
+        // TODO(EZ-SR-TL-021): 动态变速 Mod（GetTrueGameplayRate 随时间变化）下 ghost 可能与玩家时钟不同步。
+        // 统一倍速 Mod（DT/HT 等）在 Mod 过滤一致时无需 rate 换算；若将来修复，推荐增量 Session 而非 rate 列表。
         public EzScoreTimelineSnapshot QueryAtTime(double clockTime)
         {
+            int index = -1;
+            TryQueryAtTime(clockTime, ref index, out var snapshot);
+            return snapshot;
+        }
+
+        /// <summary>
+        /// 时钟单调前进时 O(1) 摊还；回退/seek 时回退到二分查找。
+        /// <paramref name="cachedIndex"/> 由调用方（processor）持有，避免多 ghost 共享 timeline 时互相污染。
+        /// </summary>
+        public bool TryQueryAtTime(double clockTime, ref int cachedIndex, out EzScoreTimelineSnapshot snapshot)
+        {
             if (snapshots.Length == 0)
-                return EzScoreTimelineSnapshot.Empty;
+            {
+                cachedIndex = -1;
+                snapshot = EzScoreTimelineSnapshot.Empty;
+                return false;
+            }
+
+            if (cachedIndex >= 0 && cachedIndex < snapshots.Length)
+            {
+                if (cachedIndex + 1 < snapshots.Length && clockTime >= snapshots[cachedIndex].ClockTime && clockTime < snapshots[cachedIndex + 1].ClockTime)
+                {
+                    snapshot = snapshots[cachedIndex];
+                    return true;
+                }
+
+                if (cachedIndex == snapshots.Length - 1 && clockTime >= snapshots[cachedIndex].ClockTime)
+                {
+                    snapshot = snapshots[cachedIndex];
+                    return true;
+                }
+            }
 
             if (clockTime <= snapshots[0].ClockTime)
-                return snapshots[0];
+            {
+                cachedIndex = 0;
+                snapshot = snapshots[0];
+                return true;
+            }
 
             int left = 0;
             int right = snapshots.Length - 1;
@@ -62,7 +98,9 @@ namespace osu.Game.EzOsuGame.Scoring
                     right = mid - 1;
             }
 
-            return snapshots[left];
+            cachedIndex = left;
+            snapshot = snapshots[left];
+            return true;
         }
     }
 }

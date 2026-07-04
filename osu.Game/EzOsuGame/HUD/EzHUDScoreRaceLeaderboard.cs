@@ -10,9 +10,7 @@ using osu.Framework.Extensions.Color4Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Colour;
 using osu.Framework.Graphics.Containers;
-using osu.Framework.Logging;
 using osu.Game.Configuration;
-using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Localization;
 using osu.Game.EzOsuGame.Scoring;
 using osu.Game.Graphics.Containers;
@@ -27,7 +25,7 @@ namespace osu.Game.EzOsuGame.HUD
 {
     /// <summary>
     /// 本地多成绩实时角逐排行榜。对齐官方 Leaderboard 架构：
-    /// - <see cref="EzScoreRaceService"/> 负责选歌界面预加载，提供 <see cref="IEzScoreRaceStateLookup.States"/> 字典
+    /// - <see cref="EzScoreRaceService"/> 提供 ghost 元数据（选歌）与进局 timeline build
     /// - 本组件订阅字典变化，按需创建/销毁 processor，每个 processor 绑定到一个 ghost state
     /// - HUD 直接绑定 processor 的 bindable，不需要 Session/Entry 中间层
     /// </summary>
@@ -58,9 +56,12 @@ namespace osu.Game.EzOsuGame.HUD
         private readonly Cached sorting = new Cached();
 
         private IBindableDictionary<string, EzScoreRaceState>? stateLookup;
+        private EzScoreRaceService? scoreRaceService;
 
         private LeaderboardEntryState? currentPlayerEntry;
         private double lastUpdateScoreDisplayScroll = double.MinValue;
+        private double lastScrollTarget = double.MinValue;
+        private double lastProcessorUpdateTime;
         private bool rebuildScheduled;
 
         public EzHUDScoreRaceLeaderboard()
@@ -118,6 +119,10 @@ namespace osu.Game.EzOsuGame.HUD
                 return;
             }
 
+            scoreRaceService = service;
+            ModFilterSetting.BindTo(service.ModFilter);
+            MaxEntriesSetting.BindTo(service.MaxEntries);
+
             stateLookup = service.States;
             stateLookup!.BindCollectionChanged(onStatesChanged, true);
 
@@ -146,7 +151,21 @@ namespace osu.Game.EzOsuGame.HUD
             if (LoadingText == null)
                 return;
 
-            LoadingText.Alpha = SupportsGhostRace && stateLookup!.Count == 0 ? 1 : 0;
+            LoadingText.Alpha = SupportsGhostRace && shouldShowLoading() ? 1 : 0;
+        }
+
+        private bool shouldShowLoading()
+        {
+            if (stateLookup == null || stateLookup.Count == 0)
+                return true;
+
+            foreach (var state in stateLookup)
+            {
+                if (state.Value.Timeline != null)
+                    return false;
+            }
+
+            return true;
         }
 
         protected override void OnSessionReady()
@@ -173,10 +192,18 @@ namespace osu.Game.EzOsuGame.HUD
             // Pause 时 GameplayClockContainer.CurrentTime 停止前进，processor 自然停止 ghost 推進。
             // 不做节流：QueryAtTime 是 O(log n) 二分查找，开销可忽略；
             // 框架 Bindable.Value setter 内置去重，值不变时不触发下游事件链。
-            foreach (var entry in entryStates)
-                entry.Processor?.UpdateScore();
+            if (Time.Current - lastProcessorUpdateTime >= 50)
+            {
+                foreach (var entry in entryStates)
+                    entry.Processor?.UpdateScore();
+
+                lastProcessorUpdateTime = Time.Current;
+            }
 
             updateScoreDisplay();
+
+            if (LoadingText?.Alpha > 0)
+                updateLoadingState();
         }
 
         private void updateScoreDisplay()
@@ -193,7 +220,12 @@ namespace osu.Game.EzOsuGame.HUD
             if (requiresScroll && trackedScore != null)
             {
                 double scrollTarget = scroll.GetChildPosInContent(trackedScore) + trackedScore.DrawHeight / 2 - scroll.DrawHeight / 2;
-                scroll.ScrollTo(scrollTarget);
+
+                if (Math.Abs(scrollTarget - lastScrollTarget) > 0.5f)
+                {
+                    scroll.ScrollTo(scrollTarget);
+                    lastScrollTarget = scrollTarget;
+                }
             }
 
             if (Math.Abs(currentScroll - lastUpdateScoreDisplayScroll) < 0.5f)
@@ -272,14 +304,12 @@ namespace osu.Game.EzOsuGame.HUD
                 var drawable = createDrawableForState(state, out var entryState);
                 entryStates.Add(entryState);
                 Flow.Add(drawable);
-                Logger.Log($"[EzScoreRace] Leaderboard rebuild: state[{i}] {state.ScoreInfo.ID}, HasTimeline={state.Timeline != null}", Ez2ConfigManager.LOGGER_NAME, LogLevel.Debug);
                 i++;
             }
 
             sorting.Invalidate();
             sort();
             updateLoadingState();
-            Logger.Log($"[EzScoreRace] Leaderboard rebuild done: {entryStates.Count} ghost rows + player", Ez2ConfigManager.LOGGER_NAME, LogLevel.Debug);
         }
 
         private void createCurrentPlayerEntry()
@@ -355,15 +385,12 @@ namespace osu.Game.EzOsuGame.HUD
             if (stateLookup!.Count == 0)
                 return ghostCount > 0;
 
-            string[] boundIds = stateLookup!.Keys.OrderBy(k => k).ToArray();
-            string[] stateIds = entryStates.Where(s => s != currentPlayerEntry).Select(s => s.ScoreInfoId).OrderBy(id => id).ToArray();
-
-            if (boundIds.Length != stateIds.Length)
+            if (ghostCount != stateLookup.Count)
                 return true;
 
-            for (int i = 0; i < boundIds.Length; i++)
+            foreach (var kvp in stateLookup)
             {
-                if (boundIds[i] != stateIds[i])
+                if (entryStates.All(e => e == currentPlayerEntry || e.ScoreInfoId != kvp.Key))
                     return true;
             }
 

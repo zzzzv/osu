@@ -23,6 +23,24 @@ namespace osu.Game.Tests.EzOsuGame.Scoring
     public class EzScoreTimelineTest
     {
         [Test]
+        public void TestTryQueryAtTimeFastPathReusesCachedIndex()
+        {
+            var timeline = new EzScoreTimeline(new List<EzScoreTimelineSnapshot>
+            {
+                new EzScoreTimelineSnapshot { ClockTime = 0, TotalScore = 0 },
+                new EzScoreTimelineSnapshot { ClockTime = 1000, TotalScore = 100 },
+                new EzScoreTimelineSnapshot { ClockTime = 2000, TotalScore = 250 },
+            });
+
+            int index = -1;
+            Assert.That(timeline.TryQueryAtTime(1500, ref index, out var snap1), Is.True);
+            Assert.That(snap1.TotalScore, Is.EqualTo(100));
+            Assert.That(timeline.TryQueryAtTime(1600, ref index, out var snap2), Is.True);
+            Assert.That(snap2.TotalScore, Is.EqualTo(100));
+            Assert.That(index, Is.EqualTo(1));
+        }
+
+        [Test]
         public void TestQueryAtTimeReturnsLatestSnapshotNotExceedingClock()
         {
             var timeline = new EzScoreTimeline(new List<EzScoreTimelineSnapshot>

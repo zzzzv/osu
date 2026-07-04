@@ -32,12 +32,16 @@ namespace osu.Game.EzOsuGame.Scoring
         /// </summary>
         public IClock? ReferenceClock { get; set; }
 
+        private int cachedSnapshotIndex = -1;
+        private EzScoreTimelineSnapshot lastSnapshot;
+
         /// <summary>
         /// 绑定到一个 ghost state。
         /// </summary>
         public void BindTo(EzScoreRaceState state)
         {
             State = state;
+            cachedSnapshotIndex = -1;
             UpdateScore();
         }
 
@@ -47,15 +51,18 @@ namespace osu.Game.EzOsuGame.Scoring
         public void Reset()
         {
             State = null;
+            cachedSnapshotIndex = -1;
             zeroBindables();
         }
 
+        // TODO(EZ-SR-TL-021): 见 EzScoreTimeline.TryQueryAtTime。统一倍速 Mod 下无需额外 rate 处理。
         public void UpdateScore()
         {
             var state = State;
 
             if (state?.Timeline == null || ReferenceClock == null)
             {
+                cachedSnapshotIndex = -1;
                 zeroBindables();
                 return;
             }
@@ -64,20 +71,33 @@ namespace osu.Game.EzOsuGame.Scoring
 
             if (double.IsNaN(currentTime))
             {
+                cachedSnapshotIndex = -1;
                 zeroBindables();
                 return;
             }
 
-            var snapshot = state.Timeline.QueryAtTime(currentTime);
+            if (!state.Timeline.TryQueryAtTime(currentTime, ref cachedSnapshotIndex, out var snapshot))
+            {
+                zeroBindables();
+                return;
+            }
 
-            // 对齐官方 SpectatorScoreProcessor：直接赋值。
-            // 框架 Bindable<T>.Value setter 内置 EqualityComparer 去重，
-            // 值不变时不会触发 ValueChanged 事件链，无需手动条件判断。
+            if (snapshotMatches(lastSnapshot, snapshot))
+                return;
+
+            lastSnapshot = snapshot;
+
             TotalScore.Value = snapshot.TotalScore;
             Accuracy.Value = snapshot.Accuracy;
             Combo.Value = snapshot.HighestCombo;
             MissCount.Value = snapshot.MissCount;
         }
+
+        private static bool snapshotMatches(EzScoreTimelineSnapshot a, EzScoreTimelineSnapshot b)
+            => a.TotalScore == b.TotalScore
+               && a.Accuracy == b.Accuracy
+               && a.Combo == b.Combo
+               && a.MissCount == b.MissCount;
 
         private void zeroBindables()
         {
