@@ -38,6 +38,9 @@ namespace osu.Game.EzOsuGame.Scoring
                 BuildCacheKey("timeline", score, beatmap, environment),
                 () => RunTimelineAsyncFunc(score, beatmap, environment, cancellationToken));
 
+        public virtual Task<EzScoreTimeline> RunTimelineDirectAsync(Score score, IBeatmap beatmap, IGameplayEnvironment environment, CancellationToken cancellationToken = default)
+            => RunTimelineAsyncFunc(score, beatmap, environment, cancellationToken);
+
         public virtual Task<ReplayRunResult> RunRequestAsync(ReplayRunRequest request, CancellationToken cancellationToken = default)
             => GetOrCreate(
                 CombinedCache,

@@ -27,6 +27,11 @@ namespace osu.Game.EzOsuGame.Scoring
         Task<EzScoreTimeline> RunTimelineAsync(Score score, IBeatmap beatmap, IGameplayEnvironment environment, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// 构建时间线，不经 Service 层 TimelineCache（<see cref="EzScoreTimelineBuilder"/> 角逐热路径）。
+        /// </summary>
+        Task<EzScoreTimeline> RunTimelineDirectAsync(Score score, IBeatmap beatmap, IGameplayEnvironment environment, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// 统一请求入口：支持更复杂的场景（如同时需要 Score + Timeline）。
         /// </summary>
         Task<ReplayRunResult> RunRequestAsync(ReplayRunRequest request, CancellationToken cancellationToken = default);

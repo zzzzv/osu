@@ -84,26 +84,26 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             Assert.That(liveTimeline.FinalTotalScore, Is.EqualTo(lazerTimeline.FinalTotalScore));
             Assert.That(liveTimeline.FinalTotalScore, Is.Not.EqualTo(iidxTimeline.FinalTotalScore));
 
-            _ = ManiaScoreHitEventGenerator.Instance;
-            var bridgeTimeline = EzScoreTimelineBridge.TryBuildManiaTimeline(score, beatmap);
+            var service = new ManiaReplaySessionService();
+            var builderTimeline = service.RunTimelineDirectAsync(
+                score,
+                beatmap,
+                GlobalConfigStore.EzConfig.ResolveForReplay(null, ReplayRunPurpose.ForLive)).GetAwaiter().GetResult();
 
-            Assert.That(bridgeTimeline, Is.Not.Null);
-            Assert.That(bridgeTimeline!.FinalTotalScore, Is.EqualTo(lazerTimeline.FinalTotalScore));
+            Assert.That(builderTimeline.FinalTotalScore, Is.EqualTo(lazerTimeline.FinalTotalScore));
         }
 
         [Test]
-        public void TestManiaTimelineBridgeMatchesRunTimeline()
+        public void TestManiaTimelineBuilderPathMatchesRunTimeline()
         {
-            _ = ManiaScoreHitEventGenerator.Instance;
-
             var (score, beatmap, environment) = LazerTapReplayFixtures.CreateTwoNoteColumnTap();
 
             var sessionTimeline = ManiaReplaySession.RunTimeline(score, beatmap, environment);
-            var bridgeTimeline = EzScoreTimelineBridge.TryBuildManiaTimeline(score, beatmap);
+            var service = new ManiaReplaySessionService();
+            var directTimeline = service.RunTimelineDirectAsync(score, beatmap, environment).GetAwaiter().GetResult();
 
-            Assert.That(bridgeTimeline, Is.Not.Null);
-            Assert.That(bridgeTimeline!.FinalTotalScore, Is.EqualTo(sessionTimeline.FinalTotalScore));
-            Assert.That(bridgeTimeline.QueryAtTime(2500).TotalScore, Is.EqualTo(sessionTimeline.FinalTotalScore));
+            Assert.That(directTimeline.FinalTotalScore, Is.EqualTo(sessionTimeline.FinalTotalScore));
+            Assert.That(directTimeline.QueryAtTime(2500).TotalScore, Is.EqualTo(sessionTimeline.FinalTotalScore));
         }
 
         [Test]

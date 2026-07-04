@@ -13,34 +13,19 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 {
     /// <summary>
     /// Mania 统一 replay 入口：负责 async、环境解析与共享 cache。
-    /// Panel / Graph / Race 通过此服务获取 replay 判定结果，禁止自建解析或缓存。
+    /// Panel / Graph / Race 通过此接口获取 replay 判定结果，禁止自建解析或缓存。
     /// </summary>
     public sealed class ManiaReplaySessionService : EzReplaySession
     {
-        public ManiaReplaySessionService()
-        {
-            // Race Timeline: register a direct synchronous builder (not via service)
-            // to avoid any async/caching issues for ghost score HUDs.
-            EzScoreTimelineBridge.RegisterManiaTimelineBuilder((score, beatmap, cancellationToken) =>
-            {
-                var environment = GlobalConfigStore.EzConfig.ResolveForReplay(null, ReplayRunPurpose.ForLive);
-                return ManiaReplaySession.RunTimeline(score, beatmap, environment, cancellationToken);
-            });
-
-            ManiaScoreTimelineBridgeRegistration.EnsureRegistered();
-        }
-
         protected override async Task<Score> RunScoreAsyncFunc(Score score, IBeatmap beatmap, IGameplayEnvironment? environment, CancellationToken cancellationToken)
         {
             var ruleset = new ManiaRuleset();
 
             environment ??= GlobalConfigStore.EzConfig.ResolveForReplay(score.ScoreInfo, ReplayRunPurpose.ForStored);
 
-            // Clone to isolate Session mutations from the caller's Score/ScoreInfo reference.
             var clone = score.DeepClone();
             var result = await ruleset.RunReplayAsync(clone, beatmap, environment, cancellationToken).ConfigureAwait(false);
 
-            // Copy back HitEvents and Statistics so caller gets fresh results on their object.
             score.ScoreInfo.HitEvents = result.ScoreInfo.HitEvents;
             score.ScoreInfo.Statistics.Clear();
             foreach (var kvp in result.ScoreInfo.Statistics)
@@ -53,11 +38,10 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         {
             environment ??= GlobalConfigStore.EzConfig.ResolveForReplay(score.ScoreInfo, ReplayRunPurpose.ForStored);
 
-            // ManiaReplaySession.RunTimeline is synchronous — execute directly to avoid nesting Task.Run
-            // which can cause threadpool starvation when the caller is already on a pool thread (via ensureTimelinesLoaded).
             return Task.FromResult(ManiaReplaySession.RunTimeline(score, beatmap, environment, cancellationToken));
         }
 
+        // TODO(EZ-SR-TL-026): blocked: 改为单次 run(recordTimeline:true) 返回 Score+Timeline，消除双倍仿真。
         protected override async Task<ReplayRunResult> RunCombinedAsyncFunc(ReplayRunRequest request, CancellationToken cancellationToken)
         {
             try
@@ -65,14 +49,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 var ruleset = new ManiaRuleset();
                 var resolvedEnv = request.Environment ?? GlobalConfigStore.EzConfig.ResolveForReplay(request.Score.ScoreInfo, request.Purpose);
 
-                // Clone only for RunReplayAsync to isolate PopulateScore mutations.
                 var clone = request.Score.DeepClone();
                 var sessionScore = await ruleset.RunReplayAsync(clone, request.Beatmap, resolvedEnv, cancellationToken).ConfigureAwait(false);
 
-                // RunTimeline reads only Replay.Frames, safe on original score.
                 var timeline = ManiaReplaySession.RunTimeline(request.Score, request.Beatmap, resolvedEnv, cancellationToken);
 
-                // Copy back HitEvents so caller sees fresh results on their object.
                 request.Score.ScoreInfo.HitEvents = sessionScore.ScoreInfo.HitEvents;
 
                 return new ReplayRunResult(sessionScore, timeline, hitCache: false, isValidReplay: true);
@@ -88,6 +69,3 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         }
     }
 }
-
-
-

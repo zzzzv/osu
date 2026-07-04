@@ -135,8 +135,20 @@ namespace osu.Game.EzOsuGame.Scoring
             switch (timelineMode)
             {
                 case EzScoreRaceGhostTimelineMode.ManiaSession:
-                    timeline = EzScoreTimelineBridge.TryBuildManiaTimeline(databasedScore, playableBeatmap, cancellationToken);
+                {
+                    var resolvedEnv = environment ?? GlobalConfigStore.EzConfig.ResolveForReplay(scoreInfo, ReplayRunPurpose.ForLive);
+                    var session = ruleset.CreateEzReplaySession();
+
+                    if (session == null)
+                    {
+                        timeline = null;
+                        break;
+                    }
+
+                    timeline = session.RunTimelineDirectAsync(databasedScore, playableBeatmap, resolvedEnv, cancellationToken)
+                                       .ConfigureAwait(false).GetAwaiter().GetResult();
                     break;
+                }
 
                 case EzScoreRaceGhostTimelineMode.HitEvents:
                     // TODO(EZ-SR-TL-007): 改走 OsuReplaySession + Bridge，勿再 resolveHitEvents/buildFromHitEvents。
