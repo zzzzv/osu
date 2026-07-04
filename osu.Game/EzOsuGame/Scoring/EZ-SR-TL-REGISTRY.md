@@ -167,8 +167,8 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | **1.5** | Graph Now；RunRequestAsync(ForLive)（TL-024/025） | 基本完成 |
 | **1.5b** | TL-026 单次 run 多出口 | 基本完成 |
 | **2** | API 收敛：optional env + Session 统一 ResolveForReplay；删重复/dead API | 基本完成 |
-| **3** | Osu Session（OSL）；Taiko/Catch 远期 | OSL-001~003 **done**；核心 **blocked** |
-| **Osu 过渡** | `EzScoreTimelineHitEventsLegacy` + 角逐 ghost（F 类） | 当前；**OSL-008 后移除** |
+| **3** | Osu Session（OSL）；Taiko/Catch 远期 | OSL-001~007 **done**；接线/清理 **blocked** |
+| **Osu 过渡** | `EzScoreTimelineHitEventsLegacy` + 角逐 ghost（F 类） | **过渡中** — OSL-006 后角逐走 Session；**OSL-008** 删 legacy |
 
 ### §4.1 Phase 3 工作列表（OSL，影响面轻→重）
 
@@ -217,7 +217,7 @@ flowchart LR
 
 ### §4.2 Phase 3 范围备忘（无 OSL 编号）
 
-- **Taiko / Catch Session** — 远期；待 Osu 黄金路径（OSL-007 parity）验证后再开独立前缀或 OSL 后继项。
+- **Osu Session MVP（OSL-007）** — press 匹配 + 一遍 SP；与现 `OsuScoreHitEventGenerator` 同精度。**已知限制**：slider 主体 / spinner 完整判定未覆盖；Drawable / ReplayPlayer 字段级 parity 不在 OSL-004~009 范围。
 - **Ruleset 级 `ResolveEnvironment`** — Phase 3 各 ruleset Session 时再评估（§1.7f）。
 - **TL-021 动态变速 Mod ghost 时钟** — doc-only，不阻塞 OSL。
 
@@ -264,7 +264,7 @@ flowchart LR
 | OSL-004 | blocked | Osu | 删 `EzScoreTimelineJudgementTime.cs` |
 | OSL-005 | blocked | Osu | `OsuScoreHitEventGenerator.Generate` → Session.Run HitEvents |
 | OSL-006 | blocked | Osu | `EzScoreTimelineBuilder` — HitEvents 分支 → `RunTimelineDirectAsync` |
-| OSL-007 | blocked | Osu | `OsuReplaySession` + Service + `CreateEzReplaySession` |
+| OSL-007 | **done** | Osu | `OsuReplaySession` + Service + `CreateEzReplaySession` |
 | OSL-008 | blocked | Osu | 删 `EzScoreTimelineHitEventsLegacy` + fallback 注册 |
 | OSL-009 | blocked | Osu | 删 press 匹配 / 精简 Generator |
 
