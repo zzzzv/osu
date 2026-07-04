@@ -6,7 +6,7 @@ using osu.Game.Rulesets.Scoring;
 
 namespace osu.Game.EzOsuGame.Scoring
 {
-    public readonly struct EzScoreTimelineSnapshot
+    public readonly record struct EzScoreTimelineSnapshot
     {
         public double ClockTime { get; init; }
         public long TotalScore { get; init; }
@@ -16,7 +16,9 @@ namespace osu.Game.EzOsuGame.Scoring
         public int MissCount { get; init; }
 
         /// <summary>
-        /// 实时速度倍率快照（Mod 倍率 × 时间倍率）。
+        /// 构建时记录的 gameplay rate（统计图等使用）。
+        /// TODO(EZ-SR-TL-021): 角逐 HUD 的 <see cref="EzScoreTimeline.QueryAtTime"/> 不读取本字段；
+        /// 统一倍速 Mod 下无需 rate 一致性转换；动态变速 Mod 为已知限制，见 Phase 3 增量 Session 备忘。
         /// </summary>
         public double GameplayRate { get; init; }
 

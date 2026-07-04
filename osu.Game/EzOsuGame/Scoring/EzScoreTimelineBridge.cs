@@ -4,6 +4,7 @@
 using System;
 using System.Threading;
 using osu.Game.Beatmaps;
+using osu.Game.Rulesets.Scoring;
 using osu.Game.Scoring;
 
 namespace osu.Game.EzOsuGame.Scoring
@@ -15,6 +16,16 @@ namespace osu.Game.EzOsuGame.Scoring
     public static class EzScoreTimelineBridge
     {
         private static Func<Score, IBeatmap, CancellationToken, EzScoreTimeline?>? maniaTimelineBuilder;
+        private static Action<ScoreProcessor, ScoreInfo>? hitEventsScoreProcessorContext;
+
+        public static void RegisterHitEventsScoreProcessorContext(Action<ScoreProcessor, ScoreInfo> apply)
+        {
+            ArgumentNullException.ThrowIfNull(apply);
+            hitEventsScoreProcessorContext = apply;
+        }
+
+        internal static void ApplyHitEventsScoreProcessorContext(ScoreProcessor scoreProcessor, ScoreInfo scoreInfo)
+            => hitEventsScoreProcessorContext?.Invoke(scoreProcessor, scoreInfo);
 
         public static void RegisterManiaTimelineBuilder(Func<Score, IBeatmap, CancellationToken, EzScoreTimeline?> builder)
         {

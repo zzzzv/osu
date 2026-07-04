@@ -18,7 +18,8 @@ namespace osu.Game.Benchmarks
 {
     /// <summary>
     /// P2-B: ManiaReplaySessionService 性能基准测试
-    /// 目标：Session ~10ms（多样本谱面）
+    /// Phase 3 备忘：默认采用 timeline + QueryAtTime（EzScoreRaceService）；
+    /// 若需对比增量 Session（方案 B），可在此增加 AdvanceTo 整局基准。
     /// </summary>
     public class BenchmarkManiaReplaySession : BenchmarkTest
     {

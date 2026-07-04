@@ -63,6 +63,7 @@ namespace osu.Game.Rulesets.Mania
         {
             // Ensure Mania skin editor provider is registered when the ruleset assembly is used.
             _ = typeof(EzSkinLNEditorProvider);
+            ManiaScoreTimelineBridgeRegistration.EnsureRegistered();
         }
 
         /// <summary>

@@ -26,6 +26,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 var environment = GlobalConfigStore.EzConfig.ResolveForReplay(null, ReplayRunPurpose.ForLive);
                 return ManiaReplaySession.RunTimeline(score, beatmap, environment, cancellationToken);
             });
+
+            ManiaScoreTimelineBridgeRegistration.EnsureRegistered();
         }
 
         protected override async Task<Score> RunScoreAsyncFunc(Score score, IBeatmap beatmap, IGameplayEnvironment? environment, CancellationToken cancellationToken)

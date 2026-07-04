@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using osu.Game.Beatmaps;
@@ -350,15 +349,7 @@ namespace osu.Game.EzOsuGame.Scoring
             if (scoreInfo.IsLegacyScore)
                 scoreProcessor.IsLegacyScore = true;
 
-            if (scoreInfo.Ruleset.OnlineID != 3)
-                return;
-
-            var environment = GlobalConfigStore.EzConfig.GetGameplayEnvironment();
-
-            PropertyInfo? overrideProperty = scoreProcessor.GetType().GetProperty("TimelineHitModeOverride", BindingFlags.Public | BindingFlags.Instance);
-
-            if (overrideProperty != null && overrideProperty.CanWrite)
-                overrideProperty.SetValue(scoreProcessor, environment.ManiaHitMode);
+            EzScoreTimelineBridge.ApplyHitEventsScoreProcessorContext(scoreProcessor, scoreInfo);
         }
 
         // TODO(EZ-SR-TL-015): Osu Session 完成后删除 ensureHitWindows/resolveFallbackMissWindow 等 HitEvents 专用辅助。
