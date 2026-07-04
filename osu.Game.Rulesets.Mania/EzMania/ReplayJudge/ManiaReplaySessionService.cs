@@ -2,6 +2,7 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using osu.Game.Beatmaps;
@@ -17,46 +18,33 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
     /// </summary>
     public sealed class ManiaReplaySessionService : EzReplaySession
     {
+        private readonly ConcurrentDictionary<string, Lazy<Task<(Score Score, EzScoreTimeline Timeline)>>> sessionRunCache =
+            new ConcurrentDictionary<string, Lazy<Task<(Score Score, EzScoreTimeline Timeline)>>>();
+
         protected override async Task<Score> RunScoreAsyncFunc(Score score, IBeatmap beatmap, IGameplayEnvironment? environment, CancellationToken cancellationToken)
         {
-            var ruleset = new ManiaRuleset();
-
-            environment ??= GlobalConfigStore.EzConfig.ResolveForReplay(score.ScoreInfo, ReplayRunPurpose.ForStored);
-
-            var clone = score.DeepClone();
-            var result = await ruleset.RunReplayAsync(clone, beatmap, environment, cancellationToken).ConfigureAwait(false);
-
-            score.ScoreInfo.HitEvents = result.ScoreInfo.HitEvents;
-            score.ScoreInfo.Statistics.Clear();
-            foreach (var kvp in result.ScoreInfo.Statistics)
-                score.ScoreInfo.Statistics[kvp.Key] = kvp.Value;
-
-            return score;
+            var (resultScore, _) = await getOrRunSession(score, beatmap, environment, ReplayRunPurpose.ForStored, cancellationToken).ConfigureAwait(false);
+            return resultScore;
         }
 
-        protected override Task<EzScoreTimeline> RunTimelineAsyncFunc(Score score, IBeatmap beatmap, IGameplayEnvironment? environment, CancellationToken cancellationToken)
+        protected override async Task<EzScoreTimeline> RunTimelineAsyncFunc(Score score, IBeatmap beatmap, IGameplayEnvironment? environment, CancellationToken cancellationToken)
         {
-            environment ??= GlobalConfigStore.EzConfig.ResolveForReplay(score.ScoreInfo, ReplayRunPurpose.ForStored);
-
-            return Task.FromResult(ManiaReplaySession.RunTimeline(score, beatmap, environment, cancellationToken));
+            var (_, timeline) = await getOrRunSession(score, beatmap, environment, ReplayRunPurpose.ForStored, cancellationToken).ConfigureAwait(false);
+            return timeline;
         }
 
-        // TODO(EZ-SR-TL-026): blocked: 改为单次 run(recordTimeline:true) 返回 Score+Timeline，消除双倍仿真。
         protected override async Task<ReplayRunResult> RunCombinedAsyncFunc(ReplayRunRequest request, CancellationToken cancellationToken)
         {
             try
             {
-                var ruleset = new ManiaRuleset();
-                var resolvedEnv = request.Environment ?? GlobalConfigStore.EzConfig.ResolveForReplay(request.Score.ScoreInfo, request.Purpose);
+                var (score, timeline) = await getOrRunSession(
+                    request.Score,
+                    request.Beatmap,
+                    request.Environment,
+                    request.Purpose,
+                    cancellationToken).ConfigureAwait(false);
 
-                var clone = request.Score.DeepClone();
-                var sessionScore = await ruleset.RunReplayAsync(clone, request.Beatmap, resolvedEnv, cancellationToken).ConfigureAwait(false);
-
-                var timeline = ManiaReplaySession.RunTimeline(request.Score, request.Beatmap, resolvedEnv, cancellationToken);
-
-                request.Score.ScoreInfo.HitEvents = sessionScore.ScoreInfo.HitEvents;
-
-                return new ReplayRunResult(sessionScore, timeline, hitCache: false, isValidReplay: true);
+                return new ReplayRunResult(score, timeline, hitCache: false, isValidReplay: true);
             }
             catch (OperationCanceledException)
             {
@@ -66,6 +54,43 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             {
                 return ReplayRunResult.InvalidReplay(request.Score);
             }
+        }
+
+        private Task<(Score Score, EzScoreTimeline Timeline)> getOrRunSession(
+            Score score,
+            IBeatmap beatmap,
+            IGameplayEnvironment? environment,
+            ReplayRunPurpose purpose,
+            CancellationToken cancellationToken)
+        {
+            var resolvedEnv = environment ?? GlobalConfigStore.EzConfig.ResolveForReplay(score.ScoreInfo, purpose);
+
+            return GetOrCreate(
+                sessionRunCache,
+                BuildCacheKey("session", score, beatmap, resolvedEnv),
+                () => runSessionAsync(score, beatmap, resolvedEnv, cancellationToken));
+        }
+
+        private Task<(Score Score, EzScoreTimeline Timeline)> runSessionAsync(Score score, IBeatmap beatmap, IGameplayEnvironment environment, CancellationToken cancellationToken)
+        {
+            return Task.Run(() =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var (resultScore, timeline) = ManiaReplaySession.RunWithTimeline(score.DeepClone(), beatmap, environment, cancellationToken);
+
+                score.ScoreInfo.HitEvents = resultScore.ScoreInfo.HitEvents;
+                score.ScoreInfo.Statistics.Clear();
+
+                foreach (var kvp in resultScore.ScoreInfo.Statistics)
+                    score.ScoreInfo.Statistics[kvp.Key] = kvp.Value;
+
+                score.ScoreInfo.TotalScore = resultScore.ScoreInfo.TotalScore;
+                score.ScoreInfo.Accuracy = resultScore.ScoreInfo.Accuracy;
+                score.ScoreInfo.MaxCombo = resultScore.ScoreInfo.MaxCombo;
+
+                return (score, timeline);
+            }, cancellationToken);
         }
     }
 }

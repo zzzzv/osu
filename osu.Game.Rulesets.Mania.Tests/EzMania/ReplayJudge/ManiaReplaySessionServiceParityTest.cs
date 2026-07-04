@@ -5,6 +5,7 @@ using System;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using osu.Game.EzOsuGame.Configuration;
+using osu.Game.EzOsuGame.Scoring;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
 
 namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
@@ -121,6 +122,38 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
 
             Assert.That(serviceTimeline.FinalTotalScore, Is.EqualTo(sessionTimeline.FinalTotalScore));
             Assert.That(serviceTimeline.QueryAtTime(0).TotalScore, Is.EqualTo(0));
+        }
+
+        /// <summary>
+        /// RunRequestAsync 与单次 <see cref="ManiaReplaySession.RunWithTimeline"/> 结果一致（TL-026）。
+        /// </summary>
+        [Test]
+        public async Task TestRunRequestAsyncMatchesRunWithTimeline()
+        {
+            var (score, beatmap, environment) = LazerTapReplayFixtures.CreateTwoNoteColumnTap();
+            var service = new ManiaReplaySessionService();
+            var request = new ReplayRunRequest(score, beatmap, environment, ReplayRunPurpose.ForStored);
+
+            var combined = await service.RunRequestAsync(request).ConfigureAwait(true);
+            var (directScore, directTimeline) = ManiaReplaySession.RunWithTimeline(score.DeepClone(), beatmap, environment);
+
+            Assert.That(combined.Score.ScoreInfo.TotalScore, Is.EqualTo(directScore.ScoreInfo.TotalScore));
+            Assert.That(combined.Timeline!.FinalTotalScore, Is.EqualTo(directTimeline.FinalTotalScore));
+        }
+
+        /// <summary>
+        /// 同 score+env 下 RunAsync 与 RunTimelineAsync 共享 sessionRunCache，Timeline 终分与 Run 一致（TL-026）。
+        /// </summary>
+        [Test]
+        public async Task TestRunAsyncAndRunTimelineAsyncShareSessionRunCache()
+        {
+            var (score, beatmap, environment) = LazerTapReplayFixtures.CreateTwoNoteColumnTap();
+            var service = new ManiaReplaySessionService();
+
+            var runResult = await service.RunAsync(score, beatmap, environment).ConfigureAwait(true);
+            var timeline = await service.RunTimelineAsync(score, beatmap, environment).ConfigureAwait(true);
+
+            Assert.That(timeline.FinalTotalScore, Is.EqualTo(runResult.ScoreInfo.TotalScore));
         }
     }
 }

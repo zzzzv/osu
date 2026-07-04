@@ -55,6 +55,20 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             return timeline ?? new EzScoreTimeline(Array.Empty<EzScoreTimelineSnapshot>());
         }
 
+        /// <summary>
+        /// 一遍 Session 判定：同时写回 <see cref="Score"/> 并返回 <see cref="EzScoreTimeline"/>（Service 层多出口）。
+        /// </summary>
+        public static (Score Score, EzScoreTimeline Timeline) RunWithTimeline(Score score, IBeatmap beatmap, IGameplayEnvironment environment,
+                                                                              CancellationToken cancellationToken = default)
+        {
+            var (scoreProcessor, timeline) = run(score, beatmap, environment, recordTimeline: true, cancellationToken);
+
+            score.ScoreInfo.HitEvents = scoreProcessor.HitEvents.ToList();
+            scoreProcessor.PopulateScore(score.ScoreInfo);
+
+            return (score, timeline ?? new EzScoreTimeline(Array.Empty<EzScoreTimelineSnapshot>()));
+        }
+
         private static (ScoreProcessor scoreProcessor, EzScoreTimeline? timeline) run(
             Score score,
             IBeatmap beatmap,
@@ -282,7 +296,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 // For forced-missed tail notes, also apply HoldNote parent and Body
                 // auxiliary results so statistics match live play.
                 if (state.Target is TailNote tailNote && headByTail.TryGetValue(tailNote, out var linkedHead)
-                    && holdByHead.TryGetValue(linkedHead, out var hold))
+                                                      && holdByHead.TryGetValue(linkedHead, out var hold))
                 {
                     if (hold.Body != null)
                         ManiaReplaySessionSimulator.ApplyAuxiliaryResult(scoreProcessor, hold.Body, HitResult.ComboBreak, missEventTime, gameplayRate, recorder);

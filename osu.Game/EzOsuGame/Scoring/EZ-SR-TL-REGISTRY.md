@@ -30,12 +30,12 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | `RunTimeline` | EzScoreTimeline | 1 |
 | `RunHitEvents` | HitEvents（= Run） | 1 |
 
-### Service 层缺口（TL-026）
+### Service 层（TL-026 已完成）
 
-| 调用 | 现状仿真遍数 | 目标 |
+| 调用 | 仿真遍数 | 说明 |
 |------|-------------|------|
-| `RunCombinedAsyncFunc` | 2（Run + RunTimeline） | 1（`recordTimeline:true` 多出口） |
-| 同 score+env 分别 `RunAsync` + `RunTimelineAsync` | 最多 2（不同 cache key） | 共享底层结果 |
+| `RunCombinedAsyncFunc` / `RunRequestAsync` | **1** | `RunWithTimeline` 多出口 |
+| 同 score+env 的 `RunAsync` + `RunTimelineAsync` | **1** | 共享 `sessionRunCache` |
 
 角逐 Builder 使用 `IEzReplaySession.RunTimelineDirectAsync`（不经 TimelineCache）。
 
@@ -93,7 +93,7 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 |-------|------|------|
 | **1** | Mania Session + Timeline + Race | 基本完成 |
 | **1.5** | Graph Now；RunRequestAsync(ForLive)（TL-024/025） | 基本完成 |
-| **1.5b** | TL-026 单次 run 多出口 | blocked |
+| **1.5b** | TL-026 单次 run 多出口 | 基本完成 |
 | **2** | Mania 环境分层；Session 零 GlobalConfig | 文档预览 |
 | **3** | Osu/Taiko/Catch Session | Osu **blocked** |
 | **Osu 过渡** | `EzScoreTimelineHitEventsLegacy` + 角逐 ghost | 当前 |
@@ -124,7 +124,7 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | TL-023 | **done** | All | `EzReplaySessionRouter` 实现 `IEzReplaySession`，按 ruleset 分发 |
 | TL-024 | **done** | Mania | EzScoreGraphBase → RunRequestAsync(ForLive) |
 | TL-025 | **done** | Mania | EzScoreGraphMania ResolveInputScore 简化 |
-| TL-026 | blocked | Mania | RunCombined 单次 run 多出口 |
+| TL-026 | **done** | Mania | `RunWithTimeline` + `sessionRunCache` 多出口 |
 
 维护：新增 `TODO(EZ-SR-TL-*)` 须先在本表加行；PR 合并时更新 status。
 
