@@ -140,7 +140,7 @@ namespace osu.Game.EzOsuGame.Scoring
                     break;
                 }
 
-                case EzScoreRaceGhostTimelineMode.HitEvents:
+                case EzScoreRaceGhostTimelineMode.OsuSession:
                 {
                     // TODO(EZ-SR-OSL-006): blocked: Osu Session 架构就绪后改 OsuReplaySession.RunTimelineDirectAsync。
                     var (hitEvents, offsetsRelativeToEnd) = EzScoreTimelineHitEventsLegacy.ResolveHitEvents(
@@ -193,9 +193,8 @@ namespace osu.Game.EzOsuGame.Scoring
                 case EzScoreRaceGhostTimelineMode.ManiaSession:
                     return $"{identity}|m|{modFp}|{beatmapFp}|hm{(int)environment.ManiaHitMode}|hh{(int)environment.ManiaHealthMode}|jp{(int)environment.JudgePrecedence}";
 
-                case EzScoreRaceGhostTimelineMode.HitEvents:
-                    // TODO(EZ-SR-OSL-001): blocked: Osu Session 对齐后定义 Osu 缓存键策略。
-                    return $"{identity}|h|{modFp}|{beatmapFp}";
+                case EzScoreRaceGhostTimelineMode.OsuSession:
+                    return $"{identity}|m|{modFp}|{beatmapFp}|jp{(int)environment.JudgePrecedence}";
 
                 default:
                     return null;

@@ -26,7 +26,7 @@ namespace osu.Game.Tests.EzOsuGame.Scoring
         {
             var ruleset = new OsuRuleset().RulesetInfo;
             Assert.That(EzScoreRaceRulesetSupport.SupportsGhostRace(ruleset), Is.True);
-            Assert.That(EzScoreRaceRulesetSupport.GetGhostTimelineMode(ruleset), Is.EqualTo(EzScoreRaceGhostTimelineMode.HitEvents));
+            Assert.That(EzScoreRaceRulesetSupport.GetGhostTimelineMode(ruleset), Is.EqualTo(EzScoreRaceGhostTimelineMode.OsuSession));
         }
 
         [Test]

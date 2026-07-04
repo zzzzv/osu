@@ -167,7 +167,7 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | **1.5** | Graph Now；RunRequestAsync(ForLive)（TL-024/025） | 基本完成 |
 | **1.5b** | TL-026 单次 run 多出口 | 基本完成 |
 | **2** | API 收敛：optional env + Session 统一 ResolveForReplay；删重复/dead API | 基本完成 |
-| **3** | Osu Session（OSL）；Taiko/Catch 远期 | Osu **blocked** |
+| **3** | Osu Session（OSL）；Taiko/Catch 远期 | OSL-001~003 **done**；核心 **blocked** |
 | **Osu 过渡** | `EzScoreTimelineHitEventsLegacy` + 角逐 ghost（F 类） | 当前；**OSL-008 后移除** |
 
 ### §4.1 Phase 3 工作列表（OSL，影响面轻→重）
@@ -258,9 +258,9 @@ flowchart LR
 
 | ID | 状态 | 范围 | 文件 / 说明 |
 |----|------|------|-------------|
-| OSL-001 | blocked | Osu | `EzScoreTimelineBuilder.getCacheKey` — Osu Session 缓存键 |
-| OSL-002 | blocked | Osu | `EzScoreRaceGhostTimelineMode` — `HitEvents` → `OsuSession` |
-| OSL-003 | blocked | Osu | `EzScoreRaceRulesetSupport` — Osu 返回 `OsuSession` |
+| OSL-001 | **done** | Osu | `EzScoreTimelineBuilder.getCacheKey` — `\|m\|…\|jp`（无 hm/hh） |
+| OSL-002 | **done** | Osu | `EzScoreRaceGhostTimelineMode.OsuSession` |
+| OSL-003 | **done** | Osu | `EzScoreRaceRulesetSupport` — Osu 返回 `OsuSession` |
 | OSL-004 | blocked | Osu | 删 `EzScoreTimelineJudgementTime.cs` |
 | OSL-005 | blocked | Osu | `OsuScoreHitEventGenerator.Generate` → Session.Run HitEvents |
 | OSL-006 | blocked | Osu | `EzScoreTimelineBuilder` — HitEvents 分支 → `RunTimelineDirectAsync` |
@@ -293,7 +293,7 @@ flowchart LR
 | PR-D | Phase 2 API 收敛 + 删重复 | TL-027~029 |
 | PR-E0 | REGISTRY + OSL 重编号 | OSL-001~009（文档/注释） |
 | PR-E1 | OsuReplaySession 核心 + parity 测试 | OSL-007 |
-| PR-E2 | 接线 + 缓存键 + 枚举 | OSL-001~006 |
+| PR-E2 | 接线（OSL-006）+ 缓存键/枚举（OSL-001~003 已落地） | OSL-006 |
 | PR-E3 | 删 legacy / JudgementTime / press 匹配 | OSL-004, OSL-008, OSL-009 |
 
 分支 `ez/sr-tl-arch`：Phase-0 / PR-A / PR-B / PR-C 已合并。Wiki 对齐见 Ez2Lazer.wiki `6ceebf4`。
