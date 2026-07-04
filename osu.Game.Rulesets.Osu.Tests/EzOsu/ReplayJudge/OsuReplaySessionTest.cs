@@ -68,7 +68,7 @@ namespace osu.Game.Rulesets.Osu.Tests.EzOsu.ReplayJudge
         {
             var (score, beatmap, environment) = OsuReplayFixtures.CreateTwoCircleTap();
 
-            var generatorEvents = OsuScoreHitEventGenerator.Instance.Generate(score, beatmap)!;
+            var generatorEvents = OsuScoreHitEventGenerator.Instance.Generate(score, beatmap);
             var sessionEvents = OsuReplaySession.RunHitEvents(score, beatmap, environment);
 
             Assert.That(generatorEvents.Count, Is.EqualTo(sessionEvents.Count));

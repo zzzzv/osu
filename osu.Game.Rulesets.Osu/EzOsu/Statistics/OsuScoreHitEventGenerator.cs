@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using osu.Game.Beatmaps;
-using osu.Game.EzOsuGame.Scoring;
 using osu.Game.Rulesets.Osu.EzOsu.ReplayJudge;
 using osu.Game.Rulesets.Osu.Replays;
 using osu.Game.Rulesets.Scoring;
@@ -22,18 +21,6 @@ namespace osu.Game.Rulesets.Osu.EzOsu.Statistics
 
         private static readonly OsuReplaySessionService session_service = new OsuReplaySessionService();
 
-        static OsuScoreHitEventGenerator()
-        {
-            // OSU-TRANSITIONAL: 注册 F 类 HitEvents fallback，直至 OSL-008 删除 legacy 路径。
-            EzScoreTimelineBuilder.RegisterHitEventFallback((score, beatmap, ct) =>
-            {
-                if (Instance.Validate(score))
-                    return (Instance.Generate(score, beatmap, ct), false);
-
-                return (null, false);
-            });
-        }
-
         public bool Validate(Score score)
         {
             if (score.ScoreInfo.Ruleset.OnlineID != 0)
@@ -47,7 +34,7 @@ namespace osu.Game.Rulesets.Osu.EzOsu.Statistics
             return replay.Frames.OfType<OsuReplayFrame>().Any();
         }
 
-        public List<HitEvent>? Generate(Score score, IBeatmap playableBeatmap, CancellationToken cancellationToken = default)
+        public List<HitEvent> Generate(Score score, IBeatmap playableBeatmap, CancellationToken cancellationToken = default)
         {
             return session_service.RunHitEventsAsync(score, playableBeatmap, cancellationToken).GetAwaiter().GetResult();
         }

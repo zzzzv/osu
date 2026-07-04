@@ -55,7 +55,7 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | **C** | Graph 拖 offset，UI 预览 | ✓ 合法 |
 | **D** | offset debounce 后精确 Session | ✓ 合法 |
 | **E** | Mania 用 Session HitEvents 再 `buildFromHitEvents` | ✗ 文档禁令（无代码路径） |
-| **F** | Osu generator → `buildFromHitEvents` | OSU-TRANSITIONAL |
+| **F** | Osu generator → `buildFromHitEvents` | **已消除（OSL-008）** |
 
 ---
 
@@ -98,7 +98,7 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 
 **读法差异，不是算法差异**：StatisticsPanel 只 patch `HitEvents` 子集；Graph 读完整 `Score`；Race 读 `Timeline.QueryAtTime`——三者可共享底层 Run，**禁止**为不同出口各跑一遍仿真。
 
-**Osu**：无 Session；角逐 F 类 legacy 不参与 `sessionRunCache`（generator → `buildFromHitEvents`，非 replay 一遍视图）。
+**Osu**：`OsuReplaySessionService` + `sessionRunCache`；角逐经 `RunTimelineDirectAsync`（与 Mania 同形）。
 
 ### 1.7d C / D / E / F 易混澄清
 
@@ -107,7 +107,7 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | **C** | Graph 拖 offset → `RefreshDisplayOnly` | 已实现 UX，本 epic 不改 |
 | **D** | offset debounce → `RefreshFromService` | 已实现，新 env 精确 Session |
 | **E** | Mania 已有 Session 输出，却再 `buildFromHitEvents` 建 Timeline | **否** — 仅文档禁令；Mania 必须用 `RunTimeline` / `RunWithTimeline` |
-| **F** | Osu：`OsuScoreHitEventGenerator` → legacy 喂 SP | **是过渡** — Phase 3 OSL-007 后 OSL-008 删除 |
+| **F** | Osu：`OsuScoreHitEventGenerator` → legacy 喂 SP | **已消除（OSL-008）** |
 
 **Graph 改 offset = C/D，与 E/F 无关。** PR-B 把 legacy **只留给 Osu** 即落实「Mania 禁止 F 类」。
 
@@ -119,15 +119,14 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | 何时必须要完整 Score | Graph Now、Parity 测试、跨源不变量（HitEvents 聚合 ≡ Statistics） |
 | 何时用 Timeline 而非 Score | 角逐 HUD 实时分；**禁止**用终局 `TotalScore` 充当时钟查询结果 |
 | Mania 能否 HitEvents→SP 建 Timeline | **禁止**（F/E 类）；Timeline 必须 replay 一遍 SP 快照 |
-| Osu 角逐 | F 类过渡；精度上限由 generator 决定，不对标 Mania Session |
+| Osu 角逐 | Session 一遍 SP（MVP press 匹配）；精度见 §4.2 |
 
 ### 1.7f 本分析 epic 边界（未展开部分）
 
 以下**刻意不在** Phase 0–1.5b 分析定稿内展开，见 §4 Phase 2/3：
 
 - Mania `ResolveEnvironment`、Ruleset 级环境转换（Phase 3 各 ruleset Session 时再评估）
-- Osu/Taiko/Catch `OsuReplaySession`、角逐改 `OsuSession`（Phase 3）
-- Osu timeline 缓存键 OSL-001（随 Osu Session 一并定）
+- Osu/Taiko/Catch Session 黄金路径 — Osu **done**（OSL）；Taiko/Catch 远期
 
 ---
 
@@ -136,11 +135,11 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | 消费场景 | 所需出口 | Purpose | Mania | Osu | 原则 |
 |----------|----------|---------|-------|-----|------|
 | Realm 持久化 | Statistics / Acc / TotalScore | — | ✓ | ✓ | HitEvents `[Ignored]` |
-| StatisticsPanel 补 HitEvents | HitEvents | ForStored | Router ✓ | 无 Session → null | 只 patch HitEvents；见 §1.7b/c |
+| StatisticsPanel 补 HitEvents | HitEvents | ForStored | Router ✓ | Router ✓ | 只 patch HitEvents；见 §1.7b/c |
 | Graph Original | Realm 静态 | — | ✓ | — | 不跑 Session |
 | Graph Now 基线 | 完整 Score | ForLive | RunRequestAsync ✓ | — | 与 Panel **可**共 key（若 purpose/env 一致） |
 | Graph offset | C / D | ForLive（D 为新 env） | ✓ | — | 不污染 base；见 §1.7d |
-| 角逐 Timeline | EzScoreTimeline | ForLive | RunTimelineDirect | F 类 legacy | 一遍 SP；Osu 见 §1.7e |
+| 角逐 Timeline | EzScoreTimeline | ForLive | RunTimelineDirect | RunTimelineDirect | 一遍 SP |
 | 角逐 HUD 实时分 | Timeline 快照 | — | ✓ | ✓ | 不用终局 TotalScore |
 | Parity | Score + HitEvents 字段级 | ForStored/ForLive | Drawable ≡ Session | 未建立 | REPLAY_JUDGE_MERGE |
 
@@ -152,7 +151,8 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 |------|------|--------|
 | `osu.Game/EzOsuGame/Scoring/*` | IEzReplaySession、Timeline/Race 编排、cache 接口、ReplayRunPurpose | 判定、press 匹配、HitMode Mapping |
 | `Rulesets.Mania/.../ReplayJudge/*` | ManiaReplaySession、RunTimeline、CreateEzReplaySession | Race HUD |
-| `Rulesets.Osu/.../OsuScoreHitEventGenerator` | Osu HitEvents 生成 + fallback 注册 | 长期框架逻辑 |
+| `Rulesets.Osu/.../ReplayJudge/*` | OsuReplaySession、RunTimeline、CreateEzReplaySession | Race HUD |
+| `Rulesets.Osu/.../OsuScoreHitEventGenerator` | 薄壳委托 `OsuReplaySessionService` | press 匹配（已迁入 Session） |
 | ~~EzScoreTimelineBridge~~ | **已删除（TL-005）** | 静态注册反模式 |
 
 目标：`ruleset.CreateEzReplaySession()` → `RunTimelineDirectAsync` / `RunAsync`。
@@ -167,8 +167,7 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | **1.5** | Graph Now；RunRequestAsync(ForLive)（TL-024/025） | 基本完成 |
 | **1.5b** | TL-026 单次 run 多出口 | 基本完成 |
 | **2** | API 收敛：optional env + Session 统一 ResolveForReplay；删重复/dead API | 基本完成 |
-| **3** | Osu Session（OSL）；Taiko/Catch 远期 | OSL-001~007 **done**；接线/清理 **blocked** |
-| **Osu 过渡** | `EzScoreTimelineHitEventsLegacy` + 角逐 ghost（F 类） | **过渡中** — OSL-006 后角逐走 Session；**OSL-008** 删 legacy |
+| **3** | Osu Session（OSL）；Taiko/Catch 远期 | **Osu done**（OSL-001~009） |
 
 ### §4.1 Phase 3 工作列表（OSL，影响面轻→重）
 
@@ -217,7 +216,8 @@ flowchart LR
 
 ### §4.2 Phase 3 范围备忘（无 OSL 编号）
 
-- **Osu Session MVP（OSL-007）** — press 匹配 + 一遍 SP；与现 `OsuScoreHitEventGenerator` 同精度。**已知限制**：slider 主体 / spinner 完整判定未覆盖；Drawable / ReplayPlayer 字段级 parity 不在 OSL-004~009 范围。
+- **Osu Session MVP（OSL-007）** — press 匹配 + 一遍 SP；与现 Generator 同精度。**已知限制**：slider 主体 / spinner 完整判定未覆盖；Drawable / ReplayPlayer 字段级 parity 不在 OSL-004~009 范围。
+- **Taiko / Catch Session** — 远期；待 Osu 黄金路径验证后再开独立前缀或 OSL 后继项。
 - **Ruleset 级 `ResolveEnvironment`** — Phase 3 各 ruleset Session 时再评估（§1.7f）。
 - **TL-021 动态变速 Mod ghost 时钟** — doc-only，不阻塞 OSL。
 
@@ -261,12 +261,12 @@ flowchart LR
 | OSL-001 | **done** | Osu | `EzScoreTimelineBuilder.getCacheKey` — `\|m\|…\|jp`（无 hm/hh） |
 | OSL-002 | **done** | Osu | `EzScoreRaceGhostTimelineMode.OsuSession` |
 | OSL-003 | **done** | Osu | `EzScoreRaceRulesetSupport` — Osu 返回 `OsuSession` |
-| OSL-004 | blocked | Osu | 删 `EzScoreTimelineJudgementTime.cs` |
+| OSL-004 | **done** | Osu | 删 `EzScoreTimelineJudgementTime.cs` |
 | OSL-005 | **done** | Osu | `OsuScoreHitEventGenerator.Generate` → Session.Run HitEvents |
 | OSL-006 | **done** | Osu | `EzScoreTimelineBuilder` — OsuSession → `RunTimelineDirectAsync` |
 | OSL-007 | **done** | Osu | `OsuReplaySession` + Service + `CreateEzReplaySession` |
-| OSL-008 | blocked | Osu | 删 `EzScoreTimelineHitEventsLegacy` + fallback 注册 |
-| OSL-009 | blocked | Osu | 删 press 匹配 / 精简 Generator |
+| OSL-008 | **done** | Osu | 删 `EzScoreTimelineHitEventsLegacy` + `RegisterHitEventFallback` |
+| OSL-009 | **done** | Osu | Generator 瘦身为 Session 委托 |
 
 ---
 
@@ -295,5 +295,3 @@ flowchart LR
 | PR-E1 | OsuReplaySession 核心 + parity 测试 | OSL-007 |
 | PR-E2 | 接线（OSL-006）+ 缓存键/枚举（OSL-001~003 已落地） | OSL-006 |
 | PR-E3 | 删 legacy / JudgementTime / press 匹配 | OSL-004, OSL-008, OSL-009 |
-
-分支 `ez/sr-tl-arch`：Phase-0 / PR-A / PR-B / PR-C 已合并。Wiki 对齐见 Ez2Lazer.wiki `6ceebf4`。

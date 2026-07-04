@@ -39,7 +39,6 @@ using osu.Game.Rulesets.Osu.Skinning.Argon;
 using osu.Game.Rulesets.Osu.Skinning.Default;
 using osu.Game.Rulesets.Osu.Skinning.Legacy;
 using osu.Game.Rulesets.Osu.EzOsu.ReplayJudge;
-using osu.Game.Rulesets.Osu.EzOsu.Statistics;
 using osu.Game.Rulesets.Osu.Statistics;
 using osu.Game.Rulesets.Osu.UI;
 using osu.Game.Rulesets.Replays.Types;
@@ -57,12 +56,6 @@ namespace osu.Game.Rulesets.Osu
 {
     public class OsuRuleset : Ruleset, ILegacyRuleset
     {
-        static OsuRuleset()
-        {
-            // 触发 OsuScoreHitEventGenerator 的静态构造函数，注册 EzScoreTimelineBuilder 的 HitEvents 回退。
-            _ = OsuScoreHitEventGenerator.Instance;
-        }
-
         public override DrawableRuleset CreateDrawableRulesetWith(IBeatmap beatmap, IReadOnlyList<Mod>? mods = null) => new DrawableOsuRuleset(this, beatmap, mods);
 
         public override ScoreProcessor CreateScoreProcessor() => new OsuScoreProcessor();

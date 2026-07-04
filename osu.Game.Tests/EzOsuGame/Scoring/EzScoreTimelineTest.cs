@@ -69,8 +69,8 @@ namespace osu.Game.Tests.EzOsuGame.Scoring
             var circle = new HitCircle { StartTime = 10_000 };
             var hitEvent = new HitEvent(-500, 1.0, HitResult.Great, circle, null, null);
 
-            Assert.That(EzScoreTimelineJudgementTime.Get(hitEvent, offsetsRelativeToEnd: true), Is.EqualTo(9_500));
-            Assert.That(EzScoreTimelineJudgementTime.Get(hitEvent, offsetsRelativeToEnd: false), Is.EqualTo(9_500));
+            Assert.That(EzScoreTimelineTestHelper.GetJudgementTime(hitEvent, offsetsRelativeToEnd: true), Is.EqualTo(9_500));
+            Assert.That(EzScoreTimelineTestHelper.GetJudgementTime(hitEvent, offsetsRelativeToEnd: false), Is.EqualTo(9_500));
         }
 
         [Test]
@@ -90,7 +90,7 @@ namespace osu.Game.Tests.EzOsuGame.Scoring
                 new HitEvent(0, 1.0, HitResult.Great, circle, null, null),
             };
 
-            var timeline = EzScoreTimelineBuilder.BuildFromHitEventsForTesting(ruleset, beatmap, scoreInfo, hitEvents, offsetsRelativeToEnd: false);
+            var timeline = EzScoreTimelineTestHelper.BuildFromHitEvents(ruleset, beatmap, scoreInfo, hitEvents, offsetsRelativeToEnd: false);
 
             Assert.That(timeline.QueryAtTime(0).TotalScore, Is.EqualTo(0));
             Assert.That(timeline.QueryAtTime(9_999).TotalScore, Is.EqualTo(0));
@@ -114,7 +114,7 @@ namespace osu.Game.Tests.EzOsuGame.Scoring
                 new HitEvent(-20_000, 1.0, HitResult.Great, circle, null, null),
             };
 
-            var timeline = EzScoreTimelineBuilder.BuildFromHitEventsForTesting(ruleset, beatmap, scoreInfo, hitEvents, offsetsRelativeToEnd: true);
+            var timeline = EzScoreTimelineTestHelper.BuildFromHitEvents(ruleset, beatmap, scoreInfo, hitEvents, offsetsRelativeToEnd: true);
 
             Assert.That(timeline.QueryAtTime(0).TotalScore, Is.EqualTo(0));
             Assert.That(timeline.QueryAtTime(9_599).TotalScore, Is.EqualTo(0));
@@ -144,7 +144,7 @@ namespace osu.Game.Tests.EzOsuGame.Scoring
                 new HitEvent(0, 1.0, HitResult.Great, circle2, circle1, null),
             };
 
-            var timeline = EzScoreTimelineBuilder.BuildFromHitEventsForTesting(ruleset, beatmap, scoreInfo, hitEvents);
+            var timeline = EzScoreTimelineTestHelper.BuildFromHitEvents(ruleset, beatmap, scoreInfo, hitEvents);
 
             var scoreProcessor = ruleset.CreateScoreProcessor();
             scoreProcessor.ApplyBeatmap(beatmap);

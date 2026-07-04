@@ -18,16 +18,6 @@ namespace osu.Game.EzOsuGame.Scoring
     /// </summary>
     public static class EzScoreTimelineBuilder
     {
-        private static Func<Score, IBeatmap, CancellationToken, (System.Collections.Generic.List<HitEvent>? hitEvents, bool offsetsRelativeToEnd)>? hitEventFallback;
-
-        /// <summary>
-        /// 注册 HitEvents 生成回退（Osu 过渡）。见 OsuScoreHitEventGenerator 静态构造。
-        /// </summary>
-        public static void RegisterHitEventFallback(Func<Score, IBeatmap, CancellationToken, (System.Collections.Generic.List<HitEvent>? hitEvents, bool offsetsRelativeToEnd)> fallback)
-        {
-            hitEventFallback = fallback;
-        }
-
         /// <summary>
         /// 创建一个进程内 in-memory 缓存实例，绑定到调用方生命周期。
         /// </summary>
@@ -39,10 +29,6 @@ namespace osu.Game.EzOsuGame.Scoring
         public static EzScoreTimeline? TryBuild(ScoreManager scoreManager, BeatmapManager beatmaps, ScoreInfo scoreInfo, IBeatmap? sharedPlayableBeatmap = null,
                                                 IEzScoreTimelineCache? cache = null, IGameplayEnvironment? environment = null, CancellationToken cancellationToken = default)
             => tryBuild(scoreManager, beatmaps, scoreInfo, sharedPlayableBeatmap, cache ?? NullEzScoreTimelineCache.INSTANCE, environment, cancellationToken);
-
-        internal static EzScoreTimeline BuildFromHitEventsForTesting(Ruleset ruleset, IBeatmap beatmap, ScoreInfo scoreInfo, System.Collections.Generic.IReadOnlyList<HitEvent> hitEvents,
-                                                                     bool offsetsRelativeToEnd = false)
-            => EzScoreTimelineHitEventsLegacy.BuildFromHitEventsForTesting(ruleset, beatmap, scoreInfo, hitEvents, offsetsRelativeToEnd);
 
         private static EzScoreTimeline? tryBuild(ScoreManager scoreManager, BeatmapManager beatmaps, ScoreInfo scoreInfo, IBeatmap? sharedPlayableBeatmap,
                                                  IEzScoreTimelineCache cache, IGameplayEnvironment? environment, CancellationToken cancellationToken)

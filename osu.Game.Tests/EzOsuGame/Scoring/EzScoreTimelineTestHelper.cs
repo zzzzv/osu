@@ -1,15 +1,11 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
-// OSU-TRANSITIONAL: HitEvents 作 SP 输入建 Timeline（F 类）。Mania 生产禁止；Osu 角逐至 OsuReplaySession。
-// 详见 EZ-SR-TL-REGISTRY.md §1.6b。
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using osu.Game.Beatmaps;
+using osu.Game.EzOsuGame.Scoring;
 using osu.Game.Rulesets;
 using osu.Game.Rulesets.Judgements;
 using osu.Game.Rulesets.Mods;
@@ -18,46 +14,43 @@ using osu.Game.Rulesets.Objects.Types;
 using osu.Game.Rulesets.Scoring;
 using osu.Game.Scoring;
 
-namespace osu.Game.EzOsuGame.Scoring
+namespace osu.Game.Tests.EzOsuGame.Scoring
 {
     /// <summary>
-    /// Osu 角逐过渡：从 HitEvents 列表二次喂 SP 构建 <see cref="EzScoreTimeline"/>。
-    /// Mania 不得调用；Mania 使用 <see cref="IEzReplaySession.RunTimelineDirectAsync"/>。
+    /// 单元测专用：合成 HitEvents → 按序 ApplyResult → Timeline（不回流生产代码）。
     /// </summary>
-    // TODO(EZ-SR-OSL-008): Osu Session 完成后删除本模块（原 TL-010~015）。
-    internal static class EzScoreTimelineHitEventsLegacy
+    internal static class EzScoreTimelineTestHelper
     {
-        // TODO(EZ-SR-OSL-008): Osu Session 完成后删除。
-        internal static (List<HitEvent>? hitEvents, bool offsetsRelativeToEnd) ResolveHitEvents(
-            Score databasedScore,
-            IBeatmap playableBeatmap,
-            Func<Score, IBeatmap, CancellationToken, (List<HitEvent>? hitEvents, bool offsetsRelativeToEnd)>? hitEventFallback,
-            CancellationToken cancellationToken)
+        public static double GetJudgementTime(HitEvent hitEvent, bool offsetsRelativeToEnd, HitObject? beatmapHitObject = null, double fallbackMissWindow = 0)
         {
-            if (databasedScore.ScoreInfo.HitEvents.Count > 0)
-                return (databasedScore.ScoreInfo.HitEvents.ToList(), true);
+            double rate = hitEvent.GameplayRate ?? 1.0;
+            double offset = hitEvent.TimeOffset / rate;
 
-            var ruleset = databasedScore.ScoreInfo.Ruleset.CreateInstance();
-            var session = ruleset.CreateEzReplaySession();
+            var timingObject = beatmapHitObject ?? hitEvent.HitObject;
+            var windowObject = beatmapHitObject ?? hitEvent.HitObject;
 
-            if (session != null)
-            {
-                var task = session.RunHitEventsAsync(databasedScore, playableBeatmap, cancellationToken);
-                var hitEvents = Task.Run(() => task, cancellationToken).GetAwaiter().GetResult();
-                return (hitEvents, false);
-            }
+            double startTime = timingObject.StartTime;
+            double endTime = timingObject.GetEndTime();
 
-            if (hitEventFallback != null)
-                return hitEventFallback(databasedScore, playableBeatmap, cancellationToken);
+            double judgementTime = offsetsRelativeToEnd
+                ? endTime + offset
+                : startTime + offset;
 
-            return (null, false);
+            double missWindow = windowObject.HitWindows != null && windowObject.HitWindows != HitWindows.Empty
+                ? windowObject.HitWindows.WindowFor(HitResult.Miss)
+                : 0;
+
+            if (missWindow <= 0 && fallbackMissWindow > 0)
+                missWindow = fallbackMissWindow;
+
+            if (missWindow > 0)
+                judgementTime = Math.Max(startTime - missWindow, judgementTime);
+
+            return judgementTime;
         }
 
-        internal static EzScoreTimeline BuildFromHitEventsForTesting(Ruleset ruleset, IBeatmap beatmap, ScoreInfo scoreInfo, IReadOnlyList<HitEvent> hitEvents,
-                                                                     bool offsetsRelativeToEnd = false)
-            => BuildFromHitEvents(ruleset, beatmap, scoreInfo, hitEvents, offsetsRelativeToEnd);
-
-        internal static EzScoreTimeline BuildFromHitEvents(Ruleset ruleset, IBeatmap beatmap, ScoreInfo scoreInfo, IReadOnlyList<HitEvent> hitEvents, bool offsetsRelativeToEnd)
+        public static EzScoreTimeline BuildFromHitEvents(Ruleset ruleset, IBeatmap beatmap, ScoreInfo scoreInfo, IReadOnlyList<HitEvent> hitEvents,
+                                                         bool offsetsRelativeToEnd = false)
         {
             double fallbackMissWindow = resolveFallbackMissWindow(beatmap);
 
@@ -102,6 +95,13 @@ namespace osu.Game.EzOsuGame.Scoring
             return new EzScoreTimeline(snapshots);
         }
 
+        private static double getJudgementTime(HitEvent hitEvent, bool offsetsRelativeToEnd, IBeatmap beatmap, double fallbackMissWindow, HitObject? beatmapHitObject = null,
+                                               Dictionary<HitObject, HitObject>? hitObjectMap = null)
+        {
+            beatmapHitObject ??= findBeatmapHitObject(beatmap, hitEvent.HitObject, hitObjectMap);
+            return GetJudgementTime(hitEvent, offsetsRelativeToEnd, beatmapHitObject, fallbackMissWindow);
+        }
+
         private static Dictionary<HitObject, HitObject> buildHitObjectReferenceMap(IBeatmap beatmap)
         {
             var map = new Dictionary<HitObject, HitObject>(ReferenceEqualityComparer.Instance);
@@ -120,15 +120,6 @@ namespace osu.Game.EzOsuGame.Scoring
                 collectHitObjectReferences(nested, map);
         }
 
-        // TODO(EZ-SR-OSL-008): Osu Session 完成后删除。
-        private static double getJudgementTime(HitEvent hitEvent, bool offsetsRelativeToEnd, IBeatmap beatmap, double fallbackMissWindow, HitObject? beatmapHitObject = null,
-                                               Dictionary<HitObject, HitObject>? hitObjectMap = null)
-        {
-            beatmapHitObject ??= findBeatmapHitObject(beatmap, hitEvent.HitObject, hitObjectMap);
-            return EzScoreTimelineJudgementTime.Get(hitEvent, offsetsRelativeToEnd, beatmapHitObject, fallbackMissWindow);
-        }
-
-        // TODO(EZ-SR-OSL-008): Osu Session 完成后删除。
         private static HitObject findBeatmapHitObject(IBeatmap beatmap, HitObject hitObject, Dictionary<HitObject, HitObject>? hitObjectMap = null)
         {
             if (hitObjectMap != null && hitObjectMap.TryGetValue(hitObject, out var mapped))
@@ -200,7 +191,6 @@ namespace osu.Game.EzOsuGame.Scoring
                 scoreProcessor.IsLegacyScore = true;
         }
 
-        // TODO(EZ-SR-OSL-008): Osu Session 完成后删除。
         private static void ensureHitWindows(IBeatmap? beatmap, HitObject hitObject)
         {
             if (beatmap == null)
