@@ -19,14 +19,10 @@ using osu.Game.Scoring;
 namespace osu.Game.EzOsuGame.Scoring
 {
     /// <summary>
-    /// 全局后台服务。对齐官方 <see cref="osu.Game.Online.Spectator.SpectatorClient"/> 的设计：
+    /// 全局 ghost 角逐服务。
     ///
-    /// - 订阅 <c>currentBeatmap</c> 变化，在选歌界面后台预加载 ghost 数据（Realm 查询 + timeline 构建）
-    /// - 预加载完成后将 <c>Guid → EzScoreRaceState</c> 写入 <see cref="States"/> 字典
-    /// - <see cref="EzScoreRaceTimelineScoreProcessor"/> 订阅字典，自动按时钟更新 bindable
-    /// - HUD 组件直接订阅 processor bindable，无需中间层
-    ///
-    /// 以 <see cref="Component"/> 形式注册到 <see cref="OsuGame"/>，生命周期与进程一致。
+    /// - 选歌：仅 Realm 查询 ghost 元数据（FilterByMods → Top N），不构建 timeline
+    /// - 进局（osu.Game.Screens.Play.PlayerLoader）：后台构建 timeline，逐条增量发布
     /// </summary>
     public partial class EzScoreRaceService : Component, IEzScoreRaceStateLookup
     {
@@ -42,63 +38,44 @@ namespace osu.Game.EzOsuGame.Scoring
         [Resolved]
         private IBindable<WorkingBeatmap> currentBeatmap { get; set; } = null!;
 
-        /// <summary>
-        /// 全局 ghost 状态字典。对齐官方 <c>SpectatorClient.WatchedUserStates</c>。
-        /// Key = <c>ScoreInfo.ID.ToString()</c>。
-        /// </summary>
+        /// <summary>Mod 过滤策略（HUD ModFilterSetting 绑定到此）。</summary>
+        public Bindable<EzScoreModFilter> ModFilter { get; } = new Bindable<EzScoreModFilter>(EzScoreModFilter.Any);
+
+        /// <summary>ghost 条目上限（HUD MaxEntriesSetting 绑定到此）。</summary>
+        public BindableNumber<int> MaxEntries { get; } = new BindableNumber<int>(5)
+        {
+            MinValue = 1,
+            MaxValue = 10,
+        };
+
         public IBindableDictionary<string, EzScoreRaceState> States => states;
 
         private readonly BindableDictionary<string, EzScoreRaceState> states = new BindableDictionary<string, EzScoreRaceState>();
 
-        private Guid? currentBeatmapId;
+        private readonly IEzScoreTimelineCache timelineCache = EzScoreTimelineBuilder.CreateSessionCache();
 
-        /// <summary>
-        /// 当前正在进行的预加载任务（用于取消）。同一个实例也会作为 value 放入 <see cref="preloadingBeatmaps"/>，
-        /// 因此取消/释放时必须先从字典移除，避免外部遍历到已释放的实例。
-        /// </summary>
-        private CancellationTokenSource? currentPreloadCts;
+        /// <summary>metadata 缓存：queryKey → ghost 元数据列表（timeline 可能 null 或部分就绪）。</summary>
+        private readonly Dictionary<string, List<EzScoreRaceState>> metadataCache = new Dictionary<string, List<EzScoreRaceState>>();
 
-        /// <summary>
-        /// <see cref="currentPreloadCts"/> 正在预加载的谱面 ID。用于把 <see cref="preloadingBeatmaps"/> 里的条目
-        /// 与当前 CTS 对应起来，避免在取消/释放时遗留失效引用。
-        /// </summary>
-        private Guid? currentPreloadBeatmapId;
+        private readonly LinkedList<string> metadataCacheLru = new LinkedList<string>();
 
-        /// <summary>
-        /// 缓存：BeatmapInfo.ID → 预加载数据（跨局复用，只要谱面没变就不重加载）。
-        /// 上限 <see cref="preloaded_cache_capacity"/> 首，超出按 LRU 淘汰最久未访问的谱面。
-        /// 注意：必须与 <see cref="preloadedCacheLru"/> 同步维护，二者构成 LRU 的双向索引。
-        /// </summary>
-        private readonly Dictionary<Guid, List<EzScoreRaceState>> preloadedCache = new Dictionary<Guid, List<EzScoreRaceState>>();
+        private const int metadata_cache_capacity = 3;
 
-        /// <summary>
-        /// LRU 访问顺序链表：表头 = 最近一次命中/写入的谱面，表尾 = 最久未访问。
-        /// 节点 value 是 <see cref="preloadedCache"/> 的 key。
-        /// </summary>
-        private readonly LinkedList<Guid> preloadedCacheLru = new LinkedList<Guid>();
+        private string? activeQueryKey;
+        private Guid? activeBeatmapId;
 
-        /// <summary>
-        /// 最多缓存多少首谱面的 ghost 数据。超出按 LRU 淘汰。
-        /// </summary>
-        private const int preloaded_cache_capacity = 3;
-
-        private readonly Dictionary<Guid, CancellationTokenSource> preloadingBeatmaps = new Dictionary<Guid, CancellationTokenSource>();
-
-        /// <summary>
-        /// 去抖版本号：每次 startPreload 递增，延迟回调通过比对版本号判断是否过期。
-        /// </summary>
-        private int preloadVersion;
-
-        /// <summary>
-        /// 预加载去抖延迟（毫秒）。快速切歌时，中间歌曲的预加载在延迟期间被取消，
-        /// 避免为每首过渡歌曲都启动昂贵的 buildPreloadedStates（Realm 查询 + 多 ghost timeline 构建）。
-        /// </summary>
-        private const int preload_debounce_delay_ms = 300;
+        private CancellationTokenSource? timelineBuildCts;
+        private int timelineBuildVersion;
 
         protected override void LoadComplete()
         {
             base.LoadComplete();
+
+            ModFilter.BindValueChanged(_ => onQueryContextChanged());
+            MaxEntries.BindValueChanged(_ => onQueryContextChanged());
             currentBeatmap.BindValueChanged(onBeatmapChanged, true);
+
+            subscribeScreenHooks();
         }
 
         private void onBeatmapChanged(ValueChangedEvent<WorkingBeatmap> e)
@@ -108,261 +85,260 @@ namespace osu.Game.EzOsuGame.Scoring
             if (beatmapInfo == null)
                 return;
 
-            // 谱面 ID 变化时清空字典。即使是同一谱面退出再进，也强制重建。
-            // 这保证了每次进入游戏时 ghost 都是干净的，不会跨局串味。
-            if (currentBeatmapId != beatmapInfo.ID)
+            if (activeBeatmapId != beatmapInfo.ID)
             {
-                currentBeatmapId = beatmapInfo.ID;
-                states.Clear();
+                activeBeatmapId = beatmapInfo.ID;
+                cancelTimelineBuild();
             }
 
-            if (preloadedCache.TryGetValue(beatmapInfo.ID, out var cached))
-            {
-                touchPreloadedCacheLru(beatmapInfo.ID);
-                publishStates(cached);
-                Logger.Log($"[EzScoreRaceService] Cache hit for beatmap {beatmapInfo.ID}, {cached.Count} states", Ez2ConfigManager.LOGGER_NAME, LogLevel.Debug);
-                return;
-            }
-
-            if (preloadingBeatmaps.ContainsKey(beatmapInfo.ID))
-                return;
-
-            startPreload(beatmapInfo, e.NewValue);
+            refreshMetadata(e.NewValue);
         }
 
-        private void startPreload(BeatmapInfo beatmapInfo, WorkingBeatmap workingBeatmap)
+        private void onQueryContextChanged()
         {
-            cancelCurrentPreload();
+            cancelTimelineBuild();
 
-            currentPreloadCts = new CancellationTokenSource();
-            currentPreloadBeatmapId = beatmapInfo.ID;
-            var token = currentPreloadCts.Token;
-            int version = ++preloadVersion;
-
-            // 去抖：延迟启动预加载。快速切歌时，中间歌曲的回调发现版本号已过期，
-            // 直接返回而不启动昂贵的 buildPreloadedStates。
-            Schedule(() =>
-            {
-                if (token.IsCancellationRequested || version != preloadVersion)
-                    return;
-
-                performPreloadAsyncDebounced(beatmapInfo, workingBeatmap, token, version);
-            });
-        }
-
-        private async void performPreloadAsyncDebounced(BeatmapInfo beatmapInfo, WorkingBeatmap workingBeatmap, CancellationToken token, int version)
-        {
-            try
-            {
-                await Task.Delay(preload_debounce_delay_ms, token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
-
-            if (version != preloadVersion || token.IsCancellationRequested)
-                return;
-
-            // 去抖结束：正式注册为"正在预加载"并启动后台工作。
-            Schedule(() =>
-            {
-                if (token.IsCancellationRequested || version != preloadVersion)
-                    return;
-
-                preloadingBeatmaps[beatmapInfo.ID] = currentPreloadCts!;
-                performPreloadAsync(beatmapInfo, workingBeatmap, token);
-            });
-        }
-
-        private async void performPreloadAsync(BeatmapInfo beatmapInfo, WorkingBeatmap workingBeatmap, CancellationToken token)
-        {
-            try
-            {
-                var ezScoreRaceStates = await Task.Run(() => buildPreloadedStates(beatmapInfo, workingBeatmap, token), token).ConfigureAwait(false);
-
-                if (token.IsCancellationRequested)
-                    return;
-
-                Schedule(() =>
-                {
-                    if (token.IsCancellationRequested)
-                        return;
-
-                    storePreloadedCache(beatmapInfo.ID, ezScoreRaceStates);
-                    preloadingBeatmaps.Remove(beatmapInfo.ID);
-
-                    // 如果当前谱面就是刚预加载的谱面，立即发布到字典
-                    if (currentBeatmap.Value?.BeatmapInfo.ID == beatmapInfo.ID)
-                        publishStates(ezScoreRaceStates);
-
-                    Logger.Log($"[EzScoreRaceService] Preloaded {ezScoreRaceStates.Count} ghost states for beatmap {beatmapInfo.ID}", Ez2ConfigManager.LOGGER_NAME, LogLevel.Debug);
-                });
-            }
-            catch (OperationCanceledException)
-            {
-                // 用户切到别的谱面/Dispose 触发的取消。当前 preload 已被 cancelCurrentPreload 从 preloadingBeatmaps 移除，
-                // 这里只记一行 debug 方便排查"为啥这首谱面的 ghost 永远不出现"。
-                Logger.Log($"[EzScoreRaceService] Preload cancelled for beatmap {beatmapInfo.ID}", Ez2ConfigManager.LOGGER_NAME, LogLevel.Debug);
-            }
-            catch (Exception ex)
-            {
-                Logger.Error(ex, $"[EzScoreRaceService] Failed to preload ghost states for beatmap {beatmapInfo.ID}", Ez2ConfigManager.LOGGER_NAME);
-                Schedule(() =>
-                {
-                    preloadingBeatmaps.Remove(beatmapInfo.ID);
-                });
-            }
+            if (currentBeatmap.Value?.BeatmapInfo != null)
+                refreshMetadata(currentBeatmap.Value);
         }
 
         /// <summary>
-        /// 将 preloaded states 发布到 BindableDictionary，触发所有订阅者的字典变化事件。
-        /// 对齐官方 SpectatorClient 在 ISpectatorClient.UserBeganPlaying 时写入 WatchedUserStates。
-        /// </summary>
-        private void publishStates(List<EzScoreRaceState> statesToPublish)
-        {
-            states.Clear();
-
-            foreach (var state in statesToPublish)
-                states[state.ScoreInfo.ID.ToString()] = state;
-        }
-
-        private List<EzScoreRaceState> buildPreloadedStates(BeatmapInfo beatmapInfo, WorkingBeatmap workingBeatmap, CancellationToken token)
-        {
-            token.ThrowIfCancellationRequested();
-
-            if (!EzScoreRaceRulesetSupport.SupportsGhostRace(workingBeatmap.BeatmapInfo.Ruleset))
-                return new List<EzScoreRaceState>();
-
-            var rulesetInfo = workingBeatmap.BeatmapInfo.Ruleset;
-            var allLocalScores = EzLocalScoreQueries.GetLocalScoresWithReplay(realm, beatmapInfo, rulesetInfo);
-            token.ThrowIfCancellationRequested();
-
-            var ghostScores = EzLocalScoreQueries.GetTopByTotalScore(allLocalScores, 10);
-            token.ThrowIfCancellationRequested();
-
-            var environment = GlobalConfigStore.EzConfig.GetGameplayEnvironment();
-
-            // 并行构建所有 ghost 的 timeline。每个 ghost 的 timeline 构建完全独立，
-            // 可充分利用多核 CPU。预期加载时间 ÷ min(ghost数量, CPU核心数)。
-            var results = new EzScoreRaceState?[ghostScores.Count];
-
-            Parallel.For(0, ghostScores.Count, new ParallelOptions { CancellationToken = token }, i =>
-            {
-                var scoreInfo = ghostScores[i];
-
-                // 每个任务加载自己的 playable beatmap，避免多线程共享同一 IBeatmap 实例
-                // （HitEvents 路径的 ensureHitWindows 会修改 HitObject 状态，非线程安全）。
-                var taskBeatmap = workingBeatmap.GetPlayableBeatmap(rulesetInfo, Array.Empty<Mod>());
-
-                var timeline = EzScoreTimelineBuilder.TryBuild(
-                    scoreManager,
-                    beatmaps,
-                    scoreInfo,
-                    taskBeatmap,
-                    cache: null,
-                    environment,
-                    token
-                );
-
-                results[i] = new EzScoreRaceState(scoreInfo, timeline);
-            });
-
-            return results.Where(r => r != null).Select(r => r!).ToList();
-        }
-
-        /// <summary>
-        /// 通知服务当前谱面 Mod 发生了变化。清空字典并强制重新预加载。
+        /// 通知 Mod 组合变化（与 <see cref="ModFilter"/> 变更等效，并 evict 当前谱面 metadata 缓存）。
         /// </summary>
         public void NotifyModsChanged()
         {
-            var beatmapId = currentBeatmap.Value?.BeatmapInfo.ID;
+            if (activeQueryKey != null)
+                evictMetadataCache(activeQueryKey);
 
-            if (beatmapId.HasValue)
+            onQueryContextChanged();
+        }
+
+        private void refreshMetadata(WorkingBeatmap workingBeatmap)
+        {
+            var beatmapInfo = workingBeatmap.BeatmapInfo;
+
+            if (beatmapInfo == null)
+                return;
+
+            if (!EzScoreRaceRulesetSupport.SupportsGhostRace(beatmapInfo.Ruleset))
             {
-                states.Clear();
-                evictPreloadedCache(beatmapId.Value);
-                if (currentBeatmap.Value != null)
-                    startPreload(currentBeatmap.Value.BeatmapInfo, currentBeatmap.Value);
+                publishStatesDiff(Array.Empty<EzScoreRaceState>());
+                return;
+            }
+
+            string queryKey = buildQueryKey(beatmapInfo.ID);
+            activeQueryKey = queryKey;
+
+            if (metadataCache.TryGetValue(queryKey, out var cached))
+            {
+                touchMetadataCacheLru(queryKey);
+                publishStatesDiff(cached);
+                return;
+            }
+
+            var rulesetInfo = beatmapInfo.Ruleset;
+            var allLocalScores = EzLocalScoreQueries.GetLocalScoresWithReplay(realm, beatmapInfo, rulesetInfo);
+            var ghostScores = EzLocalScoreQueries.SelectGhostCandidates(
+                allLocalScores,
+                getCurrentMods(),
+                ModFilter.Value,
+                MaxEntries.Value);
+
+            var metadataStates = ghostScores
+                                 .Select(s => new EzScoreRaceState(s, timeline: null))
+                                 .ToList();
+
+            storeMetadataCache(queryKey, metadataStates);
+            publishStatesDiff(metadataStates);
+        }
+
+        private void requestTimelineBuild(bool priority)
+        {
+            var workingBeatmap = currentBeatmap.Value;
+            var beatmapInfo = workingBeatmap?.BeatmapInfo;
+
+            if (beatmapInfo == null || !EzScoreRaceRulesetSupport.SupportsGhostRace(beatmapInfo.Ruleset))
+                return;
+
+            if (states.Count == 0)
+                refreshMetadata(workingBeatmap!);
+
+            cancelTimelineBuild();
+
+            timelineBuildCts = new CancellationTokenSource();
+            var token = timelineBuildCts.Token;
+            int version = ++timelineBuildVersion;
+
+            performTimelineBuildAsync(workingBeatmap!, beatmapInfo, token, version);
+        }
+
+        private async void performTimelineBuildAsync(WorkingBeatmap workingBeatmap, BeatmapInfo beatmapInfo, CancellationToken token, int version)
+        {
+            try
+            {
+                var scoreInfos = states.Values.Select(s => s.ScoreInfo).ToList();
+
+                if (scoreInfos.Count == 0)
+                    return;
+
+                var environment = GlobalConfigStore.EzConfig.GetGameplayEnvironment();
+                var rulesetInfo = beatmapInfo.Ruleset;
+                var results = new EzScoreTimeline?[scoreInfos.Count];
+
+                await Task.Run(() =>
+                {
+                    Parallel.For(0, scoreInfos.Count, new ParallelOptions
+                    {
+                        CancellationToken = token,
+                        MaxDegreeOfParallelism = Math.Max(1, Math.Min(2, Environment.ProcessorCount / 2)),
+                    }, i =>
+                    {
+                        var scoreInfo = scoreInfos[i];
+
+                        if (states.TryGetValue(scoreInfo.ID.ToString(), out var existing) && existing.Timeline != null)
+                        {
+                            results[i] = existing.Timeline;
+                            return;
+                        }
+
+                        var taskBeatmap = workingBeatmap.GetPlayableBeatmap(rulesetInfo, Array.Empty<Mod>());
+
+                        results[i] = EzScoreTimelineBuilder.TryBuild(
+                            scoreManager,
+                            beatmaps,
+                            scoreInfo,
+                            taskBeatmap,
+                            timelineCache,
+                            environment,
+                            token);
+                    });
+                }, token).ConfigureAwait(false);
+
+                if (token.IsCancellationRequested || version != timelineBuildVersion)
+                    return;
+
+                Schedule(() =>
+                {
+                    if (token.IsCancellationRequested || version != timelineBuildVersion)
+                        return;
+
+                    for (int i = 0; i < scoreInfos.Count; i++)
+                    {
+                        string id = scoreInfos[i].ID.ToString();
+
+                        if (!states.TryGetValue(id, out var state))
+                            continue;
+
+                        state.Timeline = results[i];
+                    }
+
+                    if (activeQueryKey != null && metadataCache.TryGetValue(activeQueryKey, out var cached))
+                    {
+                        foreach (var cachedState in cached)
+                        {
+                            if (states.TryGetValue(cachedState.ScoreInfo.ID.ToString(), out var live))
+                                cachedState.Timeline = live.Timeline;
+                        }
+                    }
+
+                    Logger.Log($"[EzScoreRaceService] Timeline build complete for {scoreInfos.Count} ghosts", Ez2ConfigManager.LOGGER_NAME, LogLevel.Debug);
+                });
+            }
+            catch (OperationCanceledException)
+            {
+                Logger.Log("[EzScoreRaceService] Timeline build cancelled", Ez2ConfigManager.LOGGER_NAME, LogLevel.Debug);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "[EzScoreRaceService] Timeline build failed", Ez2ConfigManager.LOGGER_NAME);
             }
         }
 
-        /// <summary>
-        /// 命中/读取缓存时把对应谱面移到 LRU 链表头。必须与 <see cref="preloadedCache"/> 同步维护。
-        /// </summary>
-        private void touchPreloadedCacheLru(Guid beatmapId)
+        private void publishStatesDiff(IReadOnlyList<EzScoreRaceState> incoming)
         {
-            if (preloadedCacheLru.First is { Value: var headId } && headId == beatmapId)
-                return;
+            var incomingIds = new HashSet<string>(incoming.Select(s => s.ScoreInfo.ID.ToString()));
 
-            if (preloadedCacheLru.Last is { Value: var tailId } && tailId == beatmapId)
+            foreach (string key in states.Keys.ToList())
             {
-                preloadedCacheLru.RemoveLast();
-                preloadedCacheLru.AddFirst(beatmapId);
-                return;
+                if (!incomingIds.Contains(key))
+                    states.Remove(key);
             }
 
-            // 一般不会到这：要么链表只有 1 节点命中首/尾，要么确实存在于中间。
-            // 中间情况少见（preloaded_cache_capacity 很小），为简洁起见 remove+add 到头。
-            for (var node = preloadedCacheLru.First; node != null; node = node.Next)
+            foreach (var state in incoming)
             {
-                if (node.Value != beatmapId)
+                string id = state.ScoreInfo.ID.ToString();
+
+                if (states.TryGetValue(id, out var existing))
+                {
+                    if (ReferenceEquals(existing, state))
+                        continue;
+
+                    // 保留已有实例引用，避免 HUD processor 绑定失效。
+                    if (state.Timeline != null)
+                        existing.Timeline = state.Timeline;
+
+                    continue;
+                }
+
+                states[id] = state;
+            }
+        }
+
+        private string buildQueryKey(Guid beatmapId)
+            => $"{beatmapId}|{ModFilter.Value}|{EzLocalScoreQueries.GetModFilterCacheFingerprint(ModFilter.Value, getCurrentMods())}|{MaxEntries.Value}";
+
+        private void storeMetadataCache(string queryKey, List<EzScoreRaceState> statesToStore)
+        {
+            metadataCache[queryKey] = statesToStore;
+            touchMetadataCacheLru(queryKey);
+
+            while (metadataCacheLru.Count > metadata_cache_capacity)
+            {
+                string evictedKey = metadataCacheLru.Last!.Value;
+                metadataCacheLru.RemoveLast();
+                metadataCache.Remove(evictedKey);
+            }
+        }
+
+        private void touchMetadataCacheLru(string queryKey)
+        {
+            if (metadataCacheLru.First is { Value: var headKey } && headKey == queryKey)
+                return;
+
+            for (var node = metadataCacheLru.First; node != null; node = node.Next)
+            {
+                if (node.Value != queryKey)
                     continue;
 
-                preloadedCacheLru.Remove(node);
-                preloadedCacheLru.AddFirst(node);
+                metadataCacheLru.Remove(node);
+                metadataCacheLru.AddFirst(node);
                 return;
             }
+
+            metadataCacheLru.AddFirst(queryKey);
         }
 
-        /// <summary>
-        /// 写入缓存并维护 LRU 容量（超过 <see cref="preloaded_cache_capacity"/> 时淘汰表尾）。
-        /// </summary>
-        private void storePreloadedCache(Guid beatmapId, List<EzScoreRaceState> statesToStore)
+        private void evictMetadataCache(string queryKey)
         {
-            preloadedCache[beatmapId] = statesToStore;
-            touchPreloadedCacheLru(beatmapId);
+            metadataCache.Remove(queryKey);
 
-            while (preloadedCacheLru.Count > preloaded_cache_capacity)
+            for (var node = metadataCacheLru.First; node != null; node = node.Next)
             {
-                var evictedId = preloadedCacheLru.Last!.Value;
-                preloadedCacheLru.RemoveLast();
-                preloadedCache.Remove(evictedId);
-                Logger.Log($"[EzScoreRaceService] LRU evict beatmap {evictedId} (cache capacity {preloaded_cache_capacity})", Ez2ConfigManager.LOGGER_NAME, LogLevel.Debug);
-            }
-        }
-
-        /// <summary>
-        /// 从缓存里强制移除指定谱面（用于 NotifyModsChanged 触发强制重加载）。
-        /// </summary>
-        private void evictPreloadedCache(Guid beatmapId)
-        {
-            preloadedCache.Remove(beatmapId);
-
-            for (var node = preloadedCacheLru.First; node != null; node = node.Next)
-            {
-                if (node.Value != beatmapId)
+                if (node.Value != queryKey)
                     continue;
 
-                preloadedCacheLru.Remove(node);
+                metadataCacheLru.Remove(node);
                 return;
             }
         }
 
-        private void cancelCurrentPreload()
+        private void cancelTimelineBuild()
         {
-            var cts = currentPreloadCts;
+            var cts = timelineBuildCts;
             if (cts == null)
                 return;
 
-            currentPreloadCts = null;
-
-            // 先从字典移除该条目，再 Cancel/Dispose，避免外面遍历字典时撞到已释放的实例。
-            if (currentPreloadBeatmapId.HasValue)
-            {
-                preloadingBeatmaps.Remove(currentPreloadBeatmapId.Value);
-                currentPreloadBeatmapId = null;
-            }
+            timelineBuildCts = null;
 
             try
             {
@@ -370,7 +346,6 @@ namespace osu.Game.EzOsuGame.Scoring
             }
             catch (ObjectDisposedException)
             {
-                // 二次释放保护：理论上不应到这里，但即便发生也不应让取消逻辑反过来抛出。
             }
             finally
             {
@@ -382,28 +357,8 @@ namespace osu.Game.EzOsuGame.Scoring
         {
             if (isDisposing)
             {
-                // cancelCurrentPreload 内部已同步把 currentPreloadCts 从 preloadingBeatmaps 中移除，
-                // 并对 Cancel/Dispose 做了二次释放保护。
-                cancelCurrentPreload();
-
-                // 正常情况下 preloadingBeatmaps 此时应为空（仅 currentPreloadCts 会作为 value 入字典，
-                // 且它已被上面清掉）。保留遍历只是为了兜底万一未来加入并行预加载时不会再次抛 ObjectDisposedException。
-                foreach (var cts in preloadingBeatmaps.Values)
-                {
-                    try
-                    {
-                        cts.Cancel();
-                    }
-                    catch (ObjectDisposedException)
-                    {
-                    }
-                    finally
-                    {
-                        cts.Dispose();
-                    }
-                }
-
-                preloadingBeatmaps.Clear();
+                unsubscribeScreenHooks();
+                cancelTimelineBuild();
             }
 
             base.Dispose(isDisposing);

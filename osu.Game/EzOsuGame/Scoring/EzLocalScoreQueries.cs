@@ -111,6 +111,33 @@ namespace osu.Game.EzOsuGame.Scoring
                          .ToList();
         }
 
+        /// <summary>
+        /// 角逐 ghost 候选：先按 Mod 过滤，再取 Top N（禁止先 Top 再 Filter）。
+        /// </summary>
+        public static List<ScoreInfo> SelectGhostCandidates(
+            IEnumerable<ScoreInfo> scores,
+            Mod[] currentMods,
+            EzScoreModFilter modFilter,
+            int maxEntries)
+        {
+            var filtered = FilterByMods(scores, currentMods, modFilter);
+            return GetTopByTotalScore(filtered, maxEntries);
+        }
+
+        /// <summary>
+        /// 用于 metadata / timeline 缓存键的 Mod 指纹（SameAsCurrent 时含 gameplay mod，Any 时为 "*"）。
+        /// </summary>
+        public static string GetModFilterCacheFingerprint(EzScoreModFilter modFilter, Mod[] currentMods)
+        {
+            if (modFilter == EzScoreModFilter.Any)
+                return "*";
+
+            return string.Join(',', currentMods
+                                    .Where(m => !COSMETIC_GHOST_MOD_TYPES.Any(t => t.IsInstanceOfType(m)))
+                                    .OrderBy(m => m.Acronym)
+                                    .Select(m => m.Acronym));
+        }
+
         public static int GetMissCount(ScoreInfo score)
         {
             return score.Statistics.Where(kv => kv.Key.IsMiss()).Sum(kv => kv.Value);
