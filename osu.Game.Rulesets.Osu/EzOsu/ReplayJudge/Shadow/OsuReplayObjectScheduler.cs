@@ -14,7 +14,7 @@ using osuTK;
 namespace osu.Game.Rulesets.Osu.EzOsu.ReplayJudge.Shadow
 {
     /// <summary>
-    /// 待判定目标队列；S1 覆盖 circle + nested tick，S2/S3 扩展 slider/spinner。
+    /// 待判定目标队列：顶层 HitCircle；Slider/Spinner 由 Shadow 状态机处理。
     /// </summary>
     internal sealed class OsuReplayObjectScheduler
     {
@@ -40,7 +40,9 @@ namespace osu.Game.Rulesets.Osu.EzOsu.ReplayJudge.Shadow
             foreach (var hitObject in beatmap.HitObjects)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                tryAddTarget(hitObject, beatmap, list, cancellationToken);
+
+                if (hitObject is HitCircle && hitObject is not SliderHeadCircle)
+                    tryAddTarget(hitObject, beatmap, list, cancellationToken);
             }
 
             return new OsuReplayObjectScheduler(list.OrderBy(t => t.HitObject.StartTime).ToList());
@@ -67,13 +69,13 @@ namespace osu.Game.Rulesets.Osu.EzOsu.ReplayJudge.Shadow
                 if (Vector2.Distance(position, target.OsuTarget.StackedPosition) > target.OsuTarget.Radius)
                     continue;
 
-                double timeOffset = time - target.HitObject.StartTime;
-                HitResult result = target.HitObject.HitWindows!.ResultFor(timeOffset);
+                double startOffset = time - target.HitObject.StartTime;
+                HitResult result = target.HitObject.HitWindows!.ResultFor(startOffset);
 
                 if (result == HitResult.None)
                     result = HitResult.Miss;
 
-                apply(target, result, timeOffset, position);
+                apply(target, result, time, position);
                 target.Judged = true;
                 return;
             }
@@ -89,7 +91,7 @@ namespace osu.Game.Rulesets.Osu.EzOsu.ReplayJudge.Shadow
                 if (time < target.HitObject.StartTime + target.MissWindow)
                     continue;
 
-                apply(target, HitResult.Miss, 0, null);
+                apply(target, HitResult.Miss, time, null);
                 target.Judged = true;
             }
         }
@@ -101,7 +103,8 @@ namespace osu.Game.Rulesets.Osu.EzOsu.ReplayJudge.Shadow
                 if (target.Judged)
                     continue;
 
-                apply(target, HitResult.Miss, 0, null);
+                double judgementTime = target.HitObject.StartTime + target.MissWindow;
+                apply(target, HitResult.Miss, judgementTime, null);
                 target.Judged = true;
             }
         }
@@ -124,12 +127,6 @@ namespace osu.Game.Rulesets.Osu.EzOsu.ReplayJudge.Shadow
                     OsuTarget = osuTarget,
                     MissWindow = hitObject.HitWindows.WindowFor(HitResult.Miss),
                 });
-            }
-
-            foreach (var nested in hitObject.NestedHitObjects)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                tryAddTarget(nested, beatmap, list, cancellationToken);
             }
         }
 

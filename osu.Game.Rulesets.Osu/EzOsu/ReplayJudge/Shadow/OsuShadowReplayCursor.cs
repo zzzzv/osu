@@ -73,7 +73,10 @@ namespace osu.Game.Rulesets.Osu.EzOsu.ReplayJudge.Shadow
             return edges;
         }
 
-        public static IReadOnlyList<double> CollectSimulationTimes(IReadOnlyList<OsuReplayFrame> frames, IEnumerable<double> missDeadlines)
+        public static IReadOnlyList<double> CollectSimulationTimes(
+            IReadOnlyList<OsuReplayFrame> frames,
+            IEnumerable<double> missDeadlines,
+            IEnumerable<IEnumerable<double>> additionalTimes)
         {
             var times = new SortedSet<double>();
 
@@ -83,8 +86,50 @@ namespace osu.Game.Rulesets.Osu.EzOsu.ReplayJudge.Shadow
             foreach (double deadline in missDeadlines)
                 times.Add(deadline);
 
+            foreach (var group in additionalTimes)
+            {
+                foreach (double time in group)
+                    times.Add(time);
+            }
+
             return times.ToList();
         }
+
+        public static Vector2 InterpolatePosition(IReadOnlyList<OsuReplayFrame> frames, double time)
+        {
+            if (frames.Count == 0)
+                return Vector2.Zero;
+
+            if (time < frames[0].Time)
+                return frames[0].Position;
+
+            int frameIndex = 0;
+
+            while (frameIndex + 1 < frames.Count && frames[frameIndex + 1].Time <= time)
+                frameIndex++;
+
+            var startFrame = frames[frameIndex];
+            var endFrame = frames[Math.Min(frameIndex + 1, frames.Count - 1)];
+
+            return startFrame.Time == endFrame.Time
+                ? startFrame.Position
+                : Interpolation.ValueAt(time, startFrame.Position, endFrame.Position, startFrame.Time, endFrame.Time);
+        }
+
+        public static IReadOnlyList<OsuAction> GetPressedActionsAt(IReadOnlyList<OsuReplayFrame> frames, double time)
+        {
+            if (frames.Count == 0 || time < frames[0].Time)
+                return Array.Empty<OsuAction>();
+
+            int frameIndex = 0;
+
+            while (frameIndex + 1 < frames.Count && frames[frameIndex + 1].Time <= time)
+                frameIndex++;
+
+            return getPressedActions(frames[frameIndex]).ToList();
+        }
+
+        public IReadOnlyList<OsuAction> GetPressedActions() => GetPressedActionsAt(frames, Time);
 
         private void advanceFrameIndex(double time)
         {

@@ -18,7 +18,7 @@ namespace osu.Game.Rulesets.Osu.EzOsu.ReplayJudge
     /// 无绘制 Osu replay Session：影子判定 → <see cref="JudgementProcessor.ApplyResult"/> → PopulateScore。
     /// </summary>
     /// <remarks>
-    /// 判定由 <see cref="Shadow.OsuReplayShadowEngine"/> 驱动（<c>TODO(EZ-SR-OSL-010)</c>）；Catch/Taiko 远期同思路见 REPLAY_JUDGE_SHADOW.md。
+    /// 判定由 <see cref="Shadow.OsuReplayShadowEngine"/> 驱动（OSL-010 Shadow Judgement）。
     /// </remarks>
     public static class OsuReplaySession
     {

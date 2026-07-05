@@ -121,7 +121,7 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | 何时必须要完整 Score | Graph Now、Parity 测试、跨源不变量（HitEvents 聚合 ≡ Statistics） |
 | 何时用 Timeline 而非 Score | 角逐 HUD 实时分；**禁止**用终局 `TotalScore` 充当时钟查询结果 |
 | Mania 能否 HitEvents→SP 建 Timeline | **禁止**（F/E 类）；Timeline 必须 replay 一遍 SP 快照 |
-| Osu 角逐 | Session 一遍 SP + **Shadow** 判定（OSL-010）；S2 Slider / S3 Spinner 待补齐 |
+| Osu 角逐 | Session 一遍 SP + **Shadow** 判定（OSL-010 ✓） |
 
 ### 1.7f 本分析 epic 边界（未展开部分）
 
@@ -143,7 +143,7 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | Graph offset | C / D | ForLive（D 为新 env） | ✓ | — | 不污染 base；见 §1.7d |
 | 角逐 Timeline | EzScoreTimeline | ForLive | RunTimelineDirect | RunTimelineDirect | 一遍 SP |
 | 角逐 HUD 实时分 | Timeline 快照 | — | ✓ | ✓ | 不用终局 TotalScore |
-| Parity | Score + HitEvents 字段级 | ForStored/ForLive | Drawable ≡ Session | Shadow 进行中（**OSL-010** S1 Circle） | REPLAY_JUDGE_MERGE |
+| Parity | Score + HitEvents 字段级 | ForStored/ForLive | Drawable ≡ Session | ✓ Shadow（**OSL-010**） | REPLAY_JUDGE_MERGE |
 
 ---
 
@@ -220,7 +220,7 @@ flowchart LR
 
 ### §4.2 Phase 3 范围备忘（无 OSL 编号）
 
-- **Osu Shadow（OSL-010，进行中）** — `ReplayJudge/Shadow/` 帧时钟 + 对象状态机；**不**拆 Mania 式 HitMode。S1 Circle ✓ 骨架；S2 Slider；S3 Spinner；S4 Parity。
+- **Osu Shadow（OSL-010 ✓）** — `ReplayJudge/Shadow/` 帧时钟 + Circle/Slider/Spinner 状态机；`TestSceneOsuReplaySessionParity`；**不**拆 Mania 式 HitMode。
 - **Catch / Taiko Session** — 远期；**沿用 Shadow 统一思路**（见 REPLAY_JUDGE_SHADOW.md §5），不破坏各 mode Drawable 元机制。
 - **Ruleset 级 `ResolveEnvironment`** — Phase 3 各 ruleset Session 时再评估（§1.7f）。
 - **TL-021 动态变速 Mod ghost 时钟** — doc-only，不阻塞 OSL。
@@ -271,7 +271,7 @@ flowchart LR
 | OSL-007 | **done** | Osu | `OsuReplaySession` + Service + `CreateEzReplaySession` |
 | OSL-008 | **done** | Osu | 删 `EzScoreTimelineHitEventsLegacy` + `RegisterHitEventFallback` |
 | OSL-009 | **done** | Osu | Generator 瘦身为 Session 委托 |
-| OSL-010 | **in_progress** | Osu | Shadow 判定：`Shadow/OsuReplayShadowEngine`；S1 Circle → S4 Parity；Catch/Taiko 文档已统一 |
+| OSL-010 | **done** | Osu | Shadow 判定：`OsuShadowSliderState` / `OsuShadowSpinnerState` + Parity 测试 |
 
 ---
 

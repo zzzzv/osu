@@ -20,11 +20,6 @@ namespace osu.Game.Rulesets.Osu.EzOsu.ReplayJudge.Shadow
     /// <summary>
     /// Osu 影子判定主循环：replay 时钟 → Shadow 状态 → 一遍 <see cref="JudgementProcessor.ApplyResult"/>。
     /// </summary>
-    /// <remarks>
-    /// OSL-010：S1 Circle + nested tick；S2 Slider；S3 Spinner。设计见 REPLAY_JUDGE_SHADOW.md。
-    /// </remarks>
-    // TODO(EZ-SR-OSL-010-S2): Slider head/tail/tick/repeat tracking — ShadowSliderState。
-    // TODO(EZ-SR-OSL-010-S3): Spinner 转速与 tick — ShadowSpinnerState。
     internal static class OsuReplayShadowEngine
     {
         internal static void Run(
@@ -44,73 +39,102 @@ namespace osu.Game.Rulesets.Osu.EzOsu.ReplayJudge.Shadow
 
             var cursor = new OsuShadowReplayCursor(frames);
             var scheduler = OsuReplayObjectScheduler.Create(beatmap, cancellationToken);
+            var sliders = OsuShadowSliderState.CreateAll(beatmap, cancellationToken);
+            var spinners = OsuShadowSpinnerState.CreateAll(beatmap, cancellationToken);
             var pressEdges = OsuShadowReplayCursor.CollectPressEdges(frames);
             int nextPressIndex = 0;
 
-            var simulationTimes = OsuShadowReplayCursor.CollectSimulationTimes(frames, scheduler.CollectMissDeadlines());
+            var simulationTimes = OsuShadowReplayCursor.CollectSimulationTimes(
+                frames,
+                scheduler.CollectMissDeadlines(),
+                sliders.Select(s => s.CollectSimulationTimes()).Concat(spinners.Select(s => s.CollectSimulationTimes())));
 
             timelineRecorder?.RecordInitial(scoreProcessor, gameplayRate);
+
+            double previousTime = simulationTimes.Count > 0 ? Math.Min(0, simulationTimes[0] - 1) : 0;
 
             foreach (double time in simulationTimes)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
+                foreach (var spinner in spinners)
+                {
+                    spinner.ProcessRotationInterval(previousTime, time, frames, gameplayRate, (hitObject, result, judgementTime, cursorPosition, configure) =>
+                        applyJudgement(hitObject, result, judgementTime, cursorPosition, gameplayRate, scoreProcessor, timelineRecorder, configure));
+                }
+
                 cursor.Seek(time);
 
                 while (nextPressIndex < pressEdges.Count && pressEdges[nextPressIndex].Time <= time)
                 {
                     var edge = pressEdges[nextPressIndex++];
-                    scheduler.ProcessPress(edge.Time, edge.Position, (target, result, timeOffset, hitPosition) =>
-                        applyJudgement(target.HitObject, result, timeOffset, hitPosition, gameplayRate, scoreProcessor, timelineRecorder));
+
+                    foreach (var slider in sliders)
+                    {
+                        slider.ProcessHeadPress(edge.Time, edge.Position, edge.Action, cursor.GetPressedActions(), (hitObject, result, judgementTime, cursorPosition) =>
+                            applyJudgement(hitObject, result, judgementTime, cursorPosition, gameplayRate, scoreProcessor, timelineRecorder));
+                    }
+
+                    scheduler.ProcessPress(edge.Time, edge.Position, (target, result, judgementTime, hitPosition) =>
+                        applyJudgement(target.HitObject, result, judgementTime, hitPosition, gameplayRate, scoreProcessor, timelineRecorder));
                 }
 
-                scheduler.ProcessExpiredMisses(time, (target, result, timeOffset, hitPosition) =>
-                    applyJudgement(target.HitObject, result, timeOffset, hitPosition, gameplayRate, scoreProcessor, timelineRecorder));
+                foreach (var slider in sliders)
+                {
+                    slider.ProcessTime(time, cursor.Position, cursor.GetPressedActions(), (hitObject, result, judgementTime, cursorPosition) =>
+                        applyJudgement(hitObject, result, judgementTime, cursorPosition, gameplayRate, scoreProcessor, timelineRecorder));
+                }
+
+                scheduler.ProcessExpiredMisses(time, (target, result, judgementTime, hitPosition) =>
+                    applyJudgement(target.HitObject, result, judgementTime, hitPosition, gameplayRate, scoreProcessor, timelineRecorder));
+
+                foreach (var spinner in spinners)
+                {
+                    spinner.ProcessEnd(time, (hitObject, result, judgementTime, cursorPosition, configure) =>
+                        applyJudgement(hitObject, result, judgementTime, cursorPosition, gameplayRate, scoreProcessor, timelineRecorder, configure));
+                }
+
+                previousTime = time;
             }
 
-            scheduler.FinalizeRemainingMisses((target, result, timeOffset, hitPosition) =>
-                applyJudgement(target.HitObject, result, timeOffset, hitPosition, gameplayRate, scoreProcessor, timelineRecorder));
+            scheduler.FinalizeRemainingMisses((target, result, judgementTime, hitPosition) =>
+                applyJudgement(target.HitObject, result, judgementTime, hitPosition, gameplayRate, scoreProcessor, timelineRecorder));
         }
 
         private static void applyJudgement(
             HitObject hitObject,
             HitResult result,
-            double timeOffset,
+            double judgementClockTime,
             Vector2? cursorPositionAtHit,
             double gameplayRate,
             ScoreProcessor scoreProcessor,
-            OsuReplayTimelineRecorder? timelineRecorder)
+            OsuReplayTimelineRecorder? timelineRecorder,
+            Action<JudgementResult>? configureResult = null)
         {
-            JudgementResult judgementResult = hitObject is HitCircle
-                ? new OsuHitCircleJudgementResult(hitObject, hitObject.Judgement)
-                : new JudgementResult(hitObject, hitObject.Judgement);
-
+            JudgementResult judgementResult = createJudgementResult(hitObject, hitObject.Judgement);
             judgementResult.Type = result;
 
             if (judgementResult is OsuHitCircleJudgementResult circleResult)
                 circleResult.CursorPositionAtHit = cursorPositionAtHit;
 
+            configureResult?.Invoke(judgementResult);
+
+            double timeOffset = Math.Min(judgementClockTime - hitObject.GetEndTime(), hitObject.MaximumJudgementOffset);
             JudgementResultTimingHelper.ApplyTiming(judgementResult, timeOffset, gameplayRate);
             scoreProcessor.ApplyResult(judgementResult);
 
-            double clockTime = getJudgementClockTime(hitObject, timeOffset, gameplayRate);
-            timelineRecorder?.Record(scoreProcessor, clockTime, gameplayRate);
+            timelineRecorder?.Record(scoreProcessor, judgementClockTime, gameplayRate);
         }
 
-        private static double getJudgementClockTime(HitObject target, double timeOffset, double gameplayRate)
+        private static JudgementResult createJudgementResult(HitObject hitObject, Judgement judgement)
         {
-            double offset = timeOffset / gameplayRate;
-            double startTime = target.StartTime;
-            double judgementTime = startTime + offset;
-
-            if (target.HitWindows != null && !ReferenceEquals(target.HitWindows, HitWindows.Empty))
+            return hitObject switch
             {
-                double missWindow = target.HitWindows.WindowFor(HitResult.Miss);
-
-                if (missWindow > 0)
-                    judgementTime = Math.Max(startTime - missWindow, judgementTime);
-            }
-
-            return judgementTime;
+                HitCircle => new OsuHitCircleJudgementResult(hitObject, judgement),
+                Slider => new OsuSliderJudgementResult(hitObject, judgement),
+                Spinner => new OsuSpinnerJudgementResult(hitObject, judgement),
+                _ => new JudgementResult(hitObject, judgement),
+            };
         }
     }
 }

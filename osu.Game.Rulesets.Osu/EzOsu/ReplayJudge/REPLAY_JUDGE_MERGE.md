@@ -19,7 +19,7 @@ Osu 采用 **Shadow Judgement**（影子判定），与 Mania 的 HitMode/Mappin
 
 **Osu HitEvent 额外字段**：`CursorPositionAtHit`（`OsuHitCircleJudgementResult`）须在 parity 中一并断言。
 
-Parity 测试（OSL-010 S4）：`TestSceneOsuReplaySessionParity`（规划）。
+Parity 测试（OSL-010 S4）：`TestSceneOsuReplaySessionParity`（circle / slider / spinner）。
 
 ---
 
@@ -30,16 +30,11 @@ Parity 测试（OSL-010 S4）：`TestSceneOsuReplaySessionParity`（规划）。
 | Session API | `OsuReplaySession.cs` | done |
 | Service + cache | `OsuReplaySessionService.cs` | done |
 | Timeline | `OsuReplayTimelineRecorder.cs` | done |
-| **Shadow 引擎** | `Shadow/OsuReplayShadowEngine.cs` 等 | **OSL-010** |
+| **Shadow 引擎** | `Shadow/OsuReplayShadowEngine.cs` 等 | **done**（OSL-010） |
 | 旧 press 循环 | ~~`OsuReplaySessionSimulator` 内启发式~~ | S1 起由 Shadow 替代 |
 
 ---
 
 ## OSL-010 进度
 
-见 REGISTRY §5.1 · `TODO(EZ-SR-OSL-010)`。
-
-- **S1**：帧时钟 + `OsuShadowReplayCursor` + Circle 判定
-- **S2**：Slider tracking / nested
-- **S3**：Spinner 转速
-- **S4**：Drawable parity 测试 → OSL-010 done
+- **S0–S4 done**：Circle + Slider tracking + Spinner 转速 + `TestSceneOsuReplaySessionParity`
