@@ -482,7 +482,7 @@ namespace osu.Game.EzOsuGame.Statistics
             try
             {
                 var result = await ReplaySession.RunRequestAsync(
-                    new ReplayRunRequest(inputScore.DeepClone(), Beatmap, null, ReplayRunPurpose.ForLive)
+                    new ReplayRunRequest(inputScore.DeepClone(), Beatmap, GetRefreshSessionEnvironment(), ReplayRunPurpose.ForLive)
                 ).ConfigureAwait(false);
 
                 if (!result.IsValidReplay)
@@ -512,6 +512,12 @@ namespace osu.Game.EzOsuGame.Statistics
         /// 子类应重写以提供规则集特定的 Score 获取逻辑
         /// </summary>
         protected virtual Score? ResolveInputScore() => null;
+
+        /// <summary>
+        /// Graph Now 基线 Session 使用的 environment；null 时 Service 按 Purpose 解析。
+        /// Mania 返回 ForLive + offset=0（与当前环境重算对齐）。
+        /// </summary>
+        protected virtual GameplayEnvironment? GetRefreshSessionEnvironment() => null;
 
         /// <summary>
         /// Offset 变化处理：debounce 逻辑

@@ -13,7 +13,8 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 
 ## §1 原则
 
-1. **Statistics 不可被 Session 覆盖** — Realm 的 Statistics / Acc / TotalScore 为权威；Session 只 patch 内存 HitEvents 或供 Graph Now 读取，禁止写回 Statistics。
+1. **Statistics 不可被 Session 自动覆盖** — Realm 的 Statistics / Acc / TotalScore 为游玩/提交权威；StatisticsPanel / Graph Now **只**读 Session 或 patch 内存 HitEvents，**禁止 silent 写回** Statistics。
+   - **例外**：用户显式选歌「**成绩重算**」（原始环境 / 当前环境，`OffsetPlusMania=0`）→ 允许 Session 结果写回 Realm Statistics / Acc / TotalScore（见 §1.8）。
 2. **同 score+env 只仿真一遍** — Score / Timeline / HitEvents 是同次 replay 仿真的多出口；消除 Service 层双倍 `Run`+`RunTimeline`（TL-026）。Mania **禁止 F 类**（非 replay 产出的 HitEvents 喂 SP 建 Timeline）。
 3. **StatisticsPanel 与 Graph Now 基线共享 Session cache** — 同一 `score + env` 一次 `Run`；Graph offset 的 C/D 分层不污染 base cache。
 4. **HitEvents 不持久化** — 补 HitEvents = 读同一 Run 的 HitEvents 子集。
@@ -84,7 +85,7 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | 消费方 | Purpose | env 语义 | 与谁可共 cache |
 |--------|---------|----------|----------------|
 | StatisticsPanel 补 HitEvents | ForStored | 成绩嵌入 HitMode/HealthMode（有则 FromScore） | 同 score、同 ForStored 解析结果的 Graph/Panel |
-| Graph Now 基线 | ForLive | 当前全局 HitMode/HealthMode 等 | 同 score、同 ForLive 的 `RunAsync` / `RunRequestAsync` |
+| Graph Now 基线 | ForLive | 当前全局 HitMode/HealthMode 等（`poorEnabled` 含 HealthMode；BmsPoor  alone 不启用 KPoor） | 同 score、同 ForLive 的 `RunAsync` / `RunRequestAsync` |
 | 角逐 ghost Timeline | ForLive | 与 HUD 一致，**不**读成绩嵌入 HitMode | 同 score+ForLive 的 Graph Now（若同时需要 Score+Timeline，走 `RunRequestAsync` 一次） |
 | Graph offset 落定（D） | ForLive | env 含 offset → **新 key** | 不与 base ForLive 共用 |
 
@@ -132,6 +133,33 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 
 ---
 
+## §1.8 KPoor 与成绩重算（2026-07）
+
+### KPoor
+
+Mania KPoor **仅 BMS HealthMode 下**启用，详见 [REPLAY_JUDGE_MERGE §KPoor](../../../osu.Game.Rulesets.Mania/EzMania/ReplayJudge/REPLAY_JUDGE_MERGE.md)。
+
+```csharp
+bool poorEnabled = IsBMSHealthMode(HealthMode) && BmsPoorHitResultEnable;
+```
+
+- Graph Now / Session / Drawable **共用**上式。
+- Rejudge（Graph offset 拖动预览）**不得**省略 HealthMode 检查。
+- BMS HitMode + Lazer Health + BmsPoor ON → **KPoor = 0**（正确行为）。
+
+### 成绩重算（Mania）
+
+| 菜单项 | env | offset | 写 Realm |
+|--------|-----|--------|----------|
+| 原始环境重算 | ForStored | 嵌入 HitMode/HealthMode（无则 Lazer+Lazer）+ 当前 JudgePrecedence/BmsPoor | 0 | Statistics / Acc / TotalScore |
+| 当前环境重算 | ForLive | `GetGameplayEnvironment()` | 0 | 同上 |
+
+- replay 帧时间**不变**。
+- **当前环境重算 ≡ Graph Now @ offset=0**（同 `score + env` cache key；`ResolveForReplay(ForLive)` + `OffsetPlusMania=0`）。
+- 非 Mania 或无 replay：回退 vanilla `ScoreManager.Recalculate`。
+
+---
+
 ## §2 消费场景矩阵
 
 | 消费场景 | 所需出口 | Purpose | Mania | Osu | 原则 |
@@ -140,6 +168,7 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | StatisticsPanel 补 HitEvents | HitEvents | ForStored | Router ✓ | Router ✓ | 只 patch HitEvents；见 §1.7b/c |
 | Graph Original | Realm 静态 | — | ✓ | — | 不跑 Session |
 | Graph Now 基线 | 完整 Score | ForLive | RunRequestAsync ✓ | — | 与 Panel **可**共 key（若 purpose/env 一致） |
+| 选歌成绩重算（Mania） | 完整 Score | ForStored / ForLive | Session Run → 写 Realm | — | §1.8；REPLAY_JUDGE |
 | Graph offset | C / D | ForLive（D 为新 env） | ✓ | — | 不污染 base；见 §1.7d |
 | 角逐 Timeline | EzScoreTimeline | ForLive | RunTimelineDirect | RunTimelineDirect | 一遍 SP |
 | 角逐 HUD 实时分 | Timeline 快照 | — | ✓ | ✓ | 不用终局 TotalScore |

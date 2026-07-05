@@ -82,6 +82,14 @@ namespace osu.Game.EzOsuGame.Localization
             "重算成绩",
             "Recalculate score");
 
+        public static readonly LocalisableString RECALCULATE_SCORE_ORIGINAL_ENV = new EzLocalizationManager.EzLocalisableString(
+            "重算成绩（原始环境）",
+            "Recalculate score (original environment)");
+
+        public static readonly LocalisableString RECALCULATE_SCORE_CURRENT_ENV = new EzLocalizationManager.EzLocalisableString(
+            "重算成绩（当前环境）",
+            "Recalculate score (current environment)");
+
         public static readonly LocalisableString RENAME_PLAYER = new EzLocalizationManager.EzLocalisableString(
             "玩家重命名",
             "Rename player");

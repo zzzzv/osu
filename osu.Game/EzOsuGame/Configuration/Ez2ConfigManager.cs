@@ -294,7 +294,7 @@ namespace osu.Game.EzOsuGame.Configuration
         /// <summary>
         /// Replay 环境解析入口。
         /// <para>ForLive: 直接读当前配置。</para>
-        /// <para>ForStored: 在配置基础上，用 ScoreInfo 中嵌入的 HitMode/HealthMode 覆盖。</para>
+        /// <para>ForStored: 在配置基础上，用 ScoreInfo 中嵌入的 HitMode/HealthMode 覆盖；Mania 无嵌入时回退 Lazer+Lazer。</para>
         /// </summary>
         public GameplayEnvironment ResolveForReplay(ScoreInfo? score, ReplayRunPurpose purpose)
         {
@@ -304,14 +304,25 @@ namespace osu.Game.EzOsuGame.Configuration
             {
                 case ReplayRunPurpose.ForStored:
 
-                    if (score == null || !score.TryGetManiaGameplayModes(out int hitMode, out int healthMode))
-                        return live;
-
-                    return live with
+                    if (score != null && score.TryGetManiaGameplayModes(out int hitMode, out int healthMode))
                     {
-                        ManiaHitMode = (EzEnumHitMode)hitMode,
-                        ManiaHealthMode = (EzEnumHealthMode)healthMode,
-                    };
+                        return live with
+                        {
+                            ManiaHitMode = (EzEnumHitMode)hitMode,
+                            ManiaHealthMode = (EzEnumHealthMode)healthMode,
+                        };
+                    }
+
+                    if (score?.Ruleset.OnlineID == 3)
+                    {
+                        return live with
+                        {
+                            ManiaHitMode = EzEnumHitMode.Lazer,
+                            ManiaHealthMode = EzEnumHealthMode.Lazer,
+                        };
+                    }
+
+                    return live;
 
                 default:
                     return live;

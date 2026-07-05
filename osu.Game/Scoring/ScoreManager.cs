@@ -24,7 +24,7 @@ using osu.Game.Scoring.Legacy;
 
 namespace osu.Game.Scoring
 {
-    public class ScoreManager : ModelManager<ScoreInfo>, IModelImporter<ScoreInfo>
+    public partial class ScoreManager : ModelManager<ScoreInfo>, IModelImporter<ScoreInfo>
     {
         private readonly Func<BeatmapManager> beatmaps;
         private readonly OsuConfigManager? configManager;

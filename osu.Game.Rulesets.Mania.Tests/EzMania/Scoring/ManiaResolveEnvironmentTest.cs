@@ -50,14 +50,16 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.Scoring
         }
 
         [Test]
-        public void TestForStoredStatisticsWithoutEmbeddedFallsBackToLive()
+        public void TestForStoredStatisticsWithoutEmbeddedUsesLazerModesForMania()
         {
             var scoreInfo = new ScoreInfo { Ruleset = new ManiaRuleset().RulesetInfo };
 
-            var live = GlobalConfigStore.EzConfig.ResolveForReplay(null, ReplayRunPurpose.ForLive);
             var stored = GlobalConfigStore.EzConfig.ResolveForReplay(scoreInfo, ReplayRunPurpose.ForStored);
 
-            Assert.That(stored, Is.EqualTo(live));
+            Assert.That(stored.ManiaHitMode, Is.EqualTo(EzEnumHitMode.Lazer));
+            Assert.That(stored.ManiaHealthMode, Is.EqualTo(EzEnumHealthMode.Lazer));
+            Assert.That(stored.JudgePrecedence, Is.EqualTo(liveBaseline.JudgePrecedence));
+            Assert.That(stored.OffsetPlusMania, Is.EqualTo(liveBaseline.OffsetPlusMania));
         }
 
         [Test]
