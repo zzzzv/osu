@@ -109,6 +109,10 @@ namespace osu.Game.EzOsuGame.Localization
             "吸附距离",
             "Snap distance");
 
+        public static readonly LocalisableString MENU_HUD_SNAP_PIXEL_FLUSH = new EzLocalizationManager.EzLocalisableString(
+            "像素吸附",
+            "Pixel snap (rendered bounds; off = editor container box)");
+
         #endregion
 
         #region Notifications

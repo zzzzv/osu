@@ -9,10 +9,18 @@ using osuTK;
 
 namespace osu.Game.EzOsuGame.SkinEditor
 {
+    /// <summary>
+    /// Grid-style HUD reference alignment: per-axis edge, center, or spacing constraints.
+    /// Component same-axis: adjacent 0-gap edges and center only (no configured spacing).
+    /// Configured spacing on an axis applies to container edges only, except orthogonal spacing to a
+    /// component which requires edge/center alignment to that same component on the other axis.
+    /// </summary>
     internal static class SkinHudSnapHelper
     {
-        public const float STICKY_THRESHOLD = 5f;
-        public const float CAPTURE_TOLERANCE = 1.5f;
+        /// <summary>
+        /// Enter/exit threshold for every alignment mode (parent-local px).
+        /// </summary>
+        public const float THRESHOLD = 5f;
 
         private readonly struct Bounds
         {
@@ -37,17 +45,27 @@ namespace osu.Game.EzOsuGame.SkinEditor
 
         private readonly struct SnapCandidate
         {
+            public readonly SkinHudSnapAlignKind Kind;
             public readonly SkinHudSnapEdge SelectionEdge;
             public readonly SkinHudSnapGapMode GapMode;
             public readonly float TargetLine;
-            public readonly float GapDelta;
+            public readonly SkinHudSnapReferenceKind ReferenceKind;
+            public readonly int ReferenceComponentIndex;
 
-            public SnapCandidate(SkinHudSnapEdge selectionEdge, SkinHudSnapGapMode gapMode, float targetLine, float gapDelta)
+            public SnapCandidate(
+                SkinHudSnapAlignKind kind,
+                SkinHudSnapEdge selectionEdge,
+                SkinHudSnapGapMode gapMode,
+                float targetLine,
+                SkinHudSnapReferenceKind referenceKind,
+                int referenceComponentIndex = -1)
             {
+                Kind = kind;
                 SelectionEdge = selectionEdge;
                 GapMode = gapMode;
                 TargetLine = targetLine;
-                GapDelta = gapDelta;
+                ReferenceKind = referenceKind;
+                ReferenceComponentIndex = referenceComponentIndex;
             }
         }
 
@@ -56,190 +74,244 @@ namespace osu.Game.EzOsuGame.SkinEditor
             IReadOnlyList<Drawable> selection,
             Vector2 rawParentDelta,
             float snapDistance,
+            bool usePixelBounds,
             ref SkinHudSnapDragState state)
         {
             if (selection.Count == 0)
                 return rawParentDelta;
 
-            var currentBounds = getCombinedBounds(selection);
+            var currentBounds = getCombinedBounds(selection, usePixelBounds);
             var proposedBounds = currentBounds.Offset(rawParentDelta.X, rawParentDelta.Y);
-            var others = getSnapTargets(container, selection);
+            var others = getSnapTargets(container, selection, usePixelBounds);
+            var containerSize = container.DrawSize;
 
-            float correctedX = processAxis(
-                isHorizontal: true,
-                currentBounds,
-                proposedBounds,
-                rawParentDelta.X,
-                snapDistance,
-                container.DrawSize,
-                others,
-                ref state.X);
+            maintainAxis(true, ref state.X, in state.Y, proposedBounds, snapDistance, containerSize, others);
+            maintainAxis(false, ref state.Y, in state.X, proposedBounds, snapDistance, containerSize, others);
+            maintainAxis(true, ref state.X, in state.Y, proposedBounds, snapDistance, containerSize, others);
+            maintainAxis(false, ref state.Y, in state.X, proposedBounds, snapDistance, containerSize, others);
 
-            float correctedY = processAxis(
-                isHorizontal: false,
-                currentBounds,
-                proposedBounds,
-                rawParentDelta.Y,
-                snapDistance,
-                container.DrawSize,
-                others,
-                ref state.Y);
+            float adjustX = computeSnapAdjust(true, proposedBounds, state.X);
+            var proposedAfterX = proposedBounds.Offset(adjustX, 0);
+            float adjustY = computeSnapAdjust(false, proposedAfterX, state.Y);
 
-            return new Vector2(correctedX, correctedY);
+            return new Vector2(rawParentDelta.X + adjustX, rawParentDelta.Y + adjustY);
         }
 
-        private static float processAxis(
+        private static void maintainAxis(
             bool isHorizontal,
-            Bounds currentBounds,
+            ref SkinHudSnapAxisSession session,
+            in SkinHudSnapAxisSession orthogonal,
             Bounds proposedBounds,
-            float rawDelta,
             float snapDistance,
             Vector2 containerDrawSize,
-            IReadOnlyList<Bounds> others,
-            ref SkinHudSnapAxisSession session)
+            IReadOnlyList<Bounds> others)
         {
-            if (session.IsActive)
-                return processActiveSession(isHorizontal, currentBounds, proposedBounds, rawDelta, snapDistance, containerDrawSize, ref session);
-
-            if (tryBeginSession(isHorizontal, proposedBounds, rawDelta, snapDistance, containerDrawSize, others, ref session))
-            {
-                float targetEdge = getTargetEdgeValue(isHorizontal, proposedBounds, session);
-                float desiredEdge = computeEdgeForGap(isHorizontal, session, session.Stage == SkinHudSnapStage.Flush ? 0 : snapDistance);
-                return desiredEdge - getSelectionEdgeValue(isHorizontal, currentBounds, session.SelectionEdge);
-            }
-
-            return rawDelta;
-        }
-
-        private static float processActiveSession(
-            bool isHorizontal,
-            Bounds currentBounds,
-            Bounds proposedBounds,
-            float rawDelta,
-            float snapDistance,
-            Vector2 containerDrawSize,
-            ref SkinHudSnapAxisSession session)
-        {
-            float openingDirection = -session.ClosingDirection;
-
-            if (rawDelta * openingDirection > 0)
-            {
-                session.IntentDelta = Math.Max(0, session.IntentDelta - Math.Abs(rawDelta));
-
-                if (session.IntentDelta <= 0 && computeGap(isHorizontal, proposedBounds, session) > snapDistance + STICKY_THRESHOLD)
-                {
-                    session.Reset();
-                    return rawDelta;
-                }
-            }
-
-            if (session.Stage == SkinHudSnapStage.Gap)
-            {
-                if (rawDelta * session.ClosingDirection < 0)
-                    session.IntentDelta += Math.Abs(rawDelta);
-
-                if (session.IntentDelta >= STICKY_THRESHOLD)
-                    session.Stage = SkinHudSnapStage.Flush;
-
-                float gapTarget = session.Stage == SkinHudSnapStage.Flush ? 0 : snapDistance;
-                float desiredEdge = computeEdgeForGap(isHorizontal, session, gapTarget);
-                return desiredEdge - getSelectionEdgeValue(isHorizontal, currentBounds, session.SelectionEdge);
-            }
-
-            // Flush
-            float desiredFlushEdge = computeEdgeForGap(isHorizontal, session, 0);
-            float flushDelta = desiredFlushEdge - getSelectionEdgeValue(isHorizontal, currentBounds, session.SelectionEdge);
-
-            var flushProposed = offsetBounds(isHorizontal, currentBounds, flushDelta);
-            var testBounds = isHorizontal ? flushProposed.Offset(rawDelta, 0) : flushProposed.Offset(0, rawDelta);
-
-            if (rawDelta * openingDirection > 0 && computeGap(isHorizontal, testBounds, session) > snapDistance + STICKY_THRESHOLD)
+            if (session.Kind == SkinHudSnapAlignKind.Spacing
+                && session.ReferenceKind == SkinHudSnapReferenceKind.Component
+                && !orthogonal.SupportsComponentOrthogonalSpacing(session.ReferenceComponentIndex))
             {
                 session.Reset();
-                return rawDelta;
+            }
+            else if (session.IsActive)
+            {
+                if (shouldRelease(isHorizontal, proposedBounds, session))
+                    session.Reset();
+                else if (session.Kind == SkinHudSnapAlignKind.Spacing)
+                    updateSpacingIntent(isHorizontal, proposedBounds, ref session, snapDistance);
             }
 
-            return flushDelta;
+            if (!session.IsActive)
+                tryCapture(isHorizontal, proposedBounds, snapDistance, orthogonal, containerDrawSize, others, ref session);
         }
 
-        private static bool tryBeginSession(
+        private static void updateSpacingIntent(
             bool isHorizontal,
             Bounds proposedBounds,
-            float rawDelta,
+            ref SkinHudSnapAxisSession session,
+            float snapDistance)
+        {
+            if (Math.Abs(session.SpacingTarget - snapDistance) > float.Epsilon)
+                return;
+
+            float proposedGap = computeGap(isHorizontal, proposedBounds, session);
+
+            if (proposedGap < session.SpacingTarget - float.Epsilon)
+                session.SpacingIntent += session.SpacingTarget - proposedGap;
+            else if (proposedGap > session.SpacingTarget + float.Epsilon)
+                session.SpacingIntent = Math.Max(0, session.SpacingIntent - (proposedGap - session.SpacingTarget));
+
+            if (session.SpacingIntent >= THRESHOLD)
+                session.SpacingTarget = 0;
+        }
+
+        private static bool shouldRelease(bool isHorizontal, Bounds proposedBounds, SkinHudSnapAxisSession session) =>
+            computeAlignmentError(isHorizontal, proposedBounds, session) > THRESHOLD;
+
+        private static float computeAlignmentError(bool isHorizontal, Bounds bounds, SkinHudSnapAxisSession session)
+        {
+            switch (session.Kind)
+            {
+                case SkinHudSnapAlignKind.Edge:
+                case SkinHudSnapAlignKind.Center:
+                    return Math.Abs(getAlignedCoordinate(isHorizontal, bounds, session) - session.TargetLine);
+
+                case SkinHudSnapAlignKind.Spacing:
+                    return Math.Abs(computeGap(isHorizontal, bounds, session) - session.SpacingTarget);
+
+                default:
+                    return float.MaxValue;
+            }
+        }
+
+        private static float getAlignedCoordinate(bool isHorizontal, Bounds bounds, SkinHudSnapAxisSession session) =>
+            getSelectionEdgeValue(isHorizontal, bounds, session.SelectionEdge);
+
+        private static void tryCapture(
+            bool isHorizontal,
+            Bounds proposedBounds,
             float snapDistance,
+            in SkinHudSnapAxisSession orthogonal,
             Vector2 containerDrawSize,
             IReadOnlyList<Bounds> others,
             ref SkinHudSnapAxisSession session)
         {
             SnapCandidate? best = null;
+            float bestError = float.MaxValue;
 
-            foreach (var candidate in enumerateCandidates(isHorizontal, containerDrawSize, others))
+            foreach (var candidate in enumerateCandidates(isHorizontal, containerDrawSize, others, proposedBounds))
             {
-                float gap = computeGap(isHorizontal, proposedBounds, candidate);
-                if (gap < 0)
-                    continue;
+                if (candidate.Kind == SkinHudSnapAlignKind.Spacing)
+                {
+                    if (candidate.ReferenceKind == SkinHudSnapReferenceKind.Component
+                        && !orthogonal.SupportsComponentOrthogonalSpacing(candidate.ReferenceComponentIndex))
+                    {
+                        continue;
+                    }
 
-                float deltaFromTarget = Math.Abs(gap - snapDistance);
-                if (deltaFromTarget > CAPTURE_TOLERANCE)
-                    continue;
+                    float gap = computeGap(isHorizontal, proposedBounds, candidate);
+                    if (gap < 0)
+                        continue;
 
-                if (best == null || deltaFromTarget < best.Value.GapDelta)
-                    best = new SnapCandidate(candidate.SelectionEdge, candidate.GapMode, candidate.TargetLine, deltaFromTarget);
+                    float error = Math.Abs(gap - snapDistance);
+                    if (error > THRESHOLD)
+                        continue;
+                }
+                else
+                {
+                    float error = Math.Abs(getSelectionEdgeValue(isHorizontal, proposedBounds, candidate.SelectionEdge) - candidate.TargetLine);
+                    if (error > THRESHOLD)
+                        continue;
+
+                    if (error < bestError)
+                    {
+                        bestError = error;
+                        best = candidate;
+                    }
+
+                    continue;
+                }
+
+                float spacingError = Math.Abs(computeGap(isHorizontal, proposedBounds, candidate) - snapDistance);
+                if (spacingError < bestError)
+                {
+                    bestError = spacingError;
+                    best = candidate;
+                }
             }
 
             if (best == null)
-                return false;
+                return;
 
-            session.Stage = SkinHudSnapStage.Gap;
-            session.IntentDelta = 0;
+            session.Kind = best.Value.Kind;
             session.SelectionEdge = best.Value.SelectionEdge;
             session.GapMode = best.Value.GapMode;
             session.TargetLine = best.Value.TargetLine;
-            session.ClosingDirection = Math.Abs(rawDelta) > float.Epsilon
-                ? Math.Sign(rawDelta)
-                : Math.Sign(getSelectionEdgeValue(isHorizontal, proposedBounds, session.SelectionEdge) - computeEdgeForGap(isHorizontal, best.Value, snapDistance));
-
-            if (session.ClosingDirection == 0)
-                session.ClosingDirection = -1;
-
-            return true;
+            session.ReferenceKind = best.Value.ReferenceKind;
+            session.ReferenceComponentIndex = best.Value.ReferenceComponentIndex;
+            session.SpacingIntent = 0;
+            session.SpacingTarget = best.Value.Kind == SkinHudSnapAlignKind.Spacing ? snapDistance : 0;
         }
 
-        private static IEnumerable<SnapCandidate> enumerateCandidates(bool isHorizontal, Vector2 containerDrawSize, IReadOnlyList<Bounds> others)
+        private static float computeSnapAdjust(bool isHorizontal, Bounds proposedBounds, SkinHudSnapAxisSession session)
+        {
+            if (!session.IsActive)
+                return 0;
+
+            if (session.Kind == SkinHudSnapAlignKind.Center)
+            {
+                float current = getSelectionEdgeValue(isHorizontal, proposedBounds, SkinHudSnapEdge.Mid);
+                return session.TargetLine - current;
+            }
+
+            float desiredEdge = session.Kind switch
+            {
+                SkinHudSnapAlignKind.Edge => computeEdgeForGap(isHorizontal, session.SelectionEdge, session.GapMode, session.TargetLine, 0),
+                SkinHudSnapAlignKind.Spacing => computeEdgeForGap(isHorizontal, session.SelectionEdge, session.GapMode, session.TargetLine, session.SpacingTarget),
+                _ => getSelectionEdgeValue(isHorizontal, proposedBounds, session.SelectionEdge),
+            };
+
+            float proposedEdge = getSelectionEdgeValue(isHorizontal, proposedBounds, session.SelectionEdge);
+            return desiredEdge - proposedEdge;
+        }
+
+        private static IEnumerable<SnapCandidate> enumerateCandidates(
+            bool isHorizontal,
+            Vector2 containerDrawSize,
+            IReadOnlyList<Bounds> others,
+            Bounds selectionBounds)
         {
             if (isHorizontal)
             {
-                foreach (var other in others)
+                for (int i = 0; i < others.Count; i++)
                 {
-                    yield return new SnapCandidate(SkinHudSnapEdge.Min, SkinHudSnapGapMode.SelectionMinusTarget, other.Right, 0);
-                    yield return new SnapCandidate(SkinHudSnapEdge.Max, SkinHudSnapGapMode.TargetMinusSelection, other.Left, 0);
-                    yield return new SnapCandidate(SkinHudSnapEdge.Min, SkinHudSnapGapMode.SelectionMinusTarget, other.Left, 0);
-                    yield return new SnapCandidate(SkinHudSnapEdge.Max, SkinHudSnapGapMode.TargetMinusSelection, other.Right, 0);
-                    yield return new SnapCandidate(SkinHudSnapEdge.Mid, SkinHudSnapGapMode.SelectionMinusTarget, other.HCenter, 0);
+                    var other = others[i];
+                    if (blocksHorizontalSnap(selectionBounds, other))
+                        continue;
+
+                    // Component: adjacent 0-gap edges and center only (no configured spacing on this axis).
+                    yield return new SnapCandidate(SkinHudSnapAlignKind.Edge, SkinHudSnapEdge.Max, SkinHudSnapGapMode.TargetMinusSelection, other.Left, SkinHudSnapReferenceKind.Component, i);
+                    yield return new SnapCandidate(SkinHudSnapAlignKind.Edge, SkinHudSnapEdge.Min, SkinHudSnapGapMode.SelectionMinusTarget, other.Right, SkinHudSnapReferenceKind.Component, i);
+                    yield return new SnapCandidate(SkinHudSnapAlignKind.Center, SkinHudSnapEdge.Mid, SkinHudSnapGapMode.SelectionMinusTarget, other.HCenter, SkinHudSnapReferenceKind.Component, i);
                 }
 
                 float width = containerDrawSize.X;
-                yield return new SnapCandidate(SkinHudSnapEdge.Min, SkinHudSnapGapMode.SelectionMinusTarget, 0, 0);
-                yield return new SnapCandidate(SkinHudSnapEdge.Max, SkinHudSnapGapMode.TargetMinusSelection, width, 0);
-                yield return new SnapCandidate(SkinHudSnapEdge.Mid, SkinHudSnapGapMode.SelectionMinusTarget, width * 0.5f, 0);
+                yield return new SnapCandidate(SkinHudSnapAlignKind.Edge, SkinHudSnapEdge.Min, SkinHudSnapGapMode.SelectionMinusTarget, 0, SkinHudSnapReferenceKind.Container);
+                yield return new SnapCandidate(SkinHudSnapAlignKind.Edge, SkinHudSnapEdge.Max, SkinHudSnapGapMode.TargetMinusSelection, width, SkinHudSnapReferenceKind.Container);
+                yield return new SnapCandidate(SkinHudSnapAlignKind.Spacing, SkinHudSnapEdge.Min, SkinHudSnapGapMode.SelectionMinusTarget, 0, SkinHudSnapReferenceKind.Container);
+                yield return new SnapCandidate(SkinHudSnapAlignKind.Spacing, SkinHudSnapEdge.Max, SkinHudSnapGapMode.TargetMinusSelection, width, SkinHudSnapReferenceKind.Container);
+                yield return new SnapCandidate(SkinHudSnapAlignKind.Center, SkinHudSnapEdge.Mid, SkinHudSnapGapMode.SelectionMinusTarget, width * 0.5f, SkinHudSnapReferenceKind.Container);
             }
             else
             {
-                foreach (var other in others)
+                for (int i = 0; i < others.Count; i++)
                 {
-                    yield return new SnapCandidate(SkinHudSnapEdge.Min, SkinHudSnapGapMode.SelectionMinusTarget, other.Bottom, 0);
-                    yield return new SnapCandidate(SkinHudSnapEdge.Max, SkinHudSnapGapMode.TargetMinusSelection, other.Top, 0);
-                    yield return new SnapCandidate(SkinHudSnapEdge.Min, SkinHudSnapGapMode.SelectionMinusTarget, other.Top, 0);
-                    yield return new SnapCandidate(SkinHudSnapEdge.Max, SkinHudSnapGapMode.TargetMinusSelection, other.Bottom, 0);
-                    yield return new SnapCandidate(SkinHudSnapEdge.Mid, SkinHudSnapGapMode.SelectionMinusTarget, other.VCenter, 0);
+                    var other = others[i];
+                    if (blocksVerticalSnap(selectionBounds, other))
+                        continue;
+
+                    yield return new SnapCandidate(SkinHudSnapAlignKind.Edge, SkinHudSnapEdge.Max, SkinHudSnapGapMode.TargetMinusSelection, other.Top, SkinHudSnapReferenceKind.Component, i);
+                    yield return new SnapCandidate(SkinHudSnapAlignKind.Edge, SkinHudSnapEdge.Min, SkinHudSnapGapMode.SelectionMinusTarget, other.Bottom, SkinHudSnapReferenceKind.Component, i);
+                    yield return new SnapCandidate(SkinHudSnapAlignKind.Center, SkinHudSnapEdge.Mid, SkinHudSnapGapMode.SelectionMinusTarget, other.VCenter, SkinHudSnapReferenceKind.Component, i);
+
+                    // Y spacing to component B; requires X edge/center alignment to the same component.
+                    yield return new SnapCandidate(SkinHudSnapAlignKind.Spacing, SkinHudSnapEdge.Min, SkinHudSnapGapMode.SelectionMinusTarget, other.Bottom, SkinHudSnapReferenceKind.Component, i);
+                    yield return new SnapCandidate(SkinHudSnapAlignKind.Spacing, SkinHudSnapEdge.Max, SkinHudSnapGapMode.TargetMinusSelection, other.Top, SkinHudSnapReferenceKind.Component, i);
                 }
 
                 float height = containerDrawSize.Y;
-                yield return new SnapCandidate(SkinHudSnapEdge.Min, SkinHudSnapGapMode.SelectionMinusTarget, 0, 0);
-                yield return new SnapCandidate(SkinHudSnapEdge.Max, SkinHudSnapGapMode.TargetMinusSelection, height, 0);
-                yield return new SnapCandidate(SkinHudSnapEdge.Mid, SkinHudSnapGapMode.SelectionMinusTarget, height * 0.5f, 0);
+                yield return new SnapCandidate(SkinHudSnapAlignKind.Edge, SkinHudSnapEdge.Min, SkinHudSnapGapMode.SelectionMinusTarget, 0, SkinHudSnapReferenceKind.Container);
+                yield return new SnapCandidate(SkinHudSnapAlignKind.Edge, SkinHudSnapEdge.Max, SkinHudSnapGapMode.TargetMinusSelection, height, SkinHudSnapReferenceKind.Container);
+                yield return new SnapCandidate(SkinHudSnapAlignKind.Spacing, SkinHudSnapEdge.Min, SkinHudSnapGapMode.SelectionMinusTarget, 0, SkinHudSnapReferenceKind.Container);
+                yield return new SnapCandidate(SkinHudSnapAlignKind.Spacing, SkinHudSnapEdge.Max, SkinHudSnapGapMode.TargetMinusSelection, height, SkinHudSnapReferenceKind.Container);
+                yield return new SnapCandidate(SkinHudSnapAlignKind.Center, SkinHudSnapEdge.Mid, SkinHudSnapGapMode.SelectionMinusTarget, height * 0.5f, SkinHudSnapReferenceKind.Container);
             }
         }
+
+        private static bool blocksHorizontalSnap(Bounds selection, Bounds other) =>
+            selection.Bottom <= other.Top || selection.Top >= other.Bottom;
+
+        private static bool blocksVerticalSnap(Bounds selection, Bounds other) =>
+            selection.Right <= other.Left || selection.Left >= other.Right;
 
         private static float computeGap(bool isHorizontal, Bounds bounds, SnapCandidate candidate) =>
             computeGap(isHorizontal, bounds, candidate.SelectionEdge, candidate.GapMode, candidate.TargetLine);
@@ -255,15 +327,10 @@ namespace osu.Game.EzOsuGame.SkinEditor
                 : targetLine - selectionEdge;
         }
 
-        private static float computeEdgeForGap(bool isHorizontal, SkinHudSnapAxisSession session, float gap) =>
-            computeEdgeForGap(isHorizontal, session.SelectionEdge, session.GapMode, session.TargetLine, gap);
-
-        private static float computeEdgeForGap(bool isHorizontal, SnapCandidate candidate, float gap) =>
-            computeEdgeForGap(isHorizontal, candidate.SelectionEdge, candidate.GapMode, candidate.TargetLine, gap);
-
-        private static float computeEdgeForGap(bool isHorizontal, SkinHudSnapEdge edge, SkinHudSnapGapMode mode, float targetLine, float gap) => mode == SkinHudSnapGapMode.SelectionMinusTarget
-            ? targetLine + gap
-            : targetLine - gap;
+        private static float computeEdgeForGap(bool isHorizontal, SkinHudSnapEdge edge, SkinHudSnapGapMode mode, float targetLine, float gap) =>
+            mode == SkinHudSnapGapMode.SelectionMinusTarget
+                ? targetLine + gap
+                : targetLine - gap;
 
         private static float getSelectionEdgeValue(bool isHorizontal, Bounds bounds, SkinHudSnapEdge edge)
         {
@@ -285,11 +352,7 @@ namespace osu.Game.EzOsuGame.SkinEditor
             };
         }
 
-        private static float getTargetEdgeValue(bool isHorizontal, Bounds bounds, SkinHudSnapAxisSession session) => getSelectionEdgeValue(isHorizontal, bounds, session.SelectionEdge);
-
-        private static Bounds offsetBounds(bool isHorizontal, Bounds bounds, float delta) => isHorizontal ? bounds.Offset(delta, 0) : bounds.Offset(0, delta);
-
-        private static Bounds getCombinedBounds(IReadOnlyList<Drawable> drawables)
+        private static Bounds getCombinedBounds(IReadOnlyList<Drawable> drawables, bool usePixelBounds)
         {
             float minX = float.PositiveInfinity;
             float minY = float.PositiveInfinity;
@@ -298,7 +361,7 @@ namespace osu.Game.EzOsuGame.SkinEditor
 
             foreach (var drawable in drawables)
             {
-                var bounds = getContainerSpaceBounds(drawable);
+                var bounds = toBounds(SkinHudSnapBounds.FromDrawable(drawable, usePixelBounds));
                 minX = Math.Min(minX, bounds.Left);
                 minY = Math.Min(minY, bounds.Top);
                 maxX = Math.Max(maxX, bounds.Right);
@@ -308,13 +371,13 @@ namespace osu.Game.EzOsuGame.SkinEditor
             return new Bounds(minX, maxX, minY, maxY);
         }
 
-        private static Bounds getContainerSpaceBounds(Drawable drawable)
-        {
-            var aabb = drawable.Parent!.ToLocalSpace(drawable.ScreenSpaceDrawQuad).AABBFloat;
-            return new Bounds(aabb.Left, aabb.Right, aabb.Top, aabb.Bottom);
-        }
+        private static Bounds getSnapBounds(Drawable drawable, bool usePixelBounds) =>
+            toBounds(SkinHudSnapBounds.FromDrawable(drawable, usePixelBounds));
 
-        private static List<Bounds> getSnapTargets(SkinnableContainer container, IReadOnlyList<Drawable> selection)
+        private static Bounds toBounds(SkinHudSnapBounds bounds) =>
+            new Bounds(bounds.Left, bounds.Right, bounds.Top, bounds.Bottom);
+
+        private static List<Bounds> getSnapTargets(SkinnableContainer container, IReadOnlyList<Drawable> selection, bool usePixelBounds)
         {
             var selectionSet = new HashSet<Drawable>(selection);
             var result = new List<Bounds>();
@@ -327,7 +390,7 @@ namespace osu.Game.EzOsuGame.SkinEditor
                 if (!component.IsEditable || !drawable.IsPresent || selectionSet.Contains(drawable))
                     continue;
 
-                result.Add(getContainerSpaceBounds(drawable));
+                result.Add(getSnapBounds(drawable, usePixelBounds));
             }
 
             return result;

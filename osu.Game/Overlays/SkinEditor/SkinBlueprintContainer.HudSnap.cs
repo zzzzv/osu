@@ -23,6 +23,7 @@ namespace osu.Game.Overlays.SkinEditor
     {
         private Bindable<bool> hudSnapEnabled = null!;
         private Bindable<float> hudSnapDistance = null!;
+        private Bindable<bool> hudSnapPixelFlush = null!;
 
         private SkinHudSnapDragState snapDragState = new SkinHudSnapDragState();
 
@@ -31,6 +32,7 @@ namespace osu.Game.Overlays.SkinEditor
         {
             hudSnapEnabled = config.GetBindable<bool>(Ez2Setting.SkinEditorHudSnapEnabled);
             hudSnapDistance = config.GetBindable<float>(Ez2Setting.SkinEditorHudSnapDistance);
+            hudSnapPixelFlush = config.GetBindable<bool>(Ez2Setting.SkinEditorHudSnapPixelFlush);
 
             hudSnapDistance.BindValueChanged(v =>
             {
@@ -86,6 +88,7 @@ namespace osu.Game.Overlays.SkinEditor
                 SelectedItems.Cast<Drawable>().ToList(),
                 parentDelta,
                 hudSnapDistance.Value,
+                hudSnapPixelFlush.Value,
                 ref snapDragState);
 
             Vector2 adjustedScreenDelta = parentDeltaToScreenDelta(referenceDrawable, parentDelta);
@@ -142,6 +145,7 @@ namespace osu.Game.Overlays.SkinEditor
                 SelectedItems.Cast<Drawable>().ToList(),
                 parentDelta,
                 hudSnapDistance.Value,
+                hudSnapPixelFlush.Value,
                 ref snapDragState);
 
             SelectionHandler.HandleMovement(new MoveSelectionEvent<ISerialisableDrawable>(

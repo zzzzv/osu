@@ -111,6 +111,7 @@ namespace osu.Game.EzOsuGame.Configuration
             SetDefault(Ez2Setting.EditorSyncTimelineSpacing, true);
             SetDefault(Ez2Setting.SkinEditorHudSnapEnabled, false);
             SetDefault(Ez2Setting.SkinEditorHudSnapDistance, 20, 10, 50, 5);
+            SetDefault(Ez2Setting.SkinEditorHudSnapPixelFlush, false);
 
             SetDefault(Ez2Setting.EzAnalysisFilter, false);
             SetDefault(Ez2Setting.EzSelectCsMode, string.Empty);
@@ -850,6 +851,11 @@ namespace osu.Game.EzOsuGame.Configuration
         /// First-stage HUD snap gap in SkinnableContainer parent pixels (10/15/20/25/50).
         /// </summary>
         SkinEditorHudSnapDistance,
+
+        /// <summary>
+        /// When enabled, snap uses rendered pixel bounds. When disabled (default), snap uses each HUD component's layout/container box.
+        /// </summary>
+        SkinEditorHudSnapPixelFlush,
 
         EzAnalysisFilter,
 

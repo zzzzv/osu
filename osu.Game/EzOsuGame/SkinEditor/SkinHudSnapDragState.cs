@@ -3,11 +3,19 @@
 
 namespace osu.Game.EzOsuGame.SkinEditor
 {
-    internal enum SkinHudSnapStage
+    internal enum SkinHudSnapAlignKind
     {
         None,
-        Gap,
-        Flush,
+        Edge,
+        Center,
+        Spacing,
+    }
+
+    internal enum SkinHudSnapReferenceKind
+    {
+        None,
+        Container,
+        Component,
     }
 
     internal enum SkinHudSnapEdge
@@ -32,24 +40,40 @@ namespace osu.Game.EzOsuGame.SkinEditor
 
     internal struct SkinHudSnapAxisSession
     {
-        public SkinHudSnapStage Stage;
-        public float IntentDelta;
-        public int ClosingDirection;
-        public float TargetLine;
+        public SkinHudSnapAlignKind Kind;
         public SkinHudSnapEdge SelectionEdge;
         public SkinHudSnapGapMode GapMode;
+        public float TargetLine;
+        public SkinHudSnapReferenceKind ReferenceKind;
+        public int ReferenceComponentIndex;
+
+        /// <summary>
+        /// Active spacing target (configured distance, then 0 after intent threshold).
+        /// </summary>
+        public float SpacingTarget;
+
+        public float SpacingIntent;
+
+        public bool IsActive => Kind != SkinHudSnapAlignKind.None;
+
+        public bool IsComponentEdgeOrCenter =>
+            Kind is SkinHudSnapAlignKind.Edge or SkinHudSnapAlignKind.Center
+            && ReferenceKind == SkinHudSnapReferenceKind.Component;
+
+        public bool SupportsComponentOrthogonalSpacing(int componentIndex) =>
+            IsComponentEdgeOrCenter && ReferenceComponentIndex == componentIndex;
 
         public void Reset()
         {
-            Stage = SkinHudSnapStage.None;
-            IntentDelta = 0;
-            ClosingDirection = 0;
-            TargetLine = 0;
+            Kind = SkinHudSnapAlignKind.None;
             SelectionEdge = SkinHudSnapEdge.Min;
             GapMode = SkinHudSnapGapMode.SelectionMinusTarget;
+            TargetLine = 0;
+            ReferenceKind = SkinHudSnapReferenceKind.None;
+            ReferenceComponentIndex = -1;
+            SpacingTarget = 0;
+            SpacingIntent = 0;
         }
-
-        public bool IsActive => Stage != SkinHudSnapStage.None;
     }
 
     internal partial class SkinHudSnapDragState

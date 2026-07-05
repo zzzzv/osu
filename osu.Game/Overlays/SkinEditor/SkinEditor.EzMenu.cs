@@ -19,18 +19,30 @@ namespace osu.Game.Overlays.SkinEditor
 
         private Bindable<bool> hudSnapEnabled = null!;
         private Bindable<float> hudSnapDistance = null!;
+        private Bindable<bool> hudSnapPixelFlush = null!;
         private SkinHudSnapDistanceMenuItem? hudSnapDistanceMenuItem;
+        private ToggleMenuItem? hudSnapPixelFlushMenuItem;
 
         private MenuItem createEzSettingsMenu()
         {
             hudSnapEnabled = ezConfig.GetBindable<bool>(Ez2Setting.SkinEditorHudSnapEnabled);
             hudSnapDistance = ezConfig.GetBindable<float>(Ez2Setting.SkinEditorHudSnapDistance);
+            hudSnapPixelFlush = ezConfig.GetBindable<bool>(Ez2Setting.SkinEditorHudSnapPixelFlush);
             hudSnapDistanceMenuItem = new SkinHudSnapDistanceMenuItem(hudSnapDistance);
+            hudSnapPixelFlushMenuItem = new ToggleMenuItem(EzEditorStrings.MENU_HUD_SNAP_PIXEL_FLUSH)
+            {
+                State = { BindTarget = hudSnapPixelFlush },
+            };
 
             hudSnapEnabled.BindValueChanged(enabled =>
             {
+                bool on = enabled.NewValue;
+
                 if (hudSnapDistanceMenuItem != null)
-                    hudSnapDistanceMenuItem.Action.Disabled = !enabled.NewValue;
+                    hudSnapDistanceMenuItem.Action.Disabled = !on;
+
+                if (hudSnapPixelFlushMenuItem != null)
+                    hudSnapPixelFlushMenuItem.Action.Disabled = !on;
             }, true);
 
             return new MenuItem(EzEditorStrings.MENU_EZ_SETTINGS)
@@ -42,6 +54,7 @@ namespace osu.Game.Overlays.SkinEditor
                         State = { BindTarget = hudSnapEnabled },
                     },
                     hudSnapDistanceMenuItem,
+                    hudSnapPixelFlushMenuItem,
                 },
             };
         }
