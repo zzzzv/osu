@@ -15,7 +15,6 @@ using osu.Game.EzOsuGame.Localization;
 using osu.Game.Rulesets.Scoring;
 using osu.Game.Rulesets.Judgements;
 using osu.Game.Rulesets.Mania.EzMania.Localization;
-using osu.Game.Rulesets.Mania.Skinning;
 using osu.Game.Rulesets.Objects.Types;
 using osu.Game.Screens.Play.HUD;
 using osu.Game.Screens.Play.HUD.HitErrorMeters;
@@ -68,6 +67,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
         [SettingSource(typeof(EzHUDManiaStrings), nameof(EzHUDManiaStrings.STOP_MOVEMENT_LABEL), nameof(EzHUDManiaStrings.STOP_MOVEMENT_DESCRIPTION))]
         public BindableBool StopMovement { get; } = new BindableBool();
 
+        [SettingSource(typeof(EzHUDManiaStrings), nameof(EzHUDManiaStrings.MATCH_PANEL_WIDTH_LABEL), nameof(EzHUDManiaStrings.MATCH_PANEL_WIDTH_DESCRIPTION))]
+        public BindableBool MatchManiaPanelWidth { get; } = ManiaHudPanelWidthHelper.CreateDefaultBindable();
+
         private Container[]? columns;
         private Box[] judgementMarkers = null!;
         private Box? backgroundSolid;
@@ -79,6 +81,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
 
         private Bindable<double> columnWidth = null!;
         private Bindable<double> specialFactor = null!;
+        private Bindable<ColumnWidthStyle> columnWidthStyle = null!;
+        private Ez2ConfigManager ezSkinConfig = null!;
 
         [Resolved]
         private InputCountController controller { get; set; } = null!;
@@ -86,11 +90,16 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
         [Resolved]
         private ISkinSource skin { get; set; } = null!;
 
+        [Resolved]
+        private SkinManager skinManager { get; set; } = null!;
+
         [BackgroundDependencyLoader]
         private void load(Ez2ConfigManager ezSkinConfig)
         {
+            this.ezSkinConfig = ezSkinConfig;
             columnWidth = ezSkinConfig.GetBindable<double>(Ez2Setting.ColumnWidth);
             specialFactor = ezSkinConfig.GetBindable<double>(Ez2Setting.SpecialFactor);
+            columnWidthStyle = ezSkinConfig.GetBindable<ColumnWidthStyle>(Ez2Setting.ColumnWidthStyle);
             floatingAverages = Array.Empty<double>();
             judgementMarkers = Array.Empty<Box>();
             columns = Array.Empty<Container>();
@@ -226,6 +235,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
 
             columnWidth.BindValueChanged(_ => updateWidth(), true);
             specialFactor.BindValueChanged(_ => updateWidth(), true);
+            columnWidthStyle.BindValueChanged(_ => updateWidth(), true);
+            MatchManiaPanelWidth.BindValueChanged(_ => updateWidth(), true);
+
+            ezSkinConfig.ColumnTypeChanged += (_, __, ___) => updateWidth();
+            skin.SourceChanged += updateWidth;
 
             // 更新标识块高度
             MarkerHeight.BindValueChanged(height =>
@@ -272,18 +286,26 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
             if (keyCount <= 0 || columns == null)
                 return;
 
+            int keyMode = controller.Triggers.Count;
             float totalWidth = 0;
 
             for (int i = 0; i < keyCount; i++)
             {
-                float? widthS = skin.GetConfig<ManiaSkinConfigurationLookup, float>(
-                                        new ManiaSkinConfigurationLookup(LegacyManiaSkinConfigurationLookups.ColumnWidth, i))
-                                    ?.Value;
+                var columnSize = ManiaColumnLayoutHelper.CalculateColumnSize(
+                    i,
+                    keyMode,
+                    skin,
+                    skinManager,
+                    ezSkinConfig,
+                    columnWidth.Value,
+                    specialFactor.Value,
+                    columnWidthStyle.Value,
+                    mobileAdjust: 1f,
+                    MatchManiaPanelWidth.Value);
 
-                float newWidth = widthS ?? (float)columnWidth.Value;
-
-                columns[i].Width = newWidth;
-                totalWidth += newWidth;
+                columns[i].Width = columnSize.Width;
+                columns[i].Margin = columnSize.Margin;
+                totalWidth += columnSize.TotalWidth;
             }
 
             Width = totalWidth;

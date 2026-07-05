@@ -75,5 +75,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.Localization
 
         public static readonly LocalisableString STOP_MOVEMENT_LABEL = new EzLocalizationManager.EzLocalisableString("停止移动", "Stop Movement");
         public static readonly LocalisableString STOP_MOVEMENT_DESCRIPTION = new EzLocalizationManager.EzLocalisableString("开启后判定标记不再移动", "When enabled, judgement markers stay fixed and no longer move.");
+
+        public static readonly LocalisableString MATCH_PANEL_WIDTH_LABEL = new EzLocalizationManager.EzLocalisableString("关联Mania面板总宽", "Match Mania Stage Width");
+        public static readonly LocalisableString MATCH_PANEL_WIDTH_DESCRIPTION = new EzLocalizationManager.EzLocalisableString("开启后 HUD 列宽与 Mania 面板一致", "When enabled, HUD column widths match the Mania playfield panel.");
     }
 }
