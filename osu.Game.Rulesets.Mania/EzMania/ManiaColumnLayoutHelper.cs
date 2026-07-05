@@ -130,6 +130,38 @@ namespace osu.Game.Rulesets.Mania.EzMania
                 Margin = new MarginPadding { Left = leftSpacing, Right = rightSpacing },
             };
         }
+
+        public static float CalculatePanelTotalWidth(
+            int keyMode,
+            int displayColumnCount,
+            ISkinSource skin,
+            SkinManager skinManager,
+            Ez2ConfigManager ezSkinConfig,
+            double columnWidth,
+            double specialFactor,
+            ColumnWidthStyle columnWidthStyle,
+            float mobileAdjust,
+            bool applyGlobalWidthSettings)
+        {
+            float totalWidth = 0;
+
+            for (int i = 0; i < displayColumnCount; i++)
+            {
+                totalWidth += CalculateColumnSize(
+                    i,
+                    keyMode,
+                    skin,
+                    skinManager,
+                    ezSkinConfig,
+                    columnWidth,
+                    specialFactor,
+                    columnWidthStyle,
+                    mobileAdjust,
+                    applyGlobalWidthSettings).TotalWidth;
+            }
+
+            return totalWidth;
+        }
     }
 
     /// <summary>
