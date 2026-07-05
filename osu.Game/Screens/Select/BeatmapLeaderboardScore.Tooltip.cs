@@ -119,8 +119,10 @@ namespace osu.Game.Screens.Select
                         updateAbsoluteDate();
                         relativeDate.Date = value.Date;
 
-                        var judgementsStatistics = value.GetStatisticsForDisplay().Select(s =>
-                            new StatisticRow(s.DisplayName.ToUpper(), s.Count.ToLocalisableString("N0"), colours.ForHitResult(s.Result)));
+                        var judgementsStatistics = (value.Ruleset.OnlineID == 3
+                                ? ManiaHitModeCatalog.GetStatisticsForDisplay(value)
+                                : value.GetStatisticsForDisplay())
+                            .Select(s => new StatisticRow(s.DisplayName.ToUpper(), s.Count.ToLocalisableString("N0"), colours.ForHitResult(s.Result)));
 
                         var ruleset = value.Ruleset.CreateInstance();
                         var scoreMultiplierCalculator = ruleset.CreateScoreMultiplierCalculator(new ScoreMultiplierContext(score.BeatmapInfo!.Difficulty));

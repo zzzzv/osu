@@ -11,19 +11,18 @@ namespace osu.Game.EzOsuGame.Extensions
     public static class HitResultExtensions
     {
         /// <summary>
-        /// 获取指定 HitResult 在当前 HitMode 下的显示名称
+        /// 获取指定 HitResult 在当前 HitMode 下的显示名称。
         /// </summary>
-        /// <param name="result">判定结果类型</param>
-        /// <returns>本地化的显示名称</returns>
         public static LocalisableString GetHitModeDisplayName(this HitResult result)
-        {
-            // 获取当前配置的 HitMode
-            var hitMode = GlobalConfigStore.EzConfig.Get<EzEnumHitMode>(
-                Ez2Setting.ManiaHitMode);
+            => result.GetHitModeDisplayName(GlobalConfigStore.EzConfig.Get<EzEnumHitMode>(Ez2Setting.ManiaHitMode));
 
+        /// <summary>
+        /// 获取指定 HitResult 在给定 HitMode 下的显示名称。
+        /// </summary>
+        public static LocalisableString GetHitModeDisplayName(this HitResult result, EzEnumHitMode hitMode)
+        {
             string displayName = getDisplayNameForMode(result, hitMode);
 
-            // 如果没有自定义名称,使用默认的 Description
             if (string.IsNullOrEmpty(displayName))
                 return result.GetLocalisableDescription();
 

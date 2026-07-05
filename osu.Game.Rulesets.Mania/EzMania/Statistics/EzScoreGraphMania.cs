@@ -506,7 +506,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
 
             foreach (var r in GetOrderedStatHitResults(currentHitMode))
             {
-                string name = r.GetHitModeDisplayName().ToString();
+                string name = r.GetHitModeDisplayName(currentHitMode).ToString();
                 var c = Colours.ForHitResult(r);
                 var item = makeSimpleStat("—", name, c);
                 judgementStatItems[r] = item;
