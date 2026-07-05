@@ -482,7 +482,7 @@ namespace osu.Game.EzOsuGame.Statistics
             try
             {
                 var result = await ReplaySession.RunRequestAsync(
-                    new ReplayRunRequest(inputScore.DeepClone(), Beatmap, GetRefreshSessionEnvironment(), ReplayRunPurpose.ForLive)
+                    new ReplayRunRequest(inputScore.DeepClone(), Beatmap, ReplayRunPurpose.ForLive)
                 ).ConfigureAwait(false);
 
                 if (!result.IsValidReplay)
@@ -514,12 +514,6 @@ namespace osu.Game.EzOsuGame.Statistics
         protected virtual Score? ResolveInputScore() => null;
 
         /// <summary>
-        /// Graph Now 基线 Session 使用的 environment；null 时 Service 按 Purpose 解析。
-        /// Mania 返回 ForLive + offset=0（与当前环境重算对齐）。
-        /// </summary>
-        protected virtual GameplayEnvironment? GetRefreshSessionEnvironment() => null;
-
-        /// <summary>
         /// Offset 变化处理：debounce 逻辑
         /// Graph-UX: 拖动时立即 display-only，停止后 debounce (300ms) 触发 service
         /// </summary>
@@ -532,12 +526,9 @@ namespace osu.Game.EzOsuGame.Statistics
 
             var token = debounceCancellation.Token;
 
+            // offset 归零：清除 CommittedNowScore，重置展示 offset。任何offset下流程相同，都是 display-only + debounce service
             if (newOffset == 0)
-            {
-                // offset 归零：清除上次 Session 的残留结果，
-                // 让 FilterHitEvents 回退到 OriginalHitEvents，避免残留旧 offset 嵌入事件。
                 CommittedNowScore = null;
-            }
 
             // 立即应用 display-only（轻量重绘）
             RefreshDisplayOnly(newOffset);
@@ -550,8 +541,9 @@ namespace osu.Game.EzOsuGame.Statistics
                 try
                 {
                     await Task.Delay(debounce_ms, token).ConfigureAwait(false);
+
                     if (!token.IsCancellationRequested)
-                        RefreshFromService();
+                        await RefreshFromService().ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {

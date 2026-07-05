@@ -29,7 +29,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.Scoring
         [Test]
         public void TestForLiveAnalysisReadsAllLiveFields()
         {
-            var env = GlobalConfigStore.EzConfig.ResolveForReplay(null, ReplayRunPurpose.ForLive);
+            var env = GlobalConfigStore.EzConfig.GetGameplayEnvironment();
 
             Assert.That(env, Is.EqualTo(liveBaseline));
         }
@@ -40,12 +40,12 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.Scoring
             var scoreInfo = new ScoreInfo { Ruleset = new ManiaRuleset().RulesetInfo };
             ReplayJudgeTestConfig.ApplyEmbeddedModes(new Score { ScoreInfo = scoreInfo }, ReplayJudgeTestConfig.Create(EzEnumHitMode.IIDX_HD, EzEnumHealthMode.IIDX_HD));
 
-            var env = GlobalConfigStore.EzConfig.ResolveForReplay(scoreInfo, ReplayRunPurpose.ForStored);
+            var env = GlobalConfigStore.EzConfig.ResolveForSession(ReplayRunPurpose.ForStored, scoreInfo);
 
             Assert.That(env.ManiaHitMode, Is.EqualTo(EzEnumHitMode.IIDX_HD));
             Assert.That(env.ManiaHealthMode, Is.EqualTo(EzEnumHealthMode.IIDX_HD));
             Assert.That(env.JudgePrecedence, Is.EqualTo(liveBaseline.JudgePrecedence));
-            Assert.That(env.OffsetPlusMania, Is.EqualTo(liveBaseline.OffsetPlusMania));
+            Assert.That(env.OffsetPlusMania, Is.EqualTo(0));
             Assert.That(env.BmsPoorHitResultEnable, Is.EqualTo(liveBaseline.BmsPoorHitResultEnable));
         }
 
@@ -54,12 +54,25 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.Scoring
         {
             var scoreInfo = new ScoreInfo { Ruleset = new ManiaRuleset().RulesetInfo };
 
-            var stored = GlobalConfigStore.EzConfig.ResolveForReplay(scoreInfo, ReplayRunPurpose.ForStored);
+            var stored = GlobalConfigStore.EzConfig.ResolveForSession(ReplayRunPurpose.ForStored, scoreInfo);
 
             Assert.That(stored.ManiaHitMode, Is.EqualTo(EzEnumHitMode.Lazer));
             Assert.That(stored.ManiaHealthMode, Is.EqualTo(EzEnumHealthMode.Lazer));
             Assert.That(stored.JudgePrecedence, Is.EqualTo(liveBaseline.JudgePrecedence));
-            Assert.That(stored.OffsetPlusMania, Is.EqualTo(liveBaseline.OffsetPlusMania));
+            Assert.That(stored.OffsetPlusMania, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void TestResolveForSessionZerosOffset()
+        {
+            var scoreInfo = new ScoreInfo { Ruleset = new ManiaRuleset().RulesetInfo };
+
+            var session = GlobalConfigStore.EzConfig.ResolveForSession(ReplayRunPurpose.ForLive, scoreInfo);
+            var live = GlobalConfigStore.EzConfig.GetGameplayEnvironment();
+
+            Assert.That(session.OffsetPlusMania, Is.EqualTo(0));
+            Assert.That(live.OffsetPlusMania, Is.EqualTo(liveBaseline.OffsetPlusMania));
+            Assert.That(session with { OffsetPlusMania = live.OffsetPlusMania }, Is.EqualTo(live));
         }
 
         [Test]
@@ -67,7 +80,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.Scoring
         {
             ReplayJudgeTestConfig.ApplyToGlobalConfig(liveBaseline with { BmsPoorHitResultEnable = false });
 
-            var env = GlobalConfigStore.EzConfig.ResolveForReplay(null, ReplayRunPurpose.ForLive);
+            var env = GlobalConfigStore.EzConfig.GetGameplayEnvironment();
 
             Assert.That(env.BmsPoorHitResultEnable, Is.False);
         }

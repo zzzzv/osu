@@ -70,7 +70,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
 
                             timeline = EzScoreTimelineBuilder.TryBuild(scoreManager, beatmapManager, imported, sharedPlayableBeatmap: playableBeatmap);
                             var databasedScore = scoreManager.GetScore(imported);
-                            sessionTotal = ManiaReplaySession.RunTimeline(databasedScore!, playableBeatmap, GlobalConfigStore.EzConfig.ResolveForReplay(null, ReplayRunPurpose.ForLive))
+                            sessionTotal = ManiaReplaySession.RunTimeline(databasedScore!, playableBeatmap, GlobalConfigStore.EzConfig.ResolveForSession(ReplayRunPurpose.ForLive, databasedScore!.ScoreInfo))
                                 .FinalTotalScore;
                         }
                     }

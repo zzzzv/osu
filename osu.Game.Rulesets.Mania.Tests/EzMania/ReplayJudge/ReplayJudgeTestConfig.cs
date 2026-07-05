@@ -21,7 +21,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
         public static GameplayEnvironment ApplyAndSnapshot(GameplayEnvironment environment)
         {
             ApplyToGlobalConfig(environment);
-            return GlobalConfigStore.EzConfig.ResolveForReplay(null, ReplayRunPurpose.ForLive);
+            return GlobalConfigStore.EzConfig.GetGameplayEnvironment();
         }
 
         public static void ApplyEmbeddedModes(Score score, GameplayEnvironment environment)

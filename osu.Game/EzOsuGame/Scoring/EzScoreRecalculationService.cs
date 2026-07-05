@@ -4,13 +4,12 @@
 using System.Threading;
 using System.Threading.Tasks;
 using osu.Game.Beatmaps;
-using osu.Game.EzOsuGame.Configuration;
 using osu.Game.Scoring;
 
 namespace osu.Game.EzOsuGame.Scoring
 {
     /// <summary>
-    /// Mania 成绩 Session 重算并写回 Realm；非 Mania 或无 replay 时回退 vanilla <see cref="ScoreManager.Recalculate"/>。
+    /// Mania 成绩 Session 重算并写回 Realm；非 Mania 或无 replay 时回退 vanilla <see cref="ScoreManager.Recalculate"/>.
     /// </summary>
     public static class EzScoreRecalculationService
     {
@@ -52,16 +51,11 @@ namespace osu.Game.EzOsuGame.Scoring
                 return;
             }
 
-            var environment = GlobalConfigStore.EzConfig.ResolveForReplay(scoreInfo, purpose) with { OffsetPlusMania = 0 };
-
-            var resultScore = await replaySession.RunAsync(
-                databasedScore.DeepClone(),
-                playableBeatmap,
-                environment,
-                purpose,
+            var result = await replaySession.RunRequestAsync(
+                new ReplayRunRequest(databasedScore.DeepClone(), playableBeatmap, purpose),
                 cancellationToken).ConfigureAwait(false);
 
-            scoreManager.ApplyEzSessionRecalculation(scoreInfo, resultScore.ScoreInfo, purpose, environment);
+            scoreManager.ApplyEzSessionRecalculation(scoreInfo, result.Score!.ScoreInfo, purpose, result.ResolvedEnvironment!);
         }
     }
 }

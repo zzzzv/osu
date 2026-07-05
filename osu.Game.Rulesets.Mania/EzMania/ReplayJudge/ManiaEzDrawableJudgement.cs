@@ -62,11 +62,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         private static GameplayEnvironment getGameplayEnvironment(DrawableHitObject? drawable = null)
         {
             var ruleset = drawable?.FindClosestParent<DrawableRuleset>();
-
-            if (ruleset?.ReplayScore?.ScoreInfo != null)
-                return GlobalConfigStore.EzConfig.ResolveForReplay(ruleset.ReplayScore.ScoreInfo, ReplayRunPurpose.ForStored);
-
-            return GlobalConfigStore.EzConfig.ResolveForReplay(null, ReplayRunPurpose.ForLive);
+            return GlobalConfigStore.EzConfig.ResolveForDrawable(ruleset?.ReplayScore?.ScoreInfo);
         }
 
         internal static bool TryMalodyHoldOnReleased(DrawableHoldNote hold)

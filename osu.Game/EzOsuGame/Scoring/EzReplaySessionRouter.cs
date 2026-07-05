@@ -31,17 +31,14 @@ namespace osu.Game.EzOsuGame.Scoring
             }
         }
 
-        public Task<Score> RunAsync(Score score, IBeatmap beatmap, IGameplayEnvironment? environment = null, ReplayRunPurpose purpose = ReplayRunPurpose.ForStored,
-                                    CancellationToken cancellationToken = default)
-            => requireSession(score).RunAsync(score, beatmap, environment, purpose, cancellationToken);
+        public Task<Score> RunAsync(Score score, IBeatmap beatmap, ReplayRunPurpose purpose, CancellationToken cancellationToken = default)
+            => requireSession(score).RunAsync(score, beatmap, purpose, cancellationToken);
 
-        public Task<EzScoreTimeline> RunTimelineAsync(Score score, IBeatmap beatmap, IGameplayEnvironment? environment = null,
-                                                      ReplayRunPurpose purpose = ReplayRunPurpose.ForStored, CancellationToken cancellationToken = default)
-            => requireSession(score).RunTimelineAsync(score, beatmap, environment, purpose, cancellationToken);
+        public Task<EzScoreTimeline> RunTimelineAsync(Score score, IBeatmap beatmap, ReplayRunPurpose purpose, CancellationToken cancellationToken = default)
+            => requireSession(score).RunTimelineAsync(score, beatmap, purpose, cancellationToken);
 
-        public Task<EzScoreTimeline> RunTimelineDirectAsync(Score score, IBeatmap beatmap, IGameplayEnvironment? environment = null,
-                                                            ReplayRunPurpose purpose = ReplayRunPurpose.ForLive, CancellationToken cancellationToken = default)
-            => requireSession(score).RunTimelineDirectAsync(score, beatmap, environment, purpose, cancellationToken);
+        public Task<EzScoreTimeline> RunTimelineDirectAsync(Score score, IBeatmap beatmap, ReplayRunPurpose purpose, CancellationToken cancellationToken = default)
+            => requireSession(score).RunTimelineDirectAsync(score, beatmap, purpose, cancellationToken);
 
         public Task<ReplayRunResult> RunRequestAsync(ReplayRunRequest request, CancellationToken cancellationToken = default)
         {

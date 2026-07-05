@@ -27,11 +27,11 @@ namespace osu.Game.EzOsuGame.Scoring
         public const string EZ_SR_TL_REGISTRY = "EZ-SR-TL-REGISTRY.md";
 
         public static EzScoreTimeline? TryBuild(ScoreManager scoreManager, BeatmapManager beatmaps, ScoreInfo scoreInfo, IBeatmap? sharedPlayableBeatmap = null,
-                                                IEzScoreTimelineCache? cache = null, IGameplayEnvironment? environment = null, CancellationToken cancellationToken = default)
-            => tryBuild(scoreManager, beatmaps, scoreInfo, sharedPlayableBeatmap, cache ?? NullEzScoreTimelineCache.INSTANCE, environment, cancellationToken);
+                                                IEzScoreTimelineCache? cache = null, CancellationToken cancellationToken = default)
+            => tryBuild(scoreManager, beatmaps, scoreInfo, sharedPlayableBeatmap, cache ?? NullEzScoreTimelineCache.INSTANCE, cancellationToken);
 
         private static EzScoreTimeline? tryBuild(ScoreManager scoreManager, BeatmapManager beatmaps, ScoreInfo scoreInfo, IBeatmap? sharedPlayableBeatmap,
-                                                 IEzScoreTimelineCache cache, IGameplayEnvironment? environment, CancellationToken cancellationToken)
+                                                 IEzScoreTimelineCache cache, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(scoreManager);
             ArgumentNullException.ThrowIfNull(beatmaps);
@@ -42,24 +42,11 @@ namespace osu.Game.EzOsuGame.Scoring
             if (timelineMode == EzScoreRaceGhostTimelineMode.None)
                 return null;
 
-            IBeatmap? beatmapForFingerprint;
+            var playableBeatmap = resolvePlayableBeatmap(beatmaps, scoreInfo, sharedPlayableBeatmap);
+            var resolvedEnvironment = GlobalConfigStore.EzConfig.ResolveForSession(ReplayRunPurpose.ForLive, scoreInfo);
 
-            if (sharedPlayableBeatmap != null)
-            {
-                beatmapForFingerprint = sharedPlayableBeatmap;
-            }
-            else
-            {
-                var workingBeatmap = beatmaps.GetWorkingBeatmap(scoreInfo.BeatmapInfo);
-
-                if (workingBeatmap is DummyWorkingBeatmap)
-                    beatmapForFingerprint = null;
-                else
-                    beatmapForFingerprint = workingBeatmap.GetPlayableBeatmap(scoreInfo.Ruleset, scoreInfo.Mods);
-            }
-
-            string? cacheKey = beatmapForFingerprint != null
-                ? getCacheKey(scoreInfo, timelineMode, environment ?? GlobalConfigStore.EzConfig.ResolveForReplay(scoreInfo, ReplayRunPurpose.ForLive), beatmapForFingerprint)
+            string? cacheKey = playableBeatmap != null
+                ? getCacheKey(scoreInfo, timelineMode, resolvedEnvironment, playableBeatmap)
                 : null;
 
             if (!string.IsNullOrEmpty(cacheKey) && cache.TryGet(cacheKey, out var cached))
@@ -76,26 +63,8 @@ namespace osu.Game.EzOsuGame.Scoring
                 return null;
             }
 
-            var ruleset = scoreInfo.Ruleset.CreateInstance();
-            IBeatmap playableBeatmap;
-
-            if (sharedPlayableBeatmap != null)
-            {
-                playableBeatmap = sharedPlayableBeatmap;
-            }
-            else
-            {
-                var workingBeatmap = beatmaps.GetWorkingBeatmap(scoreInfo.BeatmapInfo);
-
-                if (workingBeatmap is DummyWorkingBeatmap)
-                {
-                    if (!string.IsNullOrEmpty(cacheKey))
-                        cache.Store(cacheKey, EzScoreTimeline.EMPTY);
-                    return null;
-                }
-
-                playableBeatmap = workingBeatmap.GetPlayableBeatmap(scoreInfo.Ruleset, scoreInfo.Mods);
-            }
+            if (playableBeatmap == null)
+                return null;
 
             if (playableBeatmap.HitObjects.Count == 0)
             {
@@ -105,6 +74,7 @@ namespace osu.Game.EzOsuGame.Scoring
             }
 
             EzScoreTimeline? timeline;
+            var ruleset = scoreInfo.Ruleset.CreateInstance();
 
             switch (timelineMode)
             {
@@ -118,8 +88,11 @@ namespace osu.Game.EzOsuGame.Scoring
                         break;
                     }
 
-                    timeline = session.RunTimelineDirectAsync(databasedScore, playableBeatmap, environment, ReplayRunPurpose.ForLive, cancellationToken)
-                                      .ConfigureAwait(false).GetAwaiter().GetResult();
+                    timeline = session.RunTimelineDirectAsync(
+                        databasedScore,
+                        playableBeatmap,
+                        ReplayRunPurpose.ForLive,
+                        cancellationToken).ConfigureAwait(false).GetAwaiter().GetResult();
                     break;
                 }
 
@@ -133,8 +106,11 @@ namespace osu.Game.EzOsuGame.Scoring
                         break;
                     }
 
-                    timeline = session.RunTimelineDirectAsync(databasedScore, playableBeatmap, environment, ReplayRunPurpose.ForLive, cancellationToken)
-                                      .ConfigureAwait(false).GetAwaiter().GetResult();
+                    timeline = session.RunTimelineDirectAsync(
+                        databasedScore,
+                        playableBeatmap,
+                        ReplayRunPurpose.ForLive,
+                        cancellationToken).ConfigureAwait(false).GetAwaiter().GetResult();
                     break;
                 }
 
@@ -155,6 +131,19 @@ namespace osu.Game.EzOsuGame.Scoring
                 cache.Store(cacheKey, timeline);
 
             return timeline;
+        }
+
+        private static IBeatmap? resolvePlayableBeatmap(BeatmapManager beatmaps, ScoreInfo scoreInfo, IBeatmap? sharedPlayableBeatmap)
+        {
+            if (sharedPlayableBeatmap != null)
+                return sharedPlayableBeatmap;
+
+            var workingBeatmap = beatmaps.GetWorkingBeatmap(scoreInfo.BeatmapInfo);
+
+            if (workingBeatmap is DummyWorkingBeatmap)
+                return null;
+
+            return workingBeatmap.GetPlayableBeatmap(scoreInfo.Ruleset, scoreInfo.Mods);
         }
 
         private static string? getCacheKey(ScoreInfo? scoreInfo, EzScoreRaceGhostTimelineMode timelineMode, IGameplayEnvironment environment, IBeatmap? beatmap)

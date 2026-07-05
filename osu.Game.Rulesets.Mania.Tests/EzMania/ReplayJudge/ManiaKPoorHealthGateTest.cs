@@ -1,0 +1,75 @@
+// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
+// See the LICENCE file in the repository root for full licence text.
+
+using System.Collections.Generic;
+using NUnit.Framework;
+using osu.Game.EzOsuGame.Configuration;
+using osu.Game.EzOsuGame.Scoring;
+using osu.Game.Rulesets.Mania.EzMania.Helper;
+using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
+using osu.Game.Rulesets.Scoring;
+using osu.Game.Scoring;
+
+namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
+{
+    [TestFixture]
+    public class ManiaKPoorHealthGateTest
+    {
+        [Test]
+        public void TestBmsHitModeLazerHealthProducesNoExtraPoorFromKPoorRouting()
+        {
+            var (score, beatmap, bmsHealthEnv) = HitModeReplayFixtures.CreateBmsEarlyBadWithPostBadKPoor();
+            var lazerHealthEnv = bmsHealthEnv with { ManiaHealthMode = EzEnumHealthMode.Lazer };
+
+            var withBmsHealth = ManiaReplaySession.Run(score.DeepClone(), beatmap, bmsHealthEnv);
+            var withLazerHealth = ManiaReplaySession.Run(score.DeepClone(), beatmap, lazerHealthEnv);
+
+            int poorBmsHealth = withBmsHealth.ScoreInfo.Statistics.GetValueOrDefault(HitResult.Poor);
+            int poorLazerHealth = withLazerHealth.ScoreInfo.Statistics.GetValueOrDefault(HitResult.Poor);
+
+            Assert.That(poorBmsHealth, Is.GreaterThan(poorLazerHealth),
+                "BMS HealthMode 应允许 post-Bad KPoor 路由，Lazer HealthMode 不应");
+        }
+
+        [Test]
+        public void TestPoorEnabledRequiresBmsHealthMode()
+        {
+            Assert.That(HealthModeHelper.ComputeKPoorEnabled(EzEnumHealthMode.IIDX_HD, true), Is.True);
+            Assert.That(HealthModeHelper.ComputeKPoorEnabled(EzEnumHealthMode.Lazer, true), Is.False);
+            Assert.That(HealthModeHelper.ComputeKPoorEnabled(EzEnumHealthMode.IIDX_HD, false), Is.False);
+        }
+
+        [Test]
+        public void TestResolveForSessionForStoredUsesEmbeddedModesOrLazerFallback()
+        {
+            var config = GlobalConfigStore.EzConfig;
+            config.SetValue(Ez2Setting.ManiaHitMode, EzEnumHitMode.IIDX_HD);
+            config.SetValue(Ez2Setting.ManiaHealthMode, EzEnumHealthMode.Lazer);
+            config.SetValue(Ez2Setting.OffsetPlusMania, 25.0);
+
+            var scoreInfo = new ScoreInfo
+            {
+                Ruleset = new ManiaRuleset().RulesetInfo,
+                ManiaHitMode = (int)EzEnumHitMode.LR2_HD,
+                ManiaHealthMode = (int)EzEnumHealthMode.IIDX_HD,
+            };
+
+            var stored = config.ResolveForSession(ReplayRunPurpose.ForStored, scoreInfo);
+            Assert.That(stored.ManiaHitMode, Is.EqualTo(EzEnumHitMode.LR2_HD));
+            Assert.That(stored.ManiaHealthMode, Is.EqualTo(EzEnumHealthMode.IIDX_HD));
+            Assert.That(stored.OffsetPlusMania, Is.EqualTo(0));
+
+            var legacy = config.ResolveForSession(ReplayRunPurpose.ForStored, new ScoreInfo { Ruleset = new ManiaRuleset().RulesetInfo });
+            Assert.That(legacy.ManiaHitMode, Is.EqualTo(EzEnumHitMode.Lazer));
+            Assert.That(legacy.ManiaHealthMode, Is.EqualTo(EzEnumHealthMode.Lazer));
+
+            var live = config.GetGameplayEnvironment();
+            Assert.That(live.ManiaHitMode, Is.EqualTo(EzEnumHitMode.IIDX_HD));
+            Assert.That(live.ManiaHealthMode, Is.EqualTo(EzEnumHealthMode.Lazer));
+            Assert.That(live.OffsetPlusMania, Is.EqualTo(25.0));
+
+            var recalcStored = config.ResolveForSession(ReplayRunPurpose.ForStored, scoreInfo);
+            Assert.That(recalcStored.OffsetPlusMania, Is.EqualTo(0));
+        }
+    }
+}

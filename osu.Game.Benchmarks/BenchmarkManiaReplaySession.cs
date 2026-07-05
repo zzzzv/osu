@@ -26,22 +26,20 @@ namespace osu.Game.Benchmarks
         private ManiaReplaySessionService sessionService = null!;
         private IBeatmap beatmap = null!;
         private Score score = null!;
-        private IGameplayEnvironment environment = null!;
 
         public override void SetUp()
         {
             base.SetUp();
 
-            // 初始化 Session 服务
             sessionService = new ManiaReplaySessionService();
-
-            // 创建测试用 beatmap（简单 4K 谱面）
             beatmap = createTestBeatmap();
-
-            // 创建测试用 score（带 replay frames）
             score = createTestScore(beatmap);
 
-            environment = GlobalConfigStore.EzConfig.ResolveForReplay(null, ReplayRunPurpose.ForStored);
+            var environment = GlobalConfigStore.EzConfig.ResolveForSession(ReplayRunPurpose.ForStored, score.ScoreInfo);
+            GlobalConfigStore.EzConfig.SetValue(Ez2Setting.ManiaHitMode, environment.ManiaHitMode);
+            GlobalConfigStore.EzConfig.SetValue(Ez2Setting.ManiaHealthMode, environment.ManiaHealthMode);
+            GlobalConfigStore.EzConfig.SetValue(Ez2Setting.JudgePrecedence, environment.JudgePrecedence);
+            GlobalConfigStore.EzConfig.SetValue(Ez2Setting.BmsPoorHitResultEnable, environment.BmsPoorHitResultEnable);
         }
 
         [Benchmark]
@@ -50,7 +48,6 @@ namespace osu.Game.Benchmarks
             return await sessionService.RunAsync(
                 score.DeepClone(),
                 beatmap,
-                environment,
                 ReplayRunPurpose.ForStored,
                 CancellationToken.None
             ).ConfigureAwait(true);
@@ -62,7 +59,6 @@ namespace osu.Game.Benchmarks
             return await sessionService.RunTimelineAsync(
                 score.DeepClone(),
                 beatmap,
-                environment,
                 ReplayRunPurpose.ForStored,
                 CancellationToken.None
             ).ConfigureAwait(true);

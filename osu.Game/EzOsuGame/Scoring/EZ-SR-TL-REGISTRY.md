@@ -78,30 +78,61 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 
 **定音**：要优化的是「同 key 双倍完整仿真」，不是否定 `RunTimeline` 单次成本。
 
-### 1.7b ForStored / ForLive 与 cache key
+### 1.7b ForStored / ForLive 与环境解析（2026-07 收敛）
 
-环境由 `ReplayRunPurpose` + `ResolveForReplay(score, purpose)` 解析。**Purpose 不同 → env 不同 → cache key 不同**；不强行合并，但各自 key 内仍须一遍 SP 多出口。
+**三条读配置路径**（填不填 env 最终都收敛到 EzConfig resolve）：
+
+| 路径 | API | 谁调用 | offset |
+|------|-----|--------|--------|
+| Session / Graph / 重算 / 角逐 | `ResolveForSession(purpose, score)` | `EzReplaySession` 内部 | 恒 0 |
+| Drawable 判定 | `ResolveForDrawable(replayScore?)` | `ManiaEzDrawableJudgement` | Replay: 0；Live: 全局 |
+| 测试 / 静态仿真 | 显式 `IGameplayEnvironment` | `ManiaReplaySession.Run*` 等 | 测试自定 |
+
+**对外公开 API**（`Ez2ConfigManager`）：
+
+- **`GetGameplayEnvironment()`** — 实时全局快照（含 `OffsetPlusMania`）
+- **`ResolveForSession(purpose, score)`** — 一切非对局 replay
+- **`ResolveForDrawable(score?)`** — Drawable 专用分支
+
+`IEzReplaySession` 仅接受 `(score, beatmap, purpose)`；环境在 Session 内统一 `ResolveForSession`。`ReplayRunResult.ResolvedEnvironment` 供重算写回，避免二次 resolve。`environmentOverride` 已移除。
+
+| 消费方 | Purpose | 谁 Resolve | 传 env？ |
+|--------|---------|------------|----------|
+| StatisticsPanel 补 HitEvents | ForStored（硬编码） | Session | 否 |
+| Graph Now | ForLive | Session | 否 |
+| Graph offset 拖动（C） | — | **不跑 Session** | — |
+| Graph offset 落定（D） | ForLive | Session | 否 |
+| 角逐 ghost Timeline | ForLive | `EzScoreTimelineBuilder` cache key + Session | 否 |
+| 成绩重算 | ForStored / ForLive | Session → `ReplayRunResult.ResolvedEnvironment` 写 Realm | 否 |
+| Drawable 判定 | ForStored / Live | `ResolveForDrawable` | 不经 Session |
+| parity 测试 | ForStored | `ManiaReplaySession.Run*(..., env)` 或 `ApplyToGlobalConfig` + Service | 静态注入 / 全局 |
+
+Cache key 对**已解析** env 建键。
 
 | 消费方 | Purpose | env 语义 | 与谁可共 cache |
 |--------|---------|----------|----------------|
 | StatisticsPanel 补 HitEvents | ForStored | 成绩嵌入 HitMode/HealthMode（有则 FromScore） | 同 score、同 ForStored 解析结果的 Graph/Panel |
-| Graph Now 基线 | ForLive | 当前全局 HitMode/HealthMode 等（`poorEnabled` 含 HealthMode；BmsPoor  alone 不启用 KPoor） | 同 score、同 ForLive 的 `RunAsync` / `RunRequestAsync` |
-| 角逐 ghost Timeline | ForLive | 与 HUD 一致，**不**读成绩嵌入 HitMode | 同 score+ForLive 的 Graph Now（若同时需要 Score+Timeline，走 `RunRequestAsync` 一次） |
-| Graph offset 落定（D） | ForLive | env 含 offset → **新 key** | 不与 base ForLive 共用 |
+| Graph Now 基线 | ForLive | 当前全局 HitMode/HealthMode；**offset=0** | 同 score、同 ForLive 的 `RunAsync` / `RunRequestAsync` |
+| 角逐 ghost Timeline | ForLive | 与 Graph Now 一致（offset=0） | 同 score+ForLive 的 Graph Now（`RunRequestAsync` 一次） |
+| Graph offset 拖动（C） | — | fake 平移 HitEvents + Rejudge 预览，**不跑 Session** | — |
+| Graph offset 落定（D） | ForLive | debounce → `RefreshFromService`（Session offset=0，重置 DisplayOffset） | 与 base ForLive 同 key |
 
-### 1.7c 共出口分组（Mania，已实现）
+**Offset 原则**：除真实对局 Drawable 外，replay Session 不考虑 `OffsetPlusMania`。Graph 假 offset（C/D）为**既有 UX**，本 epic 不改。
 
-同一 `score + 解析后 environment` → `sessionRunCache` 一条目 → `RunWithTimeline` 一次仿真 → 多出口：
+### 1.7c 共出口分组（Mania / Osu，已实现）
+
+同一 `score + 解析后 environment` → `EzReplaySession.sessionRunCache` 一条目 → 子类 `RunWithTimeline` 一次仿真 → 多出口投影：
 
 | 出口 | 典型消费方 |
 |------|------------|
 | `Score`（含 HitEvents、Statistics） | Graph Now、`RunAsync` |
-| `EzScoreTimeline` | `RunTimelineAsync`、`RunTimelineDirectAsync`（角逐 Builder，不经 TimelineCache） |
+| `EzScoreTimeline` | `RunTimelineAsync`（cached）、`RunTimelineDirectAsync`（不经 Service cache，角逐 Builder） |
 | `ReplayRunResult`（Score + Timeline） | `RunRequestAsync(ForLive)`（Graph TL-024） |
+| `HitEvents` 子集 | `RunHitEventsAsync`（与 `RunAsync` 共 cache） |
 
-**读法差异，不是算法差异**：StatisticsPanel 只 patch `HitEvents` 子集；Graph 读完整 `Score`；Race 读 `Timeline.QueryAtTime`——三者可共享底层 Run，**禁止**为不同出口各跑一遍仿真。
+**读法差异，不是算法差异**：StatisticsPanel 只 patch `HitEvents`；Graph 读完整 `Score`；Race 读 `Timeline.QueryAtTime`——**禁止**为不同出口各跑一遍仿真。
 
-**Osu**：`OsuReplaySessionService` + `sessionRunCache`；角逐经 `RunTimelineDirectAsync`（与 Mania 同形）。
+**实现**：`EzReplaySession` 统一 async/cache；`ManiaReplaySessionService` / `OsuReplaySessionService` 仅 override `RunWithTimeline` 钩子。
 
 ### 1.7d C / D / E / F 易混澄清
 
@@ -124,11 +155,8 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | Mania 能否 HitEvents→SP 建 Timeline | **禁止**（F/E 类）；Timeline 必须 replay 一遍 SP 快照 |
 | Osu 角逐 | Session 一遍 SP + **Shadow** 判定（OSL-010 ✓） |
 
-### 1.7f 本分析 epic 边界（未展开部分）
+### 1.7f 远期
 
-以下**刻意不在** Phase 0–1.5b 分析定稿内展开，见 §4 Phase 2/3：
-
-- Mania `ResolveEnvironment`、Ruleset 级环境转换（Phase 3 各 ruleset Session 时再评估）
 - Osu/Taiko/Catch Session 黄金路径 — Osu **done**（OSL）；Taiko/Catch 远期
 
 ---
@@ -155,7 +183,8 @@ bool poorEnabled = IsBMSHealthMode(HealthMode) && BmsPoorHitResultEnable;
 | 当前环境重算 | ForLive | `GetGameplayEnvironment()` | 0 | 同上 |
 
 - replay 帧时间**不变**。
-- **当前环境重算 ≡ Graph Now @ offset=0**（同 `score + env` cache key；`ResolveForReplay(ForLive)` + `OffsetPlusMania=0`）。
+- **当前环境重算 ≡ Graph Now @ offset=0**（同 `score + env` cache key；`RunRequestAsync(..., ForLive)` 一次 resolve）。
+- 写回 Realm 使用 `ReplayRunResult.ResolvedEnvironment`，不再二次 `ResolveForSession`。
 - 非 Mania 或无 replay：回退 vanilla `ScoreManager.Recalculate`。
 
 ---
@@ -199,7 +228,7 @@ bool poorEnabled = IsBMSHealthMode(HealthMode) && BmsPoorHitResultEnable;
 | **1** | Mania Session + Timeline + Race | 基本完成 |
 | **1.5** | Graph Now；RunRequestAsync(ForLive)（TL-024/025） | 基本完成 |
 | **1.5b** | TL-026 单次 run 多出口 | 基本完成 |
-| **2** | API 收敛：optional env + Session 统一 ResolveForReplay；删重复/dead API | 基本完成 |
+| **2** | API 收敛：purpose 优先 + optional env override；Session 统一 ResolveForSession/ResolveForReplay | 完成 |
 | **3** | Osu Session（OSL）；Taiko/Catch 远期 | **Osu done**（OSL-001~009） |
 
 ### §4.1 Phase 3 工作列表（OSL，影响面轻→重）

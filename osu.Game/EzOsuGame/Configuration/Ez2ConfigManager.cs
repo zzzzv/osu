@@ -292,11 +292,20 @@ namespace osu.Game.EzOsuGame.Configuration
         };
 
         /// <summary>
-        /// Replay 环境解析入口。
-        /// <para>ForLive: 直接读当前配置。</para>
-        /// <para>ForStored: 在配置基础上，用 ScoreInfo 中嵌入的 HitMode/HealthMode 覆盖；Mania 无嵌入时回退 Lazer+Lazer。</para>
+        /// Drawable 判定环境：有 replay 成绩时用 ForStored 嵌入；否则实时全局（含 <see cref="GameplayEnvironment.OffsetPlusMania"/>）。
         /// </summary>
-        public GameplayEnvironment ResolveForReplay(ScoreInfo? score, ReplayRunPurpose purpose)
+        public GameplayEnvironment ResolveForDrawable(ScoreInfo? replayScore = null)
+        {
+            if (replayScore != null)
+                return ResolveForSession(ReplayRunPurpose.ForStored, replayScore);
+
+            return GetGameplayEnvironment();
+        }
+
+        /// <summary>
+        /// Replay 环境解析（含 OffsetPlusMania）。Session 路径请用 <see cref="ResolveForSession"/>。
+        /// </summary>
+        internal GameplayEnvironment ResolveForReplay(ReplayRunPurpose purpose, ScoreInfo? score = null)
         {
             var live = GetGameplayEnvironment();
 
@@ -310,6 +319,7 @@ namespace osu.Game.EzOsuGame.Configuration
                         {
                             ManiaHitMode = (EzEnumHitMode)hitMode,
                             ManiaHealthMode = (EzEnumHealthMode)healthMode,
+                            OffsetPlusMania = 0,
                         };
                     }
 
@@ -319,15 +329,22 @@ namespace osu.Game.EzOsuGame.Configuration
                         {
                             ManiaHitMode = EzEnumHitMode.Lazer,
                             ManiaHealthMode = EzEnumHealthMode.Lazer,
+                            OffsetPlusMania = 0,
                         };
                     }
 
-                    return live;
+                    return live with { OffsetPlusMania = 0 };
 
                 default:
                     return live;
             }
         }
+
+        /// <summary>
+        /// 非对局 replay 环境：HitMode/HealthMode 等同 <see cref="ResolveForReplay"/>，且强制 <see cref="GameplayEnvironment.OffsetPlusMania"/> = 0。
+        /// </summary>
+        public GameplayEnvironment ResolveForSession(ReplayRunPurpose purpose, ScoreInfo score)
+            => ResolveForReplay(purpose, score) with { OffsetPlusMania = 0 };
 
         /// <summary>
         /// 获取列宽

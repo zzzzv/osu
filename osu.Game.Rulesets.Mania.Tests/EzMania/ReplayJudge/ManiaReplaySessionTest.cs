@@ -91,7 +91,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
 
             ReplayJudgeTestConfig.ApplyEmbeddedModes(score, iidxEnvironment);
 
-            var liveTimeline = ManiaReplaySession.RunTimeline(score, beatmap, GlobalConfigStore.EzConfig.ResolveForReplay(null, ReplayRunPurpose.ForLive));
+            var liveTimeline = ManiaReplaySession.RunTimeline(score, beatmap, GlobalConfigStore.EzConfig.ResolveForSession(ReplayRunPurpose.ForLive, score.ScoreInfo));
             var lazerTimeline = ManiaReplaySession.RunTimeline(score, beatmap, lazerEnvironment);
             var iidxTimeline = ManiaReplaySession.RunTimeline(score, beatmap, iidxEnvironment);
 
@@ -102,7 +102,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             var builderTimeline = service.RunTimelineDirectAsync(
                 score,
                 beatmap,
-                GlobalConfigStore.EzConfig.ResolveForReplay(null, ReplayRunPurpose.ForLive)).GetAwaiter().GetResult();
+                ReplayRunPurpose.ForLive).GetAwaiter().GetResult();
 
             Assert.That(builderTimeline.FinalTotalScore, Is.EqualTo(lazerTimeline.FinalTotalScore));
         }
@@ -114,7 +114,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
 
             var sessionTimeline = ManiaReplaySession.RunTimeline(score, beatmap, environment);
             var service = new ManiaReplaySessionService();
-            var directTimeline = service.RunTimelineDirectAsync(score, beatmap, environment).GetAwaiter().GetResult();
+            var directTimeline = service.RunTimelineDirectAsync(score, beatmap, ReplayRunPurpose.ForStored).GetAwaiter().GetResult();
 
             Assert.That(directTimeline.FinalTotalScore, Is.EqualTo(sessionTimeline.FinalTotalScore));
             Assert.That(directTimeline.QueryAtTime(2500).TotalScore, Is.EqualTo(sessionTimeline.FinalTotalScore));
@@ -206,7 +206,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             var lazerEnvironment = LazerTapReplayFixtures.CreateTwoNoteColumnTap().environment;
             ReplayJudgeTestConfig.ApplyToGlobalConfig(lazerEnvironment);
 
-            var fromScore = GlobalConfigStore.EzConfig.ResolveForReplay(score.ScoreInfo, ReplayRunPurpose.ForStored);
+            var fromScore = GlobalConfigStore.EzConfig.ResolveForSession(ReplayRunPurpose.ForStored, score.ScoreInfo);
             var generatorEvents = ManiaScoreHitEventGenerator.Instance.Generate(score, beatmap);
             var sessionFromScore = ManiaReplaySession.RunHitEvents(score, beatmap, fromScore);
             var sessionLazer = ManiaReplaySession.RunHitEvents(score, beatmap, lazerEnvironment);
@@ -228,7 +228,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             ReplayJudgeTestConfig.ApplyEmbeddedModes(score, environment);
             configure?.Invoke();
 
-            var sessionEnvironment = GlobalConfigStore.EzConfig.ResolveForReplay(score.ScoreInfo, ReplayRunPurpose.ForStored);
+            var sessionEnvironment = GlobalConfigStore.EzConfig.ResolveForSession(ReplayRunPurpose.ForStored, score.ScoreInfo);
             var sessionEvents = ManiaReplaySession.RunHitEvents(score, beatmap, sessionEnvironment);
             var generatorEvents = ManiaScoreHitEventGenerator.Instance.Generate(score, beatmap);
 

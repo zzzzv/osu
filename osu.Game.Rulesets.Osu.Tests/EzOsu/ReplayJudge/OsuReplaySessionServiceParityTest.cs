@@ -17,7 +17,7 @@ namespace osu.Game.Rulesets.Osu.Tests.EzOsu.ReplayJudge
             var (score, beatmap, environment) = OsuReplayFixtures.CreateTwoCircleTap();
 
             var sessionResult = OsuReplaySession.Run(score, beatmap, environment);
-            var serviceResult = await new OsuReplaySessionService().RunAsync(score.DeepClone(), beatmap, environment).ConfigureAwait(true);
+            var serviceResult = await new OsuReplaySessionService().RunAsync(score.DeepClone(), beatmap, ReplayRunPurpose.ForStored).ConfigureAwait(true);
 
             Assert.That(serviceResult.ScoreInfo.TotalScore, Is.EqualTo(sessionResult.ScoreInfo.TotalScore));
         }
@@ -28,7 +28,7 @@ namespace osu.Game.Rulesets.Osu.Tests.EzOsu.ReplayJudge
             var (score, beatmap, environment) = OsuReplayFixtures.CreateTwoCircleTap();
 
             var sessionTimeline = OsuReplaySession.RunTimeline(score, beatmap, environment);
-            var serviceTimeline = await new OsuReplaySessionService().RunTimelineAsync(score.DeepClone(), beatmap, environment).ConfigureAwait(true);
+            var serviceTimeline = await new OsuReplaySessionService().RunTimelineAsync(score.DeepClone(), beatmap, ReplayRunPurpose.ForStored).ConfigureAwait(true);
 
             Assert.That(serviceTimeline.FinalTotalScore, Is.EqualTo(sessionTimeline.FinalTotalScore));
         }
@@ -44,7 +44,6 @@ namespace osu.Game.Rulesets.Osu.Tests.EzOsu.ReplayJudge
             var requestResult = await service.RunRequestAsync(new ReplayRunRequest(
                 score.DeepClone(),
                 beatmap,
-                environment,
                 ReplayRunPurpose.ForStored)).ConfigureAwait(true);
 
             Assert.That(requestResult.Score.ScoreInfo.TotalScore, Is.EqualTo(directScore.ScoreInfo.TotalScore));
@@ -54,11 +53,11 @@ namespace osu.Game.Rulesets.Osu.Tests.EzOsu.ReplayJudge
         [Test]
         public async Task TestServiceCacheReusesSingleRun()
         {
-            var (score, beatmap, environment) = OsuReplayFixtures.CreateTwoCircleTap();
+            var (score, beatmap, _) = OsuReplayFixtures.CreateTwoCircleTap();
             var service = new OsuReplaySessionService();
 
-            var first = await service.RunAsync(score.DeepClone(), beatmap, environment).ConfigureAwait(true);
-            var second = await service.RunAsync(score.DeepClone(), beatmap, environment).ConfigureAwait(true);
+            var first = await service.RunAsync(score.DeepClone(), beatmap, ReplayRunPurpose.ForStored).ConfigureAwait(true);
+            var second = await service.RunAsync(score.DeepClone(), beatmap, ReplayRunPurpose.ForStored).ConfigureAwait(true);
 
             Assert.That(second.ScoreInfo.TotalScore, Is.EqualTo(first.ScoreInfo.TotalScore));
             Assert.That(second.ScoreInfo.HitEvents.Count, Is.EqualTo(first.ScoreInfo.HitEvents.Count));

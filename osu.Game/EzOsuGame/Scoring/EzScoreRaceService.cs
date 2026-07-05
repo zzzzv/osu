@@ -208,7 +208,6 @@ namespace osu.Game.EzOsuGame.Scoring
                             scoreInfo,
                             taskBeatmap,
                             timelineCache,
-                            null,
                             token);
                     });
                 }, token).ConfigureAwait(false);
