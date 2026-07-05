@@ -81,7 +81,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
                && expectedTotalScore == actualTotalScore;
 
         /// <summary>
-        /// 从 HitEvents 聚合各档计数（忽略 Ignore*），应与 SP Statistics 一致。
+        /// 从 HitEvents 聚合各档计数，应与 SP Statistics 一致（含 IgnoreHit 等辅助条目）。
         /// </summary>
         public static Dictionary<HitResult, int> AggregateHitEventResults(IEnumerable<HitEvent> hitEvents)
         {
@@ -89,7 +89,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
 
             foreach (var e in hitEvents)
             {
-                if (e.Result is HitResult.IgnoreHit or HitResult.IgnoreMiss)
+                if (e.Result == HitResult.None)
                     continue;
 
                 counts[e.Result] = counts.GetValueOrDefault(e.Result, 0) + 1;

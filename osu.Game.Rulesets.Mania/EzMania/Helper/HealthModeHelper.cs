@@ -36,5 +36,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.Helper
                    hitMode == EzEnumHealthMode.LR2_HD ||
                    hitMode == EzEnumHealthMode.Raja_HD;
         }
+
+        /// <summary>
+        /// BMS post-Bad KPoor 路由是否启用（须 BMS HealthMode + BmsPoor 开关）。
+        /// </summary>
+        public static bool ComputeKPoorEnabled(EzEnumHealthMode healthMode, bool bmsPoorHitResultEnable)
+            => IsBMSHealthMode(healthMode) && bmsPoorHitResultEnable;
     }
 }

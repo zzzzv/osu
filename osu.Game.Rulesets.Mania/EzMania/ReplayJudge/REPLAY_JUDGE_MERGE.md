@@ -9,7 +9,7 @@
 | 路径                    | 是否绘制  | HitEvents 来源                                  |
 |-----------------------|-------|-----------------------------------------------|
 | 刚打完 / ReplayPlayer 回放 | 是     | `ScoreProcessor.PopulateScore` → 内存 HitEvents |
-| 排行榜 / 选歌重算            | **否** | `ManiaReplaySession.Run` → **必须等价于上表**        |
+| 排行榜 / 选歌重算（Mania） | **否** | `ManiaReplaySession.Run`（原始环境或当前环境，`OffsetPlusMania=0`）→ 写回 Statistics；须等价于 Drawable 结算 |
 
 `ManiaScoreHitEventGenerator` 仅为 StatisticsPanel 薄壳委托 Session，**不是**参考实现；Drawable/Replay 游玩后的 `ScoreProcessor` 输出才是唯一黄金标准。
 
@@ -73,6 +73,37 @@ Parity 测试：`TestSceneReplaySessionParity`（Drawable replay vs Session，�
 
 Drawable replay 播放时，`ManiaEzDrawableJudgement` 优先从 `DrawableRuleset.ReplayScore.ScoreInfo` 取 HitMode（`FromScore`），无 embedded 时回退 `FromLive`。
 
+### KPoor 启用条件（BMS HitMode）
+
+KPoor 是 BMS 专有的 **post-Bad 二次 Poor**（`BmsJudge.KPoor` → `HitResult.Poor`，经 `CanRouteToKPoor` / `TryRoutePostBadKPoor` 状态机）。与窗口内的普通 `Poor` **不是同一机制**。
+
+**须同时满足**：
+
+1. **HitMode** 走 BMS 判定（IIDX / LR2 / raja 等；Lazer HitMode 无 BMS 路由 → 无 KPoor）
+2. **HealthMode** 为 BMS 血量表：`IIDX_HD` / `LR2_HD` / `Raja_HD`（`HealthModeHelper.IsBMSHealthMode`）
+3. **`BmsPoorHitResultEnable == true`**（全局配置，不写入 ScoreInfo）
+
+**统一 gate**（Session / Drawable / Rejudge 预览必须相同）：
+
+```csharp
+bool poorEnabled = HealthModeHelper.IsBMSHealthMode(environment.ManiaHealthMode)
+                   && environment.BmsPoorHitResultEnable;
+```
+
+| 场景 | KPoor |
+|------|-------|
+| BMS HitMode + **BMS HealthMode** + BmsPoor ON | 可产生 |
+| BMS HitMode + **Lazer HealthMode** + BmsPoor ON | **不产生** |
+| BMS HealthMode + BmsPoor OFF | 不产生 |
+
+**实现锚点**：
+
+- Session：`ManiaReplaySessionSimulator` → `EvaluateSessionPress(..., poorEnabled)`
+- Drawable：`EvaluateDrawablePress(..., poorEnabled)`（与 Session 同一公式）
+- Rejudge：`ManiaHitEventRejudgeHelper` 传入完整 `poorEnabled`（含 HealthMode）
+
+**Parity**：须覆盖 BMS HitMode + Lazer Health + BmsPoor ON → **KPoor 计数为 0 且 Drawable ≡ Session**。
+
 ### 成绩统计环境
 
 | 字段                                 | 来源                                                                                   |
@@ -80,7 +111,8 @@ Drawable replay 播放时，`ManiaEzDrawableJudgement` 优先从 `DrawableRulese
 | HitMode / HealthMode（统计 HitEvents） | `ScoreInfo.ManiaHitMode` / `ManiaHealthMode`（提交时写入）→ `GameplayEnvironment.FromScore` |
 | HitMode / HealthMode（角逐时间线）        | **当前全局** `FromLive`；不读成绩嵌入字段                                                         |
 | JudgePrecedence / OffsetPlusMania  | 当前全局配置（`FromLive` fallback）                                                          |
-| **BmsPoorHitResultEnable (KPoor)** | **当前全局配置**（未写入 ScoreInfo；统计重算沿用打开成绩时的全局 KPoor 开关，与当时游玩可能不一致）                         |
+| **KPoor（post-Bad Poor）** | `poorEnabled = IsBMSHealthMode(HealthMode) && BmsPoorHitResultEnable`（见上 §KPoor）；**须 BMS HealthMode**，非 Lazer Health；JudgePrecedence 不参与；开关未写入 ScoreInfo |
+| **BmsPoorHitResultEnable** | 当前全局配置；单独为 true **不足以**产 KPoor |
 
 生产入口：`StatisticsPanel` / `ManiaScoreHitEventGenerator` → `ManiaReplaySessionService`（ForStored，env 由 Session 内 `ResolveForReplay` 解析）。
 
@@ -140,6 +172,7 @@ public static EzScoreTimeline RunTimeline(...);
 - **Now**：`ManiaReplaySession.Run(env)` 返回的完整 `Score`；Graph 只读 `nowScore.ScoreInfo.*`
 - 禁止拆字段、禁止 `applyFallbackV2FromHitEvents` 二次喂 SP
 - 改 HitMode / HealthMode / JudgePrecedence / BmsPoor → `refreshFromService()` 重跑 Session
+- **HealthMode 从 BMS → Lazer**（或反向）会改变 `poorEnabled`，Now 的 Poor/KPoor 计数可能变化；与 Drawable 修后游玩行为一致。
 
 ### 1.5b — Miss TimeOffset 数据保真
 
@@ -147,11 +180,34 @@ public static EzScoreTimeline RunTimeline(...);
 - `buildPressTimesByColumn` + `resolveMissStoredOffset` / `resolveMissEventTime`：列内最近邻 press；无输入则 stored offset 为 0（Graph 压边展示）
 - 删除 `estimateUnjudgedMissOffset`（统一 `missLate-0.01`）
 
+### 1.5d — OffsetPlusMania 持久化与 baked-replay 语义
+
+| 字段 | Realm 持久化 | 分析 baseline |
+|------|-------------|--------------|
+| `ManiaHitMode` / `ManiaHealthMode` | 是（嵌入 ScoreInfo） | ForStored 读嵌入；ForLive 读全局 |
+| `SessionOffsetPlusMania` / `SessionOffsetPlusNonMania` | **否**（`[Ignored]`） | 不恢复「当时全局 offset」 |
+| `.osr` replay 帧 | Files 表 | 输入时间序列 |
+
+**产品语义（设计目标）**：replay 帧记录的是「已按当时 offset 修正后的有效输入」→ 历史分析默认 `OffsetPlusMania=0` 应复现 Original。
+
+**现行实现差距**：
+
+- Drawable / Session 均在**判定侧**加 `OffsetPlusMania`（`timeOffset = input.Time - target.StartTime + env.OffsetPlusMania`），帧时间**未**平移。
+- `ResolveForReplay` 的 OffsetPlusMania **始终来自当前全局配置**（ForStored 不像 HitMode 那样读 score 嵌入）。
+- 因此「游玩 offset=10 → 分析 env=0 即一致」在现行实现下**不自动成立**（需 env=10 才复现当时 Drawable 判定）；follow-up 可选：Realm 持久化 `SessionOffsetPlus*` 或录制时平移 replay 帧。
+
+**Graph 接线**：
+
+- `offset=0`：`OnOffsetChanged(0)` → `RefreshFromService()`；Now 读 Session `ScoreInfo.Accuracy/TotalScore/Statistics`。
+- `offset≠0`：debounce 后 `RefreshFromService()`；滑动阶段仅 `RefreshDisplayOnly` 平移 scatter，**不**用二次公式覆盖 Now 数字。
+
+**测试**：`ManiaCrossSourceInvariantTest.TestOffsetZeroSessionMatchesOriginalStatistics`；baked-replay follow-up 单列。
+
 ### 1.5c — OffsetPlusMania 性能
 
-- **滑动 offset**：不调 Session；缓存 HitEvents 的 stored TimeOffset + delta 做 UI 平移
-- `offsetPlusMania` bindable → `refreshDisplayOnly()`（仅 `Refresh()`）
-- Result 随 offset 重算 → **后续**；1.5 滑动阶段保持 `RecalculateV2Result => Result`
+- **滑动 offset**：debounce 前不调 Session；stored TimeOffset + delta 做 UI 平移
+- `offsetPlusMania` bindable → `RefreshDisplayOnly()`（scatter/health 预览）
+- **offset 落定或归零**：debounce / 立即 `RefreshFromService()`；Now 数字来自 Session SP 输出
 
 ```mermaid
 flowchart TD

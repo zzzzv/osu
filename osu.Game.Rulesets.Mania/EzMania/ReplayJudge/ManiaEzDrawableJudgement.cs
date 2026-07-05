@@ -7,6 +7,7 @@ using osu.Framework.Graphics;
 using osu.Framework.Input.Events;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Scoring;
+using osu.Game.Rulesets.Mania.EzMania.Helper;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings;
 using osu.Game.Rulesets.Mania.Objects;
 using osu.Game.Rulesets.Mania.Objects.Drawables;
@@ -110,7 +111,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 return false;
 
             var state = GetBmsState(note);
-            var action = BmsHitModeJudgement.Instance.TryPostBadOnPressed(maniaWindows, state);
+            var environment = getGameplayEnvironment(note);
+            bool poorEnabled = HealthModeHelper.ComputeKPoorEnabled(environment.ManiaHealthMode, environment.BmsPoorHitResultEnable);
+            var action = BmsHitModeJudgement.Instance.TryPostBadOnPressed(maniaWindows, state, poorEnabled);
 
             if (!action.Handled)
                 return false;
@@ -205,9 +208,10 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                     return true;
 
                 var state = GetBmsState(drawable);
+                bool poorEnabled = HealthModeHelper.ComputeKPoorEnabled(environment.ManiaHealthMode, environment.BmsPoorHitResultEnable);
 
                 var action = userTriggered
-                    ? bms.EvaluateDrawablePress(maniaWindows, timeOffset, state)
+                    ? bms.EvaluateDrawablePress(maniaWindows, timeOffset, state, poorEnabled)
                     : bms.EvaluateDrawableAutoMiss(maniaWindows, timeOffset);
 
                 ApplyBmsAction(drawable, action, state);
@@ -287,9 +291,10 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
                 var state = GetBmsState(drawable);
                 bool forcePoor = !drawable.HoldNote.IsHolding.Value && drawable.HoldNote.Body.HasHoldBreak;
+                bool poorEnabled = HealthModeHelper.ComputeKPoorEnabled(environment.ManiaHealthMode, environment.BmsPoorHitResultEnable);
 
                 var action = userTriggered
-                    ? bms.EvaluateDrawablePress(maniaWindows, timeOffset, state, forcePoorOnTailHoldBreak: forcePoor)
+                    ? bms.EvaluateDrawablePress(maniaWindows, timeOffset, state, poorEnabled, forcePoorOnTailHoldBreak: forcePoor)
                     : bms.EvaluateDrawableAutoMiss(maniaWindows, timeOffset);
 
                 ApplyBmsAction(drawable, action, state);

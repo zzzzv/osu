@@ -48,10 +48,10 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         public override Task<ReplayRunResult> RunRequestAsync(ReplayRunRequest request, CancellationToken cancellationToken = default)
             => RunCombinedAsyncFunc(request, cancellationToken);
 
-        public override Task<List<HitEvent>> RunHitEventsAsync(Score score, IBeatmap beatmap, CancellationToken cancellationToken = default)
+        public override async Task<List<HitEvent>> RunHitEventsAsync(Score score, IBeatmap beatmap, CancellationToken cancellationToken = default)
         {
-            var env = GlobalConfigStore.EzConfig.ResolveForReplay(score.ScoreInfo, ReplayRunPurpose.ForStored);
-            return Task.Run(() => ManiaReplaySession.Run(score, beatmap, env, cancellationToken).ScoreInfo.HitEvents.ToList(), cancellationToken);
+            var (resultScore, _) = await getOrRunSession(score, beatmap, null, ReplayRunPurpose.ForStored, cancellationToken).ConfigureAwait(false);
+            return resultScore.ScoreInfo.HitEvents.ToList();
         }
 
         protected override async Task<Score> RunScoreAsyncFunc(Score score, IBeatmap beatmap, IGameplayEnvironment? environment, ReplayRunPurpose purpose,
