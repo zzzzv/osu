@@ -12,10 +12,10 @@ using osu.Framework.Graphics.Shapes;
 using osu.Game.Configuration;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Localization;
-using osu.Game.Rulesets.Scoring;
 using osu.Game.Rulesets.Judgements;
 using osu.Game.Rulesets.Mania.EzMania.Localization;
 using osu.Game.Rulesets.Objects.Types;
+using osu.Game.Rulesets.Scoring;
 using osu.Game.Screens.Play.HUD;
 using osu.Game.Screens.Play.HUD.HitErrorMeters;
 using osu.Game.Skinning;
@@ -70,6 +70,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
         [SettingSource(typeof(EzHUDManiaStrings), nameof(EzHUDManiaStrings.MATCH_PANEL_WIDTH_LABEL), nameof(EzHUDManiaStrings.MATCH_PANEL_WIDTH_DESCRIPTION))]
         public BindableBool MatchManiaPanelWidth { get; } = ManiaPlayfieldLayoutHelper.CreateDefaultMatchPanelWidthBindable();
 
+        [SettingSource(typeof(EzHUDManiaStrings), nameof(EzHUDManiaStrings.MATCH_HIT_POSITION_LAYOUT_LABEL), nameof(EzHUDManiaStrings.MATCH_HIT_POSITION_LAYOUT_DESCRIPTION))]
+        public BindableBool MatchManiaHitPositionLayout { get; } = new BindableBool();
+
         private Container[]? columns;
         private Box[] judgementMarkers = null!;
         private Box? backgroundSolid;
@@ -82,7 +85,14 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
         private Bindable<double> columnWidth = null!;
         private Bindable<double> specialFactor = null!;
         private Bindable<ColumnWidthStyle> columnWidthStyle = null!;
+        private Bindable<bool> hitPositionGlobalEnable = null!;
+        private Bindable<double> hitPosition = null!;
         private Ez2ConfigManager ezSkinConfig = null!;
+
+        private Anchor savedAnchor;
+        private Anchor savedOrigin;
+        private Vector2 savedPosition;
+        private bool savedLayout;
 
         [Resolved]
         private InputCountController controller { get; set; } = null!;
@@ -100,6 +110,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
             columnWidth = ezSkinConfig.GetBindable<double>(Ez2Setting.ColumnWidth);
             specialFactor = ezSkinConfig.GetBindable<double>(Ez2Setting.SpecialFactor);
             columnWidthStyle = ezSkinConfig.GetBindable<ColumnWidthStyle>(Ez2Setting.ColumnWidthStyle);
+            hitPositionGlobalEnable = ezSkinConfig.GetBindable<bool>(Ez2Setting.HitPositionGlobalEnable);
+            hitPosition = ezSkinConfig.GetBindable<double>(Ez2Setting.HitPosition);
             floatingAverages = Array.Empty<double>();
             judgementMarkers = Array.Empty<Box>();
             columns = Array.Empty<Container>();
@@ -238,8 +250,12 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
             columnWidthStyle.BindValueChanged(_ => updateWidth(), true);
             MatchManiaPanelWidth.BindValueChanged(_ => updateWidth(), true);
 
+            hitPositionGlobalEnable.BindValueChanged(_ => updateHitPositionLayout());
+            hitPosition.BindValueChanged(_ => updateHitPositionLayout());
+            MatchManiaHitPositionLayout.BindValueChanged(_ => updateHitPositionLayout(), true);
+
             ezSkinConfig.ColumnTypeChanged += (_, __, ___) => updateWidth();
-            skin.SourceChanged += updateWidth;
+            skin.SourceChanged += onSkinChanged;
 
             // 更新标识块高度
             MarkerHeight.BindValueChanged(height =>
@@ -309,6 +325,39 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
             }
 
             Width = totalWidth;
+        }
+
+        private void onSkinChanged()
+        {
+            updateWidth();
+            updateHitPositionLayout();
+        }
+
+        private void updateHitPositionLayout()
+        {
+            if (MatchManiaHitPositionLayout.Value)
+            {
+                if (!savedLayout)
+                {
+                    savedAnchor = Anchor;
+                    savedOrigin = Origin;
+                    savedPosition = Position;
+                    savedLayout = true;
+                }
+
+                ManiaPlayfieldLayoutHelper.ApplyHitPositionPlacement(
+                    this,
+                    ManiaPlayfieldLayoutHelper.GetHitPosition(skin, hitPositionGlobalEnable.Value, hitPosition.Value));
+                return;
+            }
+
+            if (!savedLayout)
+                return;
+
+            Anchor = savedAnchor;
+            Origin = savedOrigin;
+            Position = savedPosition;
+            savedLayout = false;
         }
 
         protected override void OnNewJudgement(JudgementResult judgement)

@@ -34,6 +34,17 @@ namespace osu.Game.Rulesets.Mania.EzMania
 
         public static BindableBool CreateDefaultMatchPanelWidthBindable() => new BindableBool(DEFAULT_MATCH_PANEL_WIDTH);
 
+        /// <summary>
+        /// Aligns a HUD element to the judgement line by position (not height).
+        /// Anchor at bottom-centre, origin at centre, X = 0, Y = hit position.
+        /// </summary>
+        public static void ApplyHitPositionPlacement(Drawable drawable, float hitPosition)
+        {
+            drawable.Anchor = Anchor.BottomCentre;
+            drawable.Origin = Anchor.Centre;
+            drawable.Position = new Vector2(0, hitPosition);
+        }
+
         public static float CalculateMobileAdjust(int keyMode, ManiaMobileLayout mobileLayout, Vector2? containingCellSize)
         {
             if (!RuntimeInfo.IsMobile || mobileLayout != ManiaMobileLayout.LandscapeExpandedColumns)
