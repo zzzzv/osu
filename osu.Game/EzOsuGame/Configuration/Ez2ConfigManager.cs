@@ -109,6 +109,8 @@ namespace osu.Game.EzOsuGame.Configuration
             SetDefault(Ez2Setting.BeatmapPreviewModeMania, EzBeatmapPreviewMode.StaticFullMap);
             SetDefault(Ez2Setting.BeatmapPreviewDensity, 1.0, 0.1, 5.0, 0.05);
             SetDefault(Ez2Setting.EditorSyncTimelineSpacing, true);
+            SetDefault(Ez2Setting.SkinEditorHudSnapEnabled, false);
+            SetDefault(Ez2Setting.SkinEditorHudSnapDistance, 20, 10, 50, 5);
 
             SetDefault(Ez2Setting.EzAnalysisFilter, false);
             SetDefault(Ez2Setting.EzSelectCsMode, string.Empty);
@@ -838,6 +840,16 @@ namespace osu.Game.EzOsuGame.Configuration
         BeatmapPreviewModeMania,
         BeatmapPreviewDensity,
         EditorSyncTimelineSpacing,
+
+        /// <summary>
+        /// Skin editor HUD magnetic snap (overlay layout editor).
+        /// </summary>
+        SkinEditorHudSnapEnabled,
+
+        /// <summary>
+        /// First-stage HUD snap gap in SkinnableContainer parent pixels (10/15/20/25/50).
+        /// </summary>
+        SkinEditorHudSnapDistance,
 
         EzAnalysisFilter,
 

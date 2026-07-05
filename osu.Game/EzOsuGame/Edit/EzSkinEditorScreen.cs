@@ -5,35 +5,34 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using osu.Framework.Extensions;
-using osu.Framework.Testing;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
 using osu.Framework;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
+using osu.Framework.Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Cursor;
 using osu.Framework.Localisation;
 using osu.Framework.Platform;
 using osu.Framework.Screens;
+using osu.Framework.Testing;
 using osu.Game.Beatmaps;
 using osu.Game.Database;
 using osu.Game.EzOsuGame.Configuration;
-using osu.Game.EzOsuGame.ScriptedSkin;
 using osu.Game.EzOsuGame.Edit.Components;
 using osu.Game.EzOsuGame.Edit.Note;
 using osu.Game.EzOsuGame.Localization;
+using osu.Game.EzOsuGame.ScriptedSkin;
 using osu.Game.Graphics.Cursor;
 using osu.Game.IO;
 using osu.Game.Overlays;
 using osu.Game.Overlays.Dialog;
 using osu.Game.Overlays.Notifications;
-using osu.Game.Overlays.SkinEditor;
 using osu.Game.Rulesets;
 using osu.Game.Screens;
 using osu.Game.Skinning;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace osu.Game.EzOsuGame.Edit
 {
@@ -189,7 +188,7 @@ namespace osu.Game.EzOsuGame.Edit
                                         Name = @"Menu container",
                                         RelativeSizeAxes = Axes.X,
                                         Depth = float.MinValue,
-                                        Height = SkinEditor.MENU_HEIGHT,
+                                        Height = osu.Game.Overlays.SkinEditor.SkinEditor.MENU_HEIGHT,
                                         Children = new Drawable[]
                                         {
                                             menuBar = new EzSkinEditorMenuBar
@@ -579,8 +578,7 @@ namespace osu.Game.EzOsuGame.Edit
             Schedule(() => setBeatmapPlaybackPlaying(PreviewState.Mode.Value == EzBeatmapPreviewMode.Dynamic, updateMode: false));
         }
 
-        private T? getSceneContent<T>() where T : Drawable
-            => sceneContentHost.Children.Count == 1 ? sceneContentHost.Child as T : null;
+        private T? getSceneContent<T>() where T : Drawable => sceneContentHost.Children.Count == 1 ? sceneContentHost.Child as T : null;
 
         private void applyEmbeddedPlayerToAppearanceContent()
         {
@@ -610,8 +608,7 @@ namespace osu.Game.EzOsuGame.Edit
             return null;
         }
 
-        private RulesetInfo? resolveAppearanceRuleset(WorkingBeatmap? workingBeatmap) =>
-            PreviewState.Ruleset.Value ?? workingBeatmap?.BeatmapInfo.Ruleset;
+        private RulesetInfo? resolveAppearanceRuleset(WorkingBeatmap? workingBeatmap) => PreviewState.Ruleset.Value ?? workingBeatmap?.BeatmapInfo.Ruleset;
 
         private void disposeEmbeddedPlayer()
         {
@@ -686,8 +683,7 @@ namespace osu.Game.EzOsuGame.Edit
             sidebar.ApplyStrategy(strategy, sceneContext);
         }
 
-        private void detachEmbeddedPlayerFromHierarchy()
-            => embeddedPlayer?.DetachForRemount();
+        private void detachEmbeddedPlayerFromHierarchy() => embeddedPlayer?.DetachForRemount();
 
         private void applySettings()
         {

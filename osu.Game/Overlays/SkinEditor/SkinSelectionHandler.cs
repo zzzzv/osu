@@ -10,6 +10,7 @@ using osu.Framework.Graphics;
 using osu.Framework.Graphics.Primitives;
 using osu.Framework.Graphics.UserInterface;
 using osu.Game.Extensions;
+using osu.Game.EzOsuGame.SkinEditor;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Rulesets.Edit;
 using osu.Game.Screens.Edit.Compose.Components;
@@ -106,7 +107,7 @@ namespace osu.Game.Overlays.SkinEditor
                 var item = c.Item;
                 Drawable drawable = (Drawable)item;
 
-                if (!item.UsesFixedAnchor)
+                if (!item.UsesFixedAnchor && !SkinHudSnapRuntime.DeferClosestAnchorDuringDrag)
                     ApplyClosestAnchorOrigin(drawable);
 
                 drawable.Position += drawable.ScreenSpaceDeltaToParentSpace(moveEvent.ScreenSpaceDelta);
