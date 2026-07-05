@@ -20,6 +20,7 @@ using osu.Game.Graphics.Sprites;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Overlays.Dialog;
 using osu.Game.Overlays.Settings;
+using osu.Game.Localisation;
 using osu.Game.Rulesets.Mania;
 using osu.Game.Rulesets.Mania.EzMania.Editor;
 using osu.Game.Screens.Edit.Components.Menus;
@@ -81,6 +82,7 @@ namespace osu.Game.Tests.Visual.Edit
         {
             AddStep("load screen", loadScreen);
             waitForScreenLoaded();
+            switchScene(EzSkinEditorSceneType.Size);
 
             AddUntilStep("menu bar visible", () => editorScreen.ChildrenOfType<EditorMenuBar>().Any());
             AddUntilStep("scene bar visible", () => editorScreen.ChildrenOfType<EzSkinEditorSceneBar>().Any());
@@ -481,7 +483,7 @@ namespace osu.Game.Tests.Visual.Edit
             waitForScreenLoaded();
             importLegacySkin();
 
-            AddUntilStep("preview host visible", () => editorScreen.ChildrenOfType<EzSkinEditorPreviewHost>().Any());
+            AddUntilStep("appearance scene visible", () => editorScreen.ChildrenOfType<EzSkinEditorAppearanceSceneContent>().Any());
             AddAssert("still static preview", () => editorScreen.PreviewSource.Value == EzSkinEditorPreviewSource.Static);
         }
 
@@ -492,8 +494,12 @@ namespace osu.Game.Tests.Visual.Edit
             AddStep("load screen", loadScreen);
             waitForScreenLoaded();
 
-            AddUntilStep("config menu items", () => editorScreen.ChildrenOfType<EditorMenuBar>().Any()
-                                                    && editorScreen.ChildrenOfType<EditorMenuItem>().Any(i => i.Text.ToString() == EzEditorStrings.MENU_CONFIG.ToString()));
+            AddUntilStep("config menu items", () =>
+            {
+                var menuBar = editorScreen.ChildrenOfType<EzSkinEditorMenuBar>().SingleOrDefault();
+                return menuBar != null
+                       && menuBar.Items.Any(m => m.Text.ToString() == EzEditorStrings.MENU_CONFIG.ToString());
+            });
         }
 
         [Test]
@@ -587,9 +593,18 @@ namespace osu.Game.Tests.Visual.Edit
             AddStep("load screen", loadScreen);
             waitForScreenLoaded();
 
-            AddAssert("export osk menu present", () => editorScreen.ChildrenOfType<EditorMenuItem>().Any(i => i.Text.ToString() == EzEditorStrings.MENU_EXPORT_OSK.ToString()));
-            AddAssert("export disabled on built-in skin",
-                () => editorScreen.ChildrenOfType<EditorMenuItem>().First(i => i.Text.ToString() == EzEditorStrings.MENU_EXPORT_OSK.ToString()).Action.Disabled);
+            AddAssert("export osk menu present", () =>
+            {
+                var menuBar = editorScreen.ChildrenOfType<EzSkinEditorMenuBar>().Single();
+                var fileMenu = menuBar.Items.First(m => m.Text.ToString() == CommonStrings.MenuBarFile.ToString());
+                return fileMenu.Items.OfType<EditorMenuItem>().Any(i => i.Text.ToString() == EzEditorStrings.MENU_EXPORT_OSK.ToString());
+            });
+            AddAssert("export disabled on built-in skin", () =>
+            {
+                var menuBar = editorScreen.ChildrenOfType<EzSkinEditorMenuBar>().Single();
+                var fileMenu = menuBar.Items.First(m => m.Text.ToString() == CommonStrings.MenuBarFile.ToString());
+                return fileMenu.Items.OfType<EditorMenuItem>().First(i => i.Text.ToString() == EzEditorStrings.MENU_EXPORT_OSK.ToString()).Action.Disabled;
+            });
         }
     }
 }

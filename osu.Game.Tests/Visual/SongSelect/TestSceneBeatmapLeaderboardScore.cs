@@ -13,6 +13,7 @@ using osu.Framework.Utils;
 using osu.Game.Configuration;
 using osu.Game.Graphics.Sprites;
 using osu.Game.Graphics.UserInterface;
+using osu.Game.Localisation;
 using osu.Game.Online.API.Requests.Responses;
 using osu.Game.Overlays;
 using osu.Game.Rulesets.Mania;
@@ -204,7 +205,8 @@ namespace osu.Game.Tests.Visual.SongSelect
             });
             AddStep("click use these mods", () =>
             {
-                InputManager.MoveMouseTo(this.ChildrenOfType<DrawableOsuMenuItem>().Single());
+                InputManager.MoveMouseTo(this.ChildrenOfType<DrawableOsuMenuItem>()
+                    .First(i => i.Item.Text.Value.ToString() == SongSelectStrings.UseTheseMods.ToString()));
                 InputManager.Click(MouseButton.Left);
             });
             AddAssert("mods received HD", () => score.SelectedMods.Value.Any(m => m is OsuModHidden));

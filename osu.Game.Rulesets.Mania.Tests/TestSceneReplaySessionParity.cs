@@ -290,6 +290,7 @@ namespace osu.Game.Rulesets.Mania.Tests
                 Beatmap.Value.Beatmap.ControlPointInfo.Add(0, new EffectControlPoint { ScrollSpeed = 0.1f });
 
                 replayScore = new Score { Replay = new Replay { Frames = frames } };
+                ReplayJudgeTestConfig.ApplyEmbeddedModes(replayScore, parityEnvironment);
                 LoadScreen(currentPlayer = new ScoreAccessibleReplayPlayer(replayScore));
             });
 
@@ -332,6 +333,7 @@ namespace osu.Game.Rulesets.Mania.Tests
                 Beatmap.Value.Beatmap.ControlPointInfo.Add(0, new EffectControlPoint { ScrollSpeed = 0.1f });
 
                 replayScore = new Score { Replay = new Replay { Frames = frames } };
+                ReplayJudgeTestConfig.ApplyEmbeddedModes(replayScore, parityEnvironment);
                 LoadScreen(currentPlayer = new ScoreAccessibleReplayPlayer(replayScore));
             });
 

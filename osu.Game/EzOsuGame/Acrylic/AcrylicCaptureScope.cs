@@ -16,6 +16,7 @@ namespace osu.Game.EzOsuGame.Acrylic
     public partial class AcrylicCaptureScope : CompositeDrawable, IAcrylicCaptureRegistrar
     {
         private int captureRefCount;
+        private int mutationGeneration;
         private readonly Drawable capturedContent;
         private BufferedContainer? activeBuffer;
 
@@ -47,10 +48,20 @@ namespace osu.Game.EzOsuGame.Acrylic
 
         private void invokeCaptureMutation(Action mutation)
         {
-            if (LoadState == LoadState.Loaded && ThreadSafety.IsUpdateThread)
+            int generation = ++mutationGeneration;
+
+            void runMutation()
+            {
+                if (generation != mutationGeneration)
+                    return;
+
                 mutation();
+            }
+
+            if (LoadState == LoadState.Loaded && ThreadSafety.IsUpdateThread)
+                runMutation();
             else
-                Schedule(mutation);
+                Schedule(runMutation);
         }
 
         private void activateCapture()
@@ -58,7 +69,10 @@ namespace osu.Game.EzOsuGame.Acrylic
             if (activeBuffer != null || captureRefCount <= 0)
                 return;
 
-            RemoveInternal(capturedContent, false);
+            if (capturedContent.Parent == this)
+                RemoveInternal(capturedContent, false);
+            else if (capturedContent.Parent == activeBuffer)
+                return;
 
             AddInternal(activeBuffer = new BufferedContainer(pixelSnapping: true)
             {
@@ -73,11 +87,37 @@ namespace osu.Game.EzOsuGame.Acrylic
             if (activeBuffer == null || captureRefCount > 0)
                 return;
 
-            activeBuffer.Remove(capturedContent, false);
+            if (capturedContent.Parent == activeBuffer)
+                activeBuffer.Remove(capturedContent, false);
+
             RemoveInternal(activeBuffer, true);
             activeBuffer = null;
 
-            AddInternal(capturedContent);
+            if (capturedContent.Parent != this)
+                AddInternal(capturedContent);
+        }
+
+        protected override void Dispose(bool isDisposing)
+        {
+            if (isDisposing)
+            {
+                mutationGeneration++;
+                captureRefCount = 0;
+
+                if (activeBuffer != null)
+                {
+                    if (capturedContent.Parent == activeBuffer)
+                        activeBuffer.Remove(capturedContent, false);
+
+                    RemoveInternal(activeBuffer, true);
+                    activeBuffer = null;
+
+                    if (capturedContent.Parent != this && !IsDisposed)
+                        AddInternal(capturedContent);
+                }
+            }
+
+            base.Dispose(isDisposing);
         }
     }
 }

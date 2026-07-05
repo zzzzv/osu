@@ -20,6 +20,7 @@ using osu.Game.Models;
 using osu.Game.Online.API.Requests.Responses;
 using osu.Game.Online.Leaderboards;
 using osu.Game.Overlays;
+using osu.Game.Resources.Localisation.Web;
 using osu.Game.Rulesets;
 using osu.Game.Rulesets.Osu;
 using osu.Game.Scoring;
@@ -72,7 +73,7 @@ namespace osu.Game.Tests.Visual.UserInterface
 
         private DrawableOsuMenuItem getDeleteMenuItem() =>
             this.ChildrenOfType<DrawableOsuMenuItem>()
-                .First(i => i.Item is OsuMenuItem menu && menu.Type == MenuItemType.Destructive);
+                .First(i => i.Item.Text.Value.ToString() == CommonStrings.ButtonsDelete.ToString());
 
         protected override IReadOnlyDependencyContainer CreateChildDependencies(IReadOnlyDependencyContainer parent)
         {
@@ -199,6 +200,14 @@ namespace osu.Game.Tests.Visual.UserInterface
                 });
             });
 
+            AddStep("refresh leaderboard", () =>
+            {
+                leaderboard.Hide();
+                leaderboard.Show();
+            });
+
+            AddUntilStep("wait for drawables", () => leaderboard.ChildrenOfType<BeatmapLeaderboardScore>().Any());
+
             AddStep("open menu for corrupted score", () =>
             {
                 var leaderboardScore = leaderboard.ChildrenOfType<BeatmapLeaderboardScore>()
@@ -211,7 +220,7 @@ namespace osu.Game.Tests.Visual.UserInterface
             // Ensure the context menu and delete dialog are shown without crashing.
             AddStep("finish transforms", () => leaderboard.FinishTransforms(true));
             AddUntilStep("context menu has delete", () => this.ChildrenOfType<DrawableOsuMenuItem>()
-                                                                .Any(i => i.Item is OsuMenuItem menu && menu.Type == MenuItemType.Destructive));
+                                                                .Any(i => i.Item.Text.Value.ToString() == CommonStrings.ButtonsDelete.ToString()));
             AddStep("click delete option", () =>
             {
                 InputManager.MoveMouseTo(getDeleteMenuItem());

@@ -581,8 +581,7 @@ namespace osu.Game.Tests.Visual.SongSelect
             }
             else
             {
-                AddUntilStep("wait for spread indicator", () => this.ChildrenOfType<PanelBeatmapStandalone.SpreadDisplay>().Any(d => d.Enabled.Value));
-                AddStep("click spread indicator", () => this.ChildrenOfType<PanelBeatmapStandalone.SpreadDisplay>().Single(d => d.Enabled.Value).TriggerClick());
+                AddStep("scope to beatmap set", () => SongSelect.ScopeToBeatmapSet(Beatmap.Value.BeatmapSetInfo));
             }
 
             WaitForFiltering();

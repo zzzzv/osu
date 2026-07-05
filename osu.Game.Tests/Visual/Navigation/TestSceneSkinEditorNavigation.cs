@@ -70,11 +70,11 @@ namespace osu.Game.Tests.Visual.Navigation
 
             AddAssert("value is default", () => hitErrorMeter.JudgementLineThickness.IsDefault);
 
-            AddStep("hover first slider", () =>
+            AddStep("hover judgement line thickness slider", () =>
             {
                 InputManager.MoveMouseTo(
                     skinEditor.ChildrenOfType<SkinSettingsToolbox>().First()
-                              .ChildrenOfType<SettingsSlider<float>>().First()
+                              .ChildrenOfType<SettingsSlider<float>>().Skip(2).First()
                               .ChildrenOfType<SliderBar<float>>().First()
                 );
             });

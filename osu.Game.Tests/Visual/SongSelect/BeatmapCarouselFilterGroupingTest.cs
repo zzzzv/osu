@@ -310,10 +310,10 @@ namespace osu.Game.Tests.Visual.SongSelect
             addBeatmapSet(applyXxyStars(7.0, 2.0), beatmapSets, out var beatmap7);
 
             var results = await runGrouping(GroupMode.XxyStarRating, beatmapSets, getXxy: resolveXxy);
-            assertGroup(results, 0, "Below 1 Star", beatmapBelow1.Beatmaps, ref total);
-            assertGroup(results, 1, "1 Star", beatmapAbove1.Beatmaps, ref total);
-            assertGroup(results, 2, "2 Stars", beatmap2.Beatmaps, ref total);
-            assertGroup(results, 3, "7 Stars", beatmap7.Beatmaps, ref total);
+            assertGroup(results, 0, BeatmapCarouselFilterGroupingStrings.BelowStars(1), beatmapBelow1.Beatmaps, ref total);
+            assertGroup(results, 1, BeatmapCarouselFilterGroupingStrings.Stars(1), beatmapAbove1.Beatmaps, ref total);
+            assertGroup(results, 2, BeatmapCarouselFilterGroupingStrings.Stars(2), beatmap2.Beatmaps, ref total);
+            assertGroup(results, 3, BeatmapCarouselFilterGroupingStrings.Stars(7), beatmap7.Beatmaps, ref total);
             assertTotal(results, total);
         }
 
