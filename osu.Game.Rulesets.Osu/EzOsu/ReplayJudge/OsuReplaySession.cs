@@ -15,8 +15,11 @@ using osu.Game.Utils;
 namespace osu.Game.Rulesets.Osu.EzOsu.ReplayJudge
 {
     /// <summary>
-    /// 无绘制 Osu replay 判定 Session：press 匹配 → <see cref="ScoreProcessor.ApplyResult"/> → PopulateScore。
+    /// 无绘制 Osu replay 判定 Session：press 匹配 → <see cref="JudgementProcessor.ApplyResult"/> → PopulateScore。
     /// </summary>
+    /// <remarks>
+    /// 判定精度为临时 press 匹配（<c>TODO(EZ-SR-OSL-010)</c>）；角逐 Timeline 与 Generator 同源。
+    /// </remarks>
     public static class OsuReplaySession
     {
         public static Score Run(Score score, IBeatmap beatmap, IGameplayEnvironment environment, CancellationToken cancellationToken = default)

@@ -18,9 +18,17 @@ using osuTK;
 namespace osu.Game.Rulesets.Osu.EzOsu.ReplayJudge
 {
     /// <summary>
-    /// Osu replay press 匹配 → 一遍 <see cref="ScoreProcessor.ApplyResult"/>。
-    /// MVP：circle + nested slider tick；slider 主体 / spinner 完整判定为已知限制。
+    /// Osu replay press 匹配 → 一遍 <see cref="JudgementProcessor.ApplyResult"/>。
     /// </summary>
+    /// <remarks>
+    /// OSU-TRANSITIONAL（精度临时方案）：见 <c>TODO(EZ-SR-OSL-010)</c> 与 REGISTRY §5.1 OSL-010。
+    /// </remarks>
+    // TODO(EZ-SR-OSL-010): Osu Session 判定精度 — 临时 press 边沿匹配，非 Drawable/ReplayPlayer 黄金路径。
+    // 问题：仅 circle + nested slider tick；无 slider 主体跟踪、spinner 转速、repeat/tail、光标轨迹插值、
+    //       mod 交互（如 HardRock 半径）与 Drawable 逐帧状态机不一致 → Statistics/角逐/Graph 可能与真实游玩偏差。
+    // 推荐：独立 epic — 无绘制 Osu 判定层对齐 Drawable（仿 Mania ColumnSimulator + TestSceneReplaySessionParity）：
+    //       逐步接入 Slider/Spinner 判定、replay 光标插值，或 headless 驱动现有 Judgement 组件；勿再扩 press 启发式。
+    // 工作量：大（touch Rulesets.Osu Objects/Drawables/Judgements + 谱面 fixture parity 套件），估 3–6 人周；刻意不在 OSL-007~009 展开。
     internal static class OsuReplaySessionSimulator
     {
         private readonly struct ReplayPressEvent
@@ -44,6 +52,7 @@ namespace osu.Game.Rulesets.Osu.EzOsu.ReplayJudge
             OsuReplayTimelineRecorder? timelineRecorder,
             CancellationToken cancellationToken)
         {
+            // TODO(EZ-SR-OSL-010): 本方法为精度瓶颈；Generator/角逐/Panel 均继承此处 press 匹配上限。
             ArgumentNullException.ThrowIfNull(score.Replay);
 
             var osuFrames = score.Replay.Frames.OfType<OsuReplayFrame>().OrderBy(f => f.Time).ToList();

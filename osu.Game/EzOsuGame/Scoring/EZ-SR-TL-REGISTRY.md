@@ -141,7 +141,7 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | Graph offset | C / D | ForLive（D 为新 env） | ✓ | — | 不污染 base；见 §1.7d |
 | 角逐 Timeline | EzScoreTimeline | ForLive | RunTimelineDirect | RunTimelineDirect | 一遍 SP |
 | 角逐 HUD 实时分 | Timeline 快照 | — | ✓ | ✓ | 不用终局 TotalScore |
-| Parity | Score + HitEvents 字段级 | ForStored/ForLive | Drawable ≡ Session | 未建立 | REPLAY_JUDGE_MERGE |
+| Parity | Score + HitEvents 字段级 | ForStored/ForLive | Drawable ≡ Session | press 匹配临时方案（**OSL-010**） | REPLAY_JUDGE_MERGE |
 
 ---
 
@@ -152,7 +152,7 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | `osu.Game/EzOsuGame/Scoring/*` | IEzReplaySession、Timeline/Race 编排、cache 接口、ReplayRunPurpose | 判定、press 匹配、HitMode Mapping |
 | `Rulesets.Mania/.../ReplayJudge/*` | ManiaReplaySession、RunTimeline、CreateEzReplaySession | Race HUD |
 | `Rulesets.Osu/.../ReplayJudge/*` | OsuReplaySession、RunTimeline、CreateEzReplaySession | Race HUD |
-| `Rulesets.Osu/.../OsuScoreHitEventGenerator` | 薄壳委托 `OsuReplaySessionService` | press 匹配（已迁入 Session） |
+| `Rulesets.Osu/.../OsuScoreHitEventGenerator` | 薄壳委托 `OsuReplaySessionService` | 判定精度（**OSL-010**，临时 press 匹配） |
 | ~~EzScoreTimelineBridge~~ | **已删除（TL-005）** | 静态注册反模式 |
 
 目标：`ruleset.CreateEzReplaySession()` → `RunTimelineDirectAsync` / `RunAsync`。
@@ -216,7 +216,8 @@ flowchart LR
 
 ### §4.2 Phase 3 范围备忘（无 OSL 编号）
 
-- **Osu Session MVP（OSL-007）** — press 匹配 + 一遍 SP；与现 Generator 同精度。**已知限制**：slider 主体 / spinner 完整判定未覆盖；Drawable / ReplayPlayer 字段级 parity 不在 OSL-004~009 范围。
+- **Osu Session MVP（OSL-007）** — 架构已 Session 一遍 SP；**判定仍为临时 press 匹配**（与旧 Generator 同精度，见 **OSL-010**）。已知缺口：slider 主体 / spinner / 光标轨迹 vs Drawable。
+- **OSL-010（精度 epic，未排期）** — 无绘制判定对齐 Drawable/ReplayPlayer；仿 Mania `TestSceneReplaySessionParity`；估 3–6 人周；刻意不在 Phase 3 破坏性改动 Osu 模式层。
 - **Taiko / Catch Session** — 远期；待 Osu 黄金路径验证后再开独立前缀或 OSL 后继项。
 - **Ruleset 级 `ResolveEnvironment`** — Phase 3 各 ruleset Session 时再评估（§1.7f）。
 - **TL-021 动态变速 Mod ghost 时钟** — doc-only，不阻塞 OSL。
@@ -267,6 +268,7 @@ flowchart LR
 | OSL-007 | **done** | Osu | `OsuReplaySession` + Service + `CreateEzReplaySession` |
 | OSL-008 | **done** | Osu | 删 `EzScoreTimelineHitEventsLegacy` + `RegisterHitEventFallback` |
 | OSL-009 | **done** | Osu | Generator 瘦身为 Session 委托 |
+| OSL-010 | **deferred** | Osu | Session/Generator **判定精度**：press 匹配 → Drawable parity；`OsuReplaySessionSimulator` |
 
 ---
 
