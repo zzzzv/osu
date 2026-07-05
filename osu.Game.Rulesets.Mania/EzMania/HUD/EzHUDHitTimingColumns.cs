@@ -6,6 +6,7 @@ using System.Linq;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
+using osu.Framework.Graphics.Colour;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
 using osu.Game.Configuration;
@@ -58,12 +59,20 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
         [SettingSource(typeof(EzHUDManiaStrings), nameof(EzHUDManiaStrings.BACKGROUND_COLOUR_LABEL), nameof(EzHUDManiaStrings.BACKGROUND_COLOUR_DESCRIPTION))]
         public BindableColour4 BackgroundColour { get; } = new BindableColour4(Colour4.Gray);
 
+        [SettingSource(typeof(EzHUDManiaStrings), nameof(EzHUDManiaStrings.BACKGROUND_GRADIENT_LABEL), nameof(EzHUDManiaStrings.BACKGROUND_GRADIENT_DESCRIPTION))]
+        public BindableBool BackgroundGradient { get; } = new BindableBool();
+
         [SettingSource(typeof(EzHUDManiaStrings), nameof(EzHUDManiaStrings.UNIFIED_MOVEMENT_LABEL), nameof(EzHUDManiaStrings.UNIFIED_MOVEMENT_DESCRIPTION))]
         public BindableBool UnifiedMovement { get; } = new BindableBool();
 
+        [SettingSource(typeof(EzHUDManiaStrings), nameof(EzHUDManiaStrings.STOP_MOVEMENT_LABEL), nameof(EzHUDManiaStrings.STOP_MOVEMENT_DESCRIPTION))]
+        public BindableBool StopMovement { get; } = new BindableBool();
+
         private Container[]? columns;
         private Box[] judgementMarkers = null!;
-        private Box? backgroundBox;
+        private Box? backgroundSolid;
+        private Box? backgroundGradientTop;
+        private Box? backgroundGradientBottom;
 
         private double[] floatingAverages = null!;
         private int keyCount;
@@ -97,7 +106,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
                 floatingAverages = Array.Empty<double>();
                 judgementMarkers = Array.Empty<Box>();
                 columns = Array.Empty<Container>();
-                backgroundBox = null!;
+                backgroundSolid = null!;
+                backgroundGradientTop = null!;
+                backgroundGradientBottom = null!;
                 return;
             }
 
@@ -112,13 +123,25 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
                 Margin = new MarginPadding(2),
                 Children = new Drawable[]
                 {
-                    backgroundBox = new Box
+                    backgroundSolid = new Box
                     {
                         RelativeSizeAxes = Axes.Both,
                         Anchor = Anchor.Centre,
                         Origin = Anchor.Centre,
-                        Colour = BackgroundColour.Value,
-                        Alpha = BackgroundAlpha.Value,
+                    },
+                    backgroundGradientTop = new Box
+                    {
+                        RelativeSizeAxes = Axes.Both,
+                        Height = 0.5f,
+                        Anchor = Anchor.Centre,
+                        Origin = Anchor.BottomCentre,
+                    },
+                    backgroundGradientBottom = new Box
+                    {
+                        RelativeSizeAxes = Axes.Both,
+                        Height = 0.5f,
+                        Anchor = Anchor.Centre,
+                        Origin = Anchor.TopCentre,
                     },
                     new FillFlowContainer
                     {
@@ -161,6 +184,38 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
                 }
             };
             Height = MoveHeight.Value;
+            updateBackgroundAppearance();
+        }
+
+        private void updateBackgroundAppearance()
+        {
+            if (backgroundSolid == null || backgroundGradientTop == null || backgroundGradientBottom == null)
+                return;
+
+            var colour = BackgroundColour.Value;
+            float alpha = BackgroundAlpha.Value;
+
+            if (BackgroundGradient.Value)
+            {
+                backgroundSolid.Alpha = 0;
+
+                var centreColour = colour.Opacity(alpha);
+                var transparentColour = colour.Opacity(0);
+
+                backgroundGradientTop.Alpha = 1;
+                backgroundGradientTop.Colour = ColourInfo.GradientVertical(transparentColour, centreColour);
+
+                backgroundGradientBottom.Alpha = 1;
+                backgroundGradientBottom.Colour = ColourInfo.GradientVertical(centreColour, transparentColour);
+            }
+            else
+            {
+                backgroundSolid.Colour = colour;
+                backgroundSolid.Alpha = alpha;
+
+                backgroundGradientTop.Alpha = 0;
+                backgroundGradientBottom.Alpha = 0;
+            }
         }
 
         protected override void LoadComplete()
@@ -194,25 +249,22 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
                 Invalidate(Invalidation.DrawSize);
             }, true);
 
-            // 更新背景透明度
-            BackgroundAlpha.BindValueChanged(alpha =>
-            {
-                if (backgroundBox == null)
-                    return;
-
-                backgroundBox.Alpha = alpha.NewValue;
-            }, true);
-
-            // 更新背景颜色
-            BackgroundColour.BindValueChanged(colour =>
-            {
-                if (backgroundBox == null)
-                    return;
-
-                backgroundBox.Colour = colour.NewValue;
-            }, true);
+            BackgroundAlpha.BindValueChanged(_ => updateBackgroundAppearance(), true);
+            BackgroundColour.BindValueChanged(_ => updateBackgroundAppearance(), true);
+            BackgroundGradient.BindValueChanged(_ => updateBackgroundAppearance(), true);
 
             UnifiedMovement.BindValueChanged(_ => updateAllMarkerPositions());
+
+            StopMovement.BindValueChanged(e =>
+            {
+                if (e.NewValue)
+                {
+                    foreach (var marker in judgementMarkers)
+                        marker.ClearTransforms();
+                }
+                else
+                    updateAllMarkerPositions();
+            }, true);
         }
 
         private void updateWidth()
@@ -295,7 +347,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
 
         private void updateAllMarkerPositions()
         {
-            if (judgementMarkers.Length == 0)
+            if (judgementMarkers.Length == 0 || StopMovement.Value)
                 return;
 
             if (UnifiedMovement.Value)
@@ -325,13 +377,16 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
 
         private void moveMarker(Box marker, float targetY, HitResult? hitResult = null)
         {
+            if (hitResult != null)
+                marker.Colour = GetColourForHitResult(hitResult.Value);
+
+            if (StopMovement.Value)
+                return;
+
             const int marker_move_duration = 800;
 
             marker.Y = targetY;
             marker.MoveToY(targetY, marker_move_duration, Easing.OutQuint);
-
-            if (hitResult != null)
-                marker.Colour = GetColourForHitResult(hitResult.Value);
         }
 
         private float getRelativeJudgementPosition(double value)
