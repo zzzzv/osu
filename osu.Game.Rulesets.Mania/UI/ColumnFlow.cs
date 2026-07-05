@@ -123,14 +123,14 @@ namespace osu.Game.Rulesets.Mania.UI
 
         private void updateColumnSize()
         {
-            float mobileAdjust = ManiaColumnLayoutHelper.CalculateMobileAdjust(
+            float mobileAdjust = ManiaPlayfieldLayoutHelper.CalculateMobileAdjust(
                 stageDefinition.Columns,
                 mobileLayout.Value,
                 this.FindClosestParent<Stage>()?.Parent?.DrawSize);
 
             for (int i = 0; i < displayColumns; i++)
             {
-                var columnSize = ManiaColumnLayoutHelper.CalculateColumnSize(
+                var columnSize = ManiaPlayfieldLayoutHelper.CalculateColumnSize(
                     i,
                     stageDefinition.Columns,
                     skin,

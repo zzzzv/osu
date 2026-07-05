@@ -24,10 +24,16 @@ namespace osu.Game.Rulesets.Mania.EzMania
     }
 
     /// <summary>
-    /// Shared Mania column sizing logic extracted from <see cref="ColumnFlow{TContent}.updateColumnSize"/>.
+    /// Shared Mania playfield layout helpers for HUD/components (column sizing, panel width, hit position).
+    /// Column sizing logic is extracted from <see cref="ColumnFlow{TContent}.updateColumnSize"/>.
+    /// Hit position logic matches <see cref="UI.Components.HitPositionPaddedContainer"/>.
     /// </summary>
-    public static class ManiaColumnLayoutHelper
+    public static class ManiaPlayfieldLayoutHelper
     {
+        public const bool DEFAULT_MATCH_PANEL_WIDTH = true;
+
+        public static BindableBool CreateDefaultMatchPanelWidthBindable() => new BindableBool(DEFAULT_MATCH_PANEL_WIDTH);
+
         public static float CalculateMobileAdjust(int keyMode, ManiaMobileLayout mobileLayout, Vector2? containingCellSize)
         {
             if (!RuntimeInfo.IsMobile || mobileLayout != ManiaMobileLayout.LandscapeExpandedColumns)
@@ -45,6 +51,37 @@ namespace osu.Game.Rulesets.Mania.EzMania
             // We should scale it back for cases like tablets which aren't so extreme.
             mobileAdjust *= aspectRatio / 1.92f;
             return mobileAdjust;
+        }
+
+        /// <summary>
+        /// Returns the effective hit position using the same rules as the in-game playfield.
+        /// </summary>
+        public static float GetHitPosition(ISkinSource skin, Ez2ConfigManager ezSkinConfig)
+        {
+            if (ezSkinConfig.Get<bool>(Ez2Setting.HitPositionGlobalEnable))
+                return (float)ezSkinConfig.Get<double>(Ez2Setting.HitPosition);
+
+            return skin.GetConfig<ManiaSkinConfigurationLookup, float>(
+                           new ManiaSkinConfigurationLookup(LegacyManiaSkinConfigurationLookups.HitPosition))
+                       ?.Value
+                   ?? (float)ezSkinConfig.Get<double>(Ez2Setting.HitPosition);
+        }
+
+        /// <summary>
+        /// Returns the effective hit position using the same rules as the in-game playfield.
+        /// </summary>
+        public static float GetHitPosition(
+            ISkinSource skin,
+            bool hitPositionGlobalEnable,
+            double hitPosition)
+        {
+            if (hitPositionGlobalEnable)
+                return (float)hitPosition;
+
+            return skin.GetConfig<ManiaSkinConfigurationLookup, float>(
+                           new ManiaSkinConfigurationLookup(LegacyManiaSkinConfigurationLookups.HitPosition))
+                       ?.Value
+                   ?? (float)hitPosition;
         }
 
         /// When <c>false</c>, only skin column width (or the configured base width) is used.
@@ -162,15 +199,5 @@ namespace osu.Game.Rulesets.Mania.EzMania
 
             return totalWidth;
         }
-    }
-
-    /// <summary>
-    /// HUD-facing defaults for optional panel width matching.
-    /// </summary>
-    public static class ManiaHudPanelWidthHelper
-    {
-        public const bool DEFAULT_MATCH_PANEL_WIDTH = true;
-
-        public static BindableBool CreateDefaultBindable() => new BindableBool(DEFAULT_MATCH_PANEL_WIDTH);
     }
 }

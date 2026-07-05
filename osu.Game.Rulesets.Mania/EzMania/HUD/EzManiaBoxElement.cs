@@ -7,7 +7,6 @@ using osu.Game.Configuration;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.HUD;
 using osu.Game.Rulesets.Mania.EzMania.Localization;
-using osu.Game.Rulesets.Mania.Skinning;
 using osu.Game.Screens.Play.HUD;
 using osu.Game.Skinning;
 
@@ -16,7 +15,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
     public partial class EzManiaBoxElement : EzBoxElement
     {
         [SettingSource(typeof(EzHUDManiaStrings), nameof(EzHUDManiaStrings.MATCH_PANEL_WIDTH_LABEL), nameof(EzHUDManiaStrings.MATCH_PANEL_WIDTH_DESCRIPTION))]
-        public BindableBool MatchManiaPanelWidth { get; } = ManiaHudPanelWidthHelper.CreateDefaultBindable();
+        public BindableBool MatchManiaPanelWidth { get; } = ManiaPlayfieldLayoutHelper.CreateDefaultMatchPanelWidthBindable();
 
         [SettingSource(typeof(EzHUDManiaStrings), nameof(EzHUDManiaStrings.MATCH_HIT_POSITION_LABEL), nameof(EzHUDManiaStrings.MATCH_HIT_POSITION_DESCRIPTION))]
         public BindableBool MatchManiaHitPosition { get; } = new BindableBool();
@@ -130,7 +129,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
             if (displayColumns <= 0)
                 return false;
 
-            panelWidth = ManiaColumnLayoutHelper.CalculatePanelTotalWidth(
+            panelWidth = ManiaPlayfieldLayoutHelper.CalculatePanelTotalWidth(
                 keyMode,
                 displayColumns,
                 skin,
@@ -147,19 +146,12 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
 
         private bool tryGetManiaHitPosition(out float hitPositionHeight)
         {
-            hitPositionHeight = getEffectiveHitPosition();
+            hitPositionHeight = ManiaPlayfieldLayoutHelper.GetHitPosition(
+                skin,
+                hitPositionGlobalEnable.Value,
+                hitPosition.Value);
+
             return hitPositionHeight > 0;
-        }
-
-        private float getEffectiveHitPosition()
-        {
-            if (hitPositionGlobalEnable.Value)
-                return (float)hitPosition.Value;
-
-            return skin.GetConfig<ManiaSkinConfigurationLookup, float>(
-                           new ManiaSkinConfigurationLookup(LegacyManiaSkinConfigurationLookups.HitPosition))
-                       ?.Value
-                   ?? (float)hitPosition.Value;
         }
     }
 }

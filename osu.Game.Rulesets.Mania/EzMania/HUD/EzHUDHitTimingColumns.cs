@@ -68,7 +68,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
         public BindableBool StopMovement { get; } = new BindableBool();
 
         [SettingSource(typeof(EzHUDManiaStrings), nameof(EzHUDManiaStrings.MATCH_PANEL_WIDTH_LABEL), nameof(EzHUDManiaStrings.MATCH_PANEL_WIDTH_DESCRIPTION))]
-        public BindableBool MatchManiaPanelWidth { get; } = ManiaHudPanelWidthHelper.CreateDefaultBindable();
+        public BindableBool MatchManiaPanelWidth { get; } = ManiaPlayfieldLayoutHelper.CreateDefaultMatchPanelWidthBindable();
 
         private Container[]? columns;
         private Box[] judgementMarkers = null!;
@@ -291,7 +291,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
 
             for (int i = 0; i < keyCount; i++)
             {
-                var columnSize = ManiaColumnLayoutHelper.CalculateColumnSize(
+                var columnSize = ManiaPlayfieldLayoutHelper.CalculateColumnSize(
                     i,
                     keyMode,
                     skin,
