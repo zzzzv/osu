@@ -5,6 +5,8 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 相关深文档：
 
 - Mania Session 黄金标准：[REPLAY_JUDGE_MERGE.md](../../../osu.Game.Rulesets.Mania/EzMania/ReplayJudge/REPLAY_JUDGE_MERGE.md)
+- **Osu / Catch / Taiko 影子判定（统一思路）**：[REPLAY_JUDGE_SHADOW.md](./REPLAY_JUDGE_SHADOW.md)
+- Osu Session：[REPLAY_JUDGE_MERGE.md](../../../osu.Game.Rulesets.Osu/EzOsu/ReplayJudge/REPLAY_JUDGE_MERGE.md)
 - Wiki：[时间线服务](https://github.com/SK-la/Ez2Lazer/wiki/时间线服务-中文) · [角逐服务](https://github.com/SK-la/Ez2Lazer/wiki/角逐服务-中文)
 
 ---
@@ -119,7 +121,7 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | 何时必须要完整 Score | Graph Now、Parity 测试、跨源不变量（HitEvents 聚合 ≡ Statistics） |
 | 何时用 Timeline 而非 Score | 角逐 HUD 实时分；**禁止**用终局 `TotalScore` 充当时钟查询结果 |
 | Mania 能否 HitEvents→SP 建 Timeline | **禁止**（F/E 类）；Timeline 必须 replay 一遍 SP 快照 |
-| Osu 角逐 | Session 一遍 SP（MVP press 匹配）；精度见 §4.2 |
+| Osu 角逐 | Session 一遍 SP + **Shadow** 判定（OSL-010）；S2 Slider / S3 Spinner 待补齐 |
 
 ### 1.7f 本分析 epic 边界（未展开部分）
 
@@ -141,7 +143,7 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 | Graph offset | C / D | ForLive（D 为新 env） | ✓ | — | 不污染 base；见 §1.7d |
 | 角逐 Timeline | EzScoreTimeline | ForLive | RunTimelineDirect | RunTimelineDirect | 一遍 SP |
 | 角逐 HUD 实时分 | Timeline 快照 | — | ✓ | ✓ | 不用终局 TotalScore |
-| Parity | Score + HitEvents 字段级 | ForStored/ForLive | Drawable ≡ Session | press 匹配临时方案（**OSL-010**） | REPLAY_JUDGE_MERGE |
+| Parity | Score + HitEvents 字段级 | ForStored/ForLive | Drawable ≡ Session | Shadow 进行中（**OSL-010** S1 Circle） | REPLAY_JUDGE_MERGE |
 
 ---
 
@@ -149,10 +151,12 @@ Score Race Timeline 架构的**唯一权威文档**。代码中 `TODO(EZ-SR-TL-*
 
 | 层级 | 负责 | 不负责 |
 |------|------|--------|
-| `osu.Game/EzOsuGame/Scoring/*` | IEzReplaySession、Timeline/Race 编排、cache 接口、ReplayRunPurpose | 判定、press 匹配、HitMode Mapping |
-| `Rulesets.Mania/.../ReplayJudge/*` | ManiaReplaySession、RunTimeline、CreateEzReplaySession | Race HUD |
-| `Rulesets.Osu/.../ReplayJudge/*` | OsuReplaySession、RunTimeline、CreateEzReplaySession | Race HUD |
-| `Rulesets.Osu/.../OsuScoreHitEventGenerator` | 薄壳委托 `OsuReplaySessionService` | 判定精度（**OSL-010**，临时 press 匹配） |
+| `osu.Game/EzOsuGame/Scoring/*` | IEzReplaySession、Timeline/Race 编排、cache 接口、ReplayRunPurpose | Shadow 判定实现、HitMode Mapping |
+| `Rulesets.Mania/.../ReplayJudge/*` | ManiaReplaySession、HitMode Mapping、CreateEzReplaySession | Race HUD |
+| `Rulesets.Osu/.../ReplayJudge/Shadow/*` | **OSL-010** 影子判定引擎 | Race HUD |
+| `Rulesets.Osu/.../ReplayJudge/*` | OsuReplaySession、Service、Timeline | 判定细节 |
+| `Rulesets.Osu/.../OsuScoreHitEventGenerator` | 薄壳委托 Session | Shadow 判定 |
+| Catch / Taiko（远期） | 同 Shadow 分层，见 REPLAY_JUDGE_SHADOW.md | Mania 式 HitMode 双轨 |
 | ~~EzScoreTimelineBridge~~ | **已删除（TL-005）** | 静态注册反模式 |
 
 目标：`ruleset.CreateEzReplaySession()` → `RunTimelineDirectAsync` / `RunAsync`。
@@ -216,9 +220,8 @@ flowchart LR
 
 ### §4.2 Phase 3 范围备忘（无 OSL 编号）
 
-- **Osu Session MVP（OSL-007）** — 架构已 Session 一遍 SP；**判定仍为临时 press 匹配**（与旧 Generator 同精度，见 **OSL-010**）。已知缺口：slider 主体 / spinner / 光标轨迹 vs Drawable。
-- **OSL-010（精度 epic，未排期）** — 无绘制判定对齐 Drawable/ReplayPlayer；仿 Mania `TestSceneReplaySessionParity`；估 3–6 人周；刻意不在 Phase 3 破坏性改动 Osu 模式层。
-- **Taiko / Catch Session** — 远期；待 Osu 黄金路径验证后再开独立前缀或 OSL 后继项。
+- **Osu Shadow（OSL-010，进行中）** — `ReplayJudge/Shadow/` 帧时钟 + 对象状态机；**不**拆 Mania 式 HitMode。S1 Circle ✓ 骨架；S2 Slider；S3 Spinner；S4 Parity。
+- **Catch / Taiko Session** — 远期；**沿用 Shadow 统一思路**（见 REPLAY_JUDGE_SHADOW.md §5），不破坏各 mode Drawable 元机制。
 - **Ruleset 级 `ResolveEnvironment`** — Phase 3 各 ruleset Session 时再评估（§1.7f）。
 - **TL-021 动态变速 Mod ghost 时钟** — doc-only，不阻塞 OSL。
 
@@ -268,7 +271,7 @@ flowchart LR
 | OSL-007 | **done** | Osu | `OsuReplaySession` + Service + `CreateEzReplaySession` |
 | OSL-008 | **done** | Osu | 删 `EzScoreTimelineHitEventsLegacy` + `RegisterHitEventFallback` |
 | OSL-009 | **done** | Osu | Generator 瘦身为 Session 委托 |
-| OSL-010 | **deferred** | Osu | Session/Generator **判定精度**：press 匹配 → Drawable parity；`OsuReplaySessionSimulator` |
+| OSL-010 | **in_progress** | Osu | Shadow 判定：`Shadow/OsuReplayShadowEngine`；S1 Circle → S4 Parity；Catch/Taiko 文档已统一 |
 
 ---
 

@@ -15,10 +15,10 @@ using osu.Game.Utils;
 namespace osu.Game.Rulesets.Osu.EzOsu.ReplayJudge
 {
     /// <summary>
-    /// 无绘制 Osu replay 判定 Session：press 匹配 → <see cref="JudgementProcessor.ApplyResult"/> → PopulateScore。
+    /// 无绘制 Osu replay Session：影子判定 → <see cref="JudgementProcessor.ApplyResult"/> → PopulateScore。
     /// </summary>
     /// <remarks>
-    /// 判定精度为临时 press 匹配（<c>TODO(EZ-SR-OSL-010)</c>）；角逐 Timeline 与 Generator 同源。
+    /// 判定由 <see cref="Shadow.OsuReplayShadowEngine"/> 驱动（<c>TODO(EZ-SR-OSL-010)</c>）；Catch/Taiko 远期同思路见 REPLAY_JUDGE_SHADOW.md。
     /// </remarks>
     public static class OsuReplaySession
     {

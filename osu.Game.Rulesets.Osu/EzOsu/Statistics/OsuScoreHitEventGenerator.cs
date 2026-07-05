@@ -16,7 +16,7 @@ namespace osu.Game.Rulesets.Osu.EzOsu.Statistics
     /// Osu 成绩 <see cref="HitEvent"/> 生成器；委托 <see cref="OsuReplaySessionService.RunHitEventsAsync"/> 作为唯一判定源。
     /// </summary>
     /// <remarks>
-    /// 精度与 <see cref="OsuReplaySessionSimulator"/> press 匹配相同（临时方案）；见 <c>TODO(EZ-SR-OSL-010)</c>。
+    /// 精度由 Shadow 引擎决定（<c>TODO(EZ-SR-OSL-010)</c>）；见 REPLAY_JUDGE_SHADOW.md。
     /// </remarks>
     public sealed class OsuScoreHitEventGenerator
     {
@@ -37,7 +37,7 @@ namespace osu.Game.Rulesets.Osu.EzOsu.Statistics
             return replay.Frames.OfType<OsuReplayFrame>().Any();
         }
 
-        // TODO(EZ-SR-OSL-010): Generate 不独立算判；精度上限 = Session press 匹配。替换方向见 OsuReplaySessionSimulator。
+        // TODO(EZ-SR-OSL-010): Generate 不独立算判；精度 = OsuReplayShadowEngine（S2 Slider / S3 Spinner 待补齐）。
         public List<HitEvent> Generate(Score score, IBeatmap playableBeatmap, CancellationToken cancellationToken = default)
         {
             return session_service.RunHitEventsAsync(score, playableBeatmap, cancellationToken).GetAwaiter().GetResult();
