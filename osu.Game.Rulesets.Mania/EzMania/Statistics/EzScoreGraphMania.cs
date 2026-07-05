@@ -156,8 +156,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
 
             if (info == null)
             {
-                // CommittedNowScore 未就绪时：静默保持上一次有效 Now 数据，不走同步 fallback 分支。
-                // 异步 RefreshFromService 完成后更新 CommittedNowScore，届时自然触发本方法重算。
+                RecalculateNowFromDisplayEvents();
                 return;
             }
 
@@ -279,9 +278,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
                 // 切换到 O2Jam 时立即同步 BPM，确保后续判定窗口正确
                 if (currentHitMode == EzEnumHitMode.O2Jam && Beatmap.HitObjects.Count > 0)
                     hitWindowsNow.UpdateO2JamBpmFromTime(Beatmap.HitObjects[0].StartTime);
-                // 不清 CommittedNowScore，Now 数据静默保持上一次有效值。
-                // 异步 RefreshFromService 完成后自然刷新 Now 数据。
-                _ = RefreshFromService();
+                onReplayConfigChanged();
             });
 
             healthModeBindable.BindValueChanged(__ =>
@@ -290,17 +287,10 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
             });
 
             ezConfig.GetBindable<EzEnumJudgePrecedence>(Ez2Setting.JudgePrecedence)
-                    .BindValueChanged(__ =>
-                    {
-                        // CommittedNowScore 由 RefreshFromService 完成后刷新
-                        _ = RefreshFromService();
-                    });
+                    .BindValueChanged(__ => onReplayConfigChanged());
 
             ezConfig.GetBindable<bool>(Ez2Setting.BmsPoorHitResultEnable)
-                    .BindValueChanged(__ =>
-                    {
-                        _ = RefreshFromService();
-                    });
+                    .BindValueChanged(__ => onReplayConfigChanged());
 
             offsetPlusMania.BindValueChanged(v => OnOffsetChanged(v.NewValue), true);
 
@@ -392,6 +382,26 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
             return counts;
         }
 
+        /// <summary>
+        /// 左侧统计表应展示的判定行（跟随当前 HitMode 有效集合，含 KPoor、ComboBreak）。
+        /// </summary>
+        internal static IReadOnlyList<HitResult> GetOrderedStatHitResults(EzEnumHitMode hitMode)
+            => HitModeHelper.GetHitModeValidHitResults(hitMode)
+                            .Where(r => r is not (HitResult.IgnoreHit or HitResult.IgnoreMiss))
+                            .OrderBy(r => r.GetIndexForOrderedDisplay())
+                            .ToList();
+
+        /// <summary>
+        /// HitMode / 重判相关配置变更：清空 Session 缓存，即时 rejudge 展示，并异步重跑 Session。
+        /// </summary>
+        private void onReplayConfigChanged()
+        {
+            CommittedNowScore = null;
+            InvalidateTextUi();
+            Refresh();
+            _ = RefreshFromService();
+        }
+
         /// <summary>Graph 展示层时间轴：Now 为空时回退 Original。</summary>
         internal static double ComputeTimeRangeForTesting(IReadOnlyList<HitEvent> displayEvents, IReadOnlyList<HitEvent> fallbackEvents)
         {
@@ -472,10 +482,13 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
             OffsetOverlayText.Alpha = show ? 1 : 0;
         }
 
-        private SimpleStatisticItem<string>[]? statItems; // 缓存文本 item 引用，供 UpdateTextValues 只更新数值
+        private SimpleStatisticItem<string>[]? statItems; // 缓存固定行（Acc/Score/Pauses）引用
+        private readonly Dictionary<HitResult, SimpleStatisticItem<string>> judgementStatItems = new Dictionary<HitResult, SimpleStatisticItem<string>>();
 
         protected override void CreateTextUI()
         {
+            judgementStatItems.Clear();
+
             // 创建带默认占位值的 item 列表
             var items = new List<SimpleStatisticItem<string>>
             {
@@ -491,22 +504,15 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
                 makeSimpleStat("Now | V1", "↓", Colours.Gray8),
             };
 
-            // 从 Now+V1 判定集合构建每个判定行的 item
-            List<HitResult> results = NowCounts.Keys
-                                               .Concat(V1Counts.Keys)
-                                               .Distinct()
-                                               .Where(r => r.IsBasic() || r == HitResult.Poor)
-                                               .OrderBy(r => r.GetIndexForOrderedDisplay())
-                                               .ToList();
-
-            foreach (var r in results)
+            foreach (var r in GetOrderedStatHitResults(currentHitMode))
             {
                 string name = r.GetHitModeDisplayName().ToString();
                 var c = Colours.ForHitResult(r);
-                items.Add(makeSimpleStat("—", name, c));
+                var item = makeSimpleStat("—", name, c);
+                judgementStatItems[r] = item;
+                items.Add(item);
             }
 
-            // 缓存所有文本 item 引用
             statItems = items.ToArray();
 
             const float label_area_width = 35f;
@@ -575,24 +581,14 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
             // statItems[6] = Pauses（pauses 不随 offset 变化，无需更新）
             // statItems[7] = "↓" 分隔线，不需更新
 
-            int idx = 8; // 静态行之后是动态判定行
-            List<HitResult> results = NowCounts.Keys
-                                               .Concat(V1Counts.Keys)
-                                               .Distinct()
-                                               .Where(r => r.IsBasic() || r == HitResult.Poor)
-                                               .OrderBy(r => r.GetIndexForOrderedDisplay())
-                                               .ToList();
-
-            foreach (var r in results)
+            foreach (var r in GetOrderedStatHitResults(currentHitMode))
             {
-                int v2Count = NowCounts.GetValueOrDefault(r, 0);
-                int v1Count = V1Counts.GetValueOrDefault(r, 0);
+                if (!judgementStatItems.TryGetValue(r, out var item))
+                    continue;
 
-                if (idx < statItems.Length)
-                {
-                    statItems[idx].Value = $"{v2Count} | {v1Count}";
-                    idx++;
-                }
+                int nowCount = NowCounts.GetValueOrDefault(r, 0);
+                int v1Count = V1Counts.GetValueOrDefault(r, 0);
+                item.Value = $"{nowCount} | {v1Count}";
             }
         }
 

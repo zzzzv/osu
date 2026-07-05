@@ -23,9 +23,9 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.Statistics
 {
     /// <summary>
     /// 验证 <see cref="EzScoreGraphMania"/> 核心逻辑：
-    /// - Now 数据只在 Session 结果就绪后才刷新
-    /// - CommittedNowScore 为 null 时不更新 NowCounts/NowAccuracy/NowScore
-    /// - 切 HitMode 不清 CommittedNowScore，静默保持上一次有效值
+    /// - 判定行跟随当前 HitMode 有效集合（含 KPoor、ComboBreak）
+    /// - Session 未就绪时 Now 列走 rejudge fallback
+    /// - 判定计数按 HitResult 键映射，避免 idx 错位
     /// </summary>
     [TestFixture]
     public class EzScoreGraphManiaTests
@@ -80,9 +80,9 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.Statistics
 
             // 过滤后总计数应等于 session 产出的所有有效判定总数
             int expectedTotal = statistics
-                .Where(kvp => kvp.Value > 0)
-                .Where(kvp => kvp.Key.IsBasic() || kvp.Key == HitResult.Poor || kvp.Key == HitResult.Miss)
-                .Sum(kvp => kvp.Value);
+                                .Where(kvp => kvp.Value > 0)
+                                .Where(kvp => kvp.Key.IsBasic() || kvp.Key == HitResult.Poor || kvp.Key == HitResult.Miss)
+                                .Sum(kvp => kvp.Value);
 
             Assert.That(extractedTotal, Is.EqualTo(expectedTotal),
                 "ExtractDisplayCounts 总计数应与 session Statistics 有效判定数一致");
@@ -153,9 +153,9 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.Statistics
             ReplayJudgeTestConfig.ApplyToGlobalConfig(env);
 
             // 使用固定偏移（25ms）在不同 BPM 下验证
-            double tapOffset = 25;
-            var (score120, beatmap120) = createTapOnlyFixture(new[] { tapOffset }, bpm: 120);
-            var (score200, beatmap200) = createTapOnlyFixture(new[] { tapOffset }, bpm: 200);
+            const double tap_offset = 25;
+            var (score120, beatmap120) = createTapOnlyFixture(new[] { tap_offset }, bpm: 120);
+            var (score200, beatmap200) = createTapOnlyFixture(new[] { tap_offset }, bpm: 200);
 
             var session120 = ManiaReplaySession.Run(score120.DeepClone(), beatmap120, env);
             var session200 = ManiaReplaySession.Run(score200.DeepClone(), beatmap200, env);
@@ -166,6 +166,75 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.Statistics
             // BPM 120 窗口更大 → 相同偏移在 BPM 120 下判定不差于 BPM 200
             Assert.That((int)result120, Is.GreaterThanOrEqualTo((int)result200),
                 $"BPM 120 结果({result120}) 应不差于 BPM 200 ({result200})");
+        }
+
+        [Test]
+        public void TestGetOrderedStatHitResultsForBmsIncludesKpoorAndComboBreak()
+        {
+            var results = EzScoreGraphMania.GetOrderedStatHitResults(EzEnumHitMode.IIDX_HD);
+
+            Assert.That(results, Does.Contain(HitResult.Meh));
+            Assert.That(results, Does.Contain(HitResult.Miss));
+            Assert.That(results, Does.Contain(HitResult.Poor));
+            Assert.That(results, Does.Contain(HitResult.ComboBreak));
+            Assert.That(results, Does.Not.Contain(HitResult.IgnoreHit));
+            Assert.That(results, Does.Not.Contain(HitResult.IgnoreMiss));
+        }
+
+        [Test]
+        public void TestBmsExtractDisplayCountsSeparatesBadAndKpoor()
+        {
+            var (score, beatmap, _) = HitModeReplayFixtures.CreateBmsEarlyBadWithPostBadKPoor();
+            var bmsEnv = ReplayJudgeTestConfig.Create(EzEnumHitMode.IIDX_HD, EzEnumHealthMode.IIDX_HD, bmsPoorHitResultEnable: true);
+
+            var bmsSession = ManiaReplaySession.Run(score.DeepClone(), beatmap, bmsEnv);
+            var counts = EzScoreGraphMania.ExtractDisplayCounts(bmsSession.ScoreInfo.Statistics, EzEnumHitMode.IIDX_HD);
+
+            Assert.That(counts.GetValueOrDefault(HitResult.Meh, 0), Is.GreaterThan(0), "Bad(Meh) 应单独计数");
+            Assert.That(counts.GetValueOrDefault(HitResult.Poor, 0), Is.GreaterThan(0), "KPoor(Poor) 应单独计数");
+            Assert.That(counts.GetValueOrDefault(HitResult.Meh, 0), Is.Not.EqualTo(counts.Values.Sum()),
+                "Bad 计数不应吞并其它判定");
+        }
+
+        [Test]
+        public void TestJudgementStatMappingUsesHitResultNotIndex()
+        {
+            const EzEnumHitMode hit_mode = EzEnumHitMode.IIDX_HD;
+            var nowCounts = new Dictionary<HitResult, int>
+            {
+                [HitResult.Perfect] = 1,
+                [HitResult.Great] = 2,
+                [HitResult.Good] = 3,
+                [HitResult.Meh] = 4,
+                [HitResult.Miss] = 5,
+                [HitResult.Poor] = 6,
+            };
+            var v1Counts = new Dictionary<HitResult, int>
+            {
+                [HitResult.Perfect] = 10,
+                [HitResult.Meh] = 40,
+                [HitResult.Miss] = 50,
+            };
+
+            foreach (var r in EzScoreGraphMania.GetOrderedStatHitResults(hit_mode))
+            {
+                string formatted = $"{nowCounts.GetValueOrDefault(r, 0)} | {v1Counts.GetValueOrDefault(r, 0)}";
+
+                switch (r)
+                {
+                    case HitResult.Meh:
+                        Assert.That(formatted, Is.EqualTo("4 | 40"), "Bad 行应对应 Meh 键而非按 idx 错位");
+                        break;
+
+                    case HitResult.Miss:
+                        Assert.That(formatted, Is.EqualTo("5 | 50"), "Poor 行应对应 Miss 键");
+                        break;
+
+                    case HitResult.Poor:
+                        Assert.That(formatted, Is.EqualTo("6 | 0"), "KPoor 行应对应 Poor 键");
+                        break;
+                }
+            }
         }
 
         // ---- 以下是从 EzScoreGraphRejudgeParityTest 复制的辅助方法 ----

@@ -402,6 +402,11 @@ namespace osu.Game.EzOsuGame.Statistics
         private bool textInitialized;
 
         /// <summary>
+        /// 标记文本统计 UI 需在下次 <see cref="UpdateText"/> 时重建（例如 HitMode 切换导致判定行集合变化）。
+        /// </summary>
+        protected void InvalidateTextUi() => textInitialized = false;
+
+        /// <summary>
         /// 更新文本显示。首次调用或 <see cref="UpdateDisplay"/> 全量刷新后调用 <see cref="CreateTextUI"/> 重建 UI，
         /// 后续调用（如 offset 拖动时）仅调用 <see cref="UpdateTextValues"/> 更新数值。
         /// </summary>
@@ -526,8 +531,6 @@ namespace osu.Game.EzOsuGame.Statistics
                 // offset 归零：清除上次 Session 的残留结果，
                 // 让 FilterHitEvents 回退到 OriginalHitEvents，避免残留旧 offset 嵌入事件。
                 CommittedNowScore = null;
-                RefreshDisplayOnly(0);
-                return;
             }
 
             // 立即应用 display-only（轻量重绘）
