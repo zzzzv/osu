@@ -2,7 +2,9 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using System.IO;
 using System.Linq;
+using Microsoft.Data.Sqlite;
 using NUnit.Framework;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
@@ -10,6 +12,7 @@ using osu.Framework.Extensions;
 using osu.Framework.Testing;
 using osu.Game.Beatmaps;
 using osu.Game.Database;
+using osu.Game.EzOsuGame.Analysis;
 using osu.Game.Rulesets;
 using osu.Game.Rulesets.Osu.Mods;
 using osu.Game.Scoring;
@@ -17,6 +20,7 @@ using osu.Game.Scoring.Legacy;
 using osu.Game.Screens.Play;
 using osu.Game.Tests.Beatmaps.IO;
 using osu.Game.Tests.Visual;
+using SQLitePCL;
 
 namespace osu.Game.Tests.Database
 {
@@ -39,6 +43,66 @@ namespace osu.Game.Tests.Database
         public void SetUpSteps()
         {
             AddStep("Set not playing", () => isPlaying.Value = LocalUserPlayingState.NotPlaying);
+            AddStep("Prepare processor test environment", prepareProcessorTestEnvironment);
+        }
+
+        private void prepareProcessorTestEnvironment()
+        {
+            ensureLocalMetadataCachePresent();
+
+            Realm.Write(r =>
+            {
+                foreach (var ruleset in r.All<RulesetInfo>())
+                {
+                    if (!ruleset.Available)
+                        continue;
+
+                    try
+                    {
+                        int difficultyVersion = ruleset.CreateInstance().CreateDifficultyCalculator(Beatmap.Value).Version;
+                        ruleset.LastAppliedDifficultyVersion = difficultyVersion;
+                    }
+                    catch (RulesetLoadException)
+                    {
+                        continue;
+                    }
+
+                    if (EzXxyStarRatingSupport.TryGetXxyStarRatingVersion(ruleset, out int xxyVersion))
+                        ruleset.LastAppliedXxySrVersion = xxyVersion;
+                }
+
+                foreach (var beatmap in r.All<BeatmapInfo>())
+                {
+                    if (beatmap.XxyStarRating < 0 && EzXxyStarRatingSupport.SupportsRuleset(beatmap.Ruleset))
+                        beatmap.XxyStarRating = beatmap.StarRating >= 0 ? beatmap.StarRating : 0;
+
+                    if (beatmap.PerformancePoints < 0 && EzXxyStarRatingSupport.IsRulesetAvailable(beatmap.Ruleset))
+                        beatmap.PerformancePoints = 0;
+
+                    beatmap.HasVideo ??= false;
+                    beatmap.HasStoryboard ??= false;
+                }
+            });
+        }
+
+        private void ensureLocalMetadataCachePresent()
+        {
+            const string cache_database_name = "online.db";
+
+            if (LocalStorage.Exists(cache_database_name))
+                return;
+
+            Batteries_V2.Init();
+
+            using (var connection = new SqliteConnection($"Data Source={LocalStorage.GetFullPath(cache_database_name)}"))
+            {
+                connection.Open();
+
+                using var command = connection.CreateCommand();
+                command.CommandText = @"CREATE TABLE schema_version (number INTEGER NOT NULL);
+INSERT INTO schema_version (number) VALUES (3);";
+                command.ExecuteNonQuery();
+            }
         }
 
         [Test]
