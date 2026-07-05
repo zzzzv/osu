@@ -212,6 +212,7 @@ namespace osu.Game.EzOsuGame.SkinEditor
                 }
 
                 float spacingError = Math.Abs(computeGap(isHorizontal, proposedBounds, candidate) - snapDistance);
+
                 if (spacingError < bestError)
                 {
                     bestError = spacingError;

@@ -54,13 +54,13 @@ namespace osu.Game.EzOsuGame.SkinEditor
 
         public float SpacingIntent;
 
-        public bool IsActive => Kind != SkinHudSnapAlignKind.None;
+        public readonly bool IsActive => Kind != SkinHudSnapAlignKind.None;
 
-        public bool IsComponentEdgeOrCenter =>
+        public readonly bool IsComponentEdgeOrCenter =>
             Kind is SkinHudSnapAlignKind.Edge or SkinHudSnapAlignKind.Center
             && ReferenceKind == SkinHudSnapReferenceKind.Component;
 
-        public bool SupportsComponentOrthogonalSpacing(int componentIndex) =>
+        public readonly bool SupportsComponentOrthogonalSpacing(int componentIndex) =>
             IsComponentEdgeOrCenter && ReferenceComponentIndex == componentIndex;
 
         public void Reset()

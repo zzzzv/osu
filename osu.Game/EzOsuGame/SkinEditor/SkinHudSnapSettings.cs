@@ -9,17 +9,17 @@ namespace osu.Game.EzOsuGame.SkinEditor
 {
     public static class SkinHudSnapSettings
     {
-        public static readonly float[] DistancePresets = { 10, 15, 20, 25, 50 };
+        public static readonly float[] DISTANCE_PRESETS = { 10, 15, 20, 25, 50 };
 
         public static bool CanSnap(GlobalSkinnableContainerLookup? target) =>
             target?.Lookup is GlobalSkinnableContainers.MainHUDComponents or GlobalSkinnableContainers.SongSelect;
 
         public static float SnapToPreset(float value)
         {
-            if (DistancePresets.Contains(value))
+            if (DISTANCE_PRESETS.Contains(value))
                 return value;
 
-            return DistancePresets.OrderBy(p => Math.Abs(p - value)).First();
+            return DISTANCE_PRESETS.OrderBy(p => Math.Abs(p - value)).First();
         }
     }
 }

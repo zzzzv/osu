@@ -19,11 +19,11 @@ namespace osu.Game.EzOsuGame.SkinEditor
         {
             this.snapDistance = snapDistance;
 
-            var items = new TernaryStateRadioMenuItem[SkinHudSnapSettings.DistancePresets.Length];
+            var items = new TernaryStateRadioMenuItem[SkinHudSnapSettings.DISTANCE_PRESETS.Length];
 
-            for (int i = 0; i < SkinHudSnapSettings.DistancePresets.Length; i++)
+            for (int i = 0; i < SkinHudSnapSettings.DISTANCE_PRESETS.Length; i++)
             {
-                float preset = SkinHudSnapSettings.DistancePresets[i];
+                float preset = SkinHudSnapSettings.DISTANCE_PRESETS[i];
                 items[i] = createMenuItem(preset);
             }
 
