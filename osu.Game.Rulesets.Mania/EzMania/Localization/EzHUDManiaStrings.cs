@@ -78,5 +78,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.Localization
 
         public static readonly LocalisableString MATCH_PANEL_WIDTH_LABEL = new EzLocalizationManager.EzLocalisableString("关联Mania面板总宽", "Match Mania Stage Width");
         public static readonly LocalisableString MATCH_PANEL_WIDTH_DESCRIPTION = new EzLocalizationManager.EzLocalisableString("开启后 HUD 列宽与 Mania 面板一致", "When enabled, HUD column widths match the Mania playfield panel.");
+
+        public static readonly LocalisableString MATCH_HIT_POSITION_LABEL = new EzLocalizationManager.EzLocalisableString("关联判定线高度", "Match Hit Position");
+        public static readonly LocalisableString MATCH_HIT_POSITION_DESCRIPTION = new EzLocalizationManager.EzLocalisableString("开启后高度与 Ez 判定线高度设置一致", "When enabled, height follows the Ez HitPosition setting.");
     }
 }
