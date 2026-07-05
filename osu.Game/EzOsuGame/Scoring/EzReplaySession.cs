@@ -46,11 +46,7 @@ namespace osu.Game.EzOsuGame.Scoring
         {
             try
             {
-                var (score, timeline, environment) = await getOrRunSession(
-                    request.Score,
-                    request.Beatmap,
-                    request.Purpose,
-                    cancellationToken).ConfigureAwait(false);
+                var (score, timeline, environment) = await getOrRunSession(request, cancellationToken).ConfigureAwait(false);
 
                 return new ReplayRunResult(score, timeline, environment, hitCache: false, isValidReplay: true);
             }
@@ -71,20 +67,25 @@ namespace osu.Game.EzOsuGame.Scoring
         }
 
         private async Task<(Score Score, EzScoreTimeline Timeline, GameplayEnvironment Environment)> getOrRunSession(
+            ReplayRunRequest request,
+            CancellationToken cancellationToken)
+        {
+            var resolvedEnv = ResolveEnvironment(request);
+
+            var result = await GetOrCreate(
+                sessionRunCache,
+                BuildCacheKey($"session:{request.Purpose}", request.Score, request.Beatmap, resolvedEnv),
+                () => runSessionDirect(request.Score, request.Beatmap, resolvedEnv, cancellationToken)).ConfigureAwait(false);
+
+            return (result.Score, result.Timeline, resolvedEnv);
+        }
+
+        private async Task<(Score Score, EzScoreTimeline Timeline, GameplayEnvironment Environment)> getOrRunSession(
             Score score,
             IBeatmap beatmap,
             ReplayRunPurpose purpose,
             CancellationToken cancellationToken)
-        {
-            var resolvedEnv = ResolveEnvironment(score, purpose);
-
-            var result = await GetOrCreate(
-                sessionRunCache,
-                BuildCacheKey($"session:{purpose}", score, beatmap, resolvedEnv),
-                () => runSessionDirect(score, beatmap, resolvedEnv, cancellationToken)).ConfigureAwait(false);
-
-            return (result.Score, result.Timeline, resolvedEnv);
-        }
+            => await getOrRunSession(new ReplayRunRequest(score, beatmap, purpose), cancellationToken).ConfigureAwait(false);
 
         private Task<(Score Score, EzScoreTimeline Timeline)> runSessionDirect(Score score, IBeatmap beatmap, IGameplayEnvironment environment, CancellationToken cancellationToken)
         {
@@ -93,6 +94,12 @@ namespace osu.Game.EzOsuGame.Scoring
                 cancellationToken.ThrowIfCancellationRequested();
                 return RunWithTimeline(score, beatmap, environment, cancellationToken);
             }, cancellationToken);
+        }
+
+        protected static GameplayEnvironment ResolveEnvironment(ReplayRunRequest request)
+        {
+            var env = GlobalConfigStore.EzConfig.ResolveForSession(request.Purpose, request.Score.ScoreInfo);
+            return request.OffsetPlusMania == 0 ? env : env with { OffsetPlusMania = request.OffsetPlusMania };
         }
 
         protected static GameplayEnvironment ResolveEnvironment(Score score, ReplayRunPurpose purpose)

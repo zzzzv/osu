@@ -13,6 +13,7 @@ using osu.Framework.Logging;
 using osu.Game.Beatmaps;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Extensions;
+using osu.Game.EzOsuGame.Scoring;
 using osu.Game.EzOsuGame.Statistics;
 using osu.Game.Rulesets.Mania.EzMania.Helper;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
@@ -133,22 +134,26 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
             return applyFakeOffsetToEvents(filtered);
         }
 
-        /// <summary>展示层叠加 OffsetPlusMania；Session 统计用 offset=0 环境。</summary>
+        /// <summary>展示层预览：相对已提交 Session offset 的 delta。</summary>
         private IReadOnlyList<HitEvent> applyFakeOffsetToEvents(IEnumerable<HitEvent> events)
         {
             var list = events.ToList();
+            double delta = offsetPlusMania.Value - CommittedSessionOffset;
 
-            if (offsetPlusMania.Value == 0)
+            if (delta == 0)
                 return list;
 
             return list.Select(e => new HitEvent(
-                e.TimeOffset + offsetPlusMania.Value,
+                e.TimeOffset + delta,
                 e.GameplayRate,
                 e.Result,
                 e.HitObject,
                 e.LastHitObject,
                 e.Position)).ToList();
         }
+
+        protected override ReplayRunRequest CreateReplayRunRequest(Score score)
+            => new ReplayRunRequest(score, Beatmap, ReplayRunPurpose.ForLive, offsetPlusMania.Value);
 
         protected override void CalculateNowAccuracy()
         {
@@ -160,9 +165,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
                 return;
             }
 
-            // Session 重放路径：从 Statistics 提取判定计数（已按当前 HitMode 重新判定）
             NowCounts = extractDisplayCounts(info.Statistics);
-            (NowAccuracy, NowScore) = computeNowAccuracyAndScore(NowCounts, currentHitMode);
+            NowAccuracy = info.Accuracy;
+            NowScore = info.TotalScore;
             logDiffIfMismatch(info);
         }
 
@@ -340,14 +345,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
         }
 
         /// <summary>
-        /// 展示层判定结果。以下场景通过当前 <see cref="IManiaNoteJudgementStrategy.RejudgeHitEvent"/> 重新判定：
-        ///   1. offset 拖动（DisplayOffset != 0）：实时预览散点颜色变化
-        ///   2. 无 Session（CommittedNowScore == null）：HitMode 变更后重判
-        /// 有 Session 且 offset 归零时直接返回 Session 产出结果。
+        /// 展示层判定结果。滑条 offset 与已提交 Session offset 不一致时 Rejudge 预览；否则读 Session。
         /// </summary>
         protected override HitResult GetDisplayResult(HitEvent hitEvent)
         {
-            if (DisplayOffset != 0 || CommittedNowScore == null)
+            if (offsetPlusMania.Value != CommittedSessionOffset || CommittedNowScore == null)
             {
                 var strategy = ManiaJudgementRegistry.GetHitModeJudgement(currentHitMode)
                                ?? (IManiaNoteJudgementStrategy)LazerNoteJudgementReplica.Instance;
@@ -397,6 +399,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
         private void onReplayConfigChanged()
         {
             CommittedNowScore = null;
+            CommittedSessionOffset = 0;
             InvalidateTextUi();
             Refresh();
             _ = RefreshFromService();
