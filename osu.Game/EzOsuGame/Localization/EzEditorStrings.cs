@@ -101,6 +101,18 @@ namespace osu.Game.EzOsuGame.Localization
             "固定note网格",
             "Fixed note grid");
 
+        public static readonly LocalisableString MENU_HUD_SNAP = new EzLocalizationManager.EzLocalisableString(
+            "HUD磁吸",
+            "HUD snap");
+
+        public static readonly LocalisableString MENU_HUD_SNAP_DISTANCE = new EzLocalizationManager.EzLocalisableString(
+            "吸附距离",
+            "Snap distance");
+
+        public static readonly LocalisableString MENU_HUD_SNAP_PIXEL_FLUSH = new EzLocalizationManager.EzLocalisableString(
+            "像素吸附",
+            "Pixel snap (rendered bounds; off = editor container box)");
+
         #endregion
 
         #region Notifications

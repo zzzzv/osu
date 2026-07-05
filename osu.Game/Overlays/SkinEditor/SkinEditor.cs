@@ -192,6 +192,7 @@ namespace osu.Game.Overlays.SkinEditor
                                                         cloneMenuItem = new EditorMenuItem(CommonStrings.Clone, MenuItemType.Standard, Clone) { Hotkey = new Hotkey(GlobalAction.EditorCloneSelection) },
                                                     }
                                                 },
+                                                createEzSettingsMenu(),
                                             }
                                         },
                                         headerText = new OsuTextFlowContainer

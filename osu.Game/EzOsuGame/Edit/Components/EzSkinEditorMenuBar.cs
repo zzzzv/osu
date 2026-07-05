@@ -17,7 +17,7 @@ namespace osu.Game.EzOsuGame.Edit.Components
     /// </summary>
     public partial class EzSkinEditorMenuBar : EditorMenuBar
     {
-        public const float HEIGHT = SkinEditor.MENU_HEIGHT;
+        public const float HEIGHT = Game.Overlays.SkinEditor.SkinEditor.MENU_HEIGHT;
 
         public Action? ApplyAction { get; set; }
 
