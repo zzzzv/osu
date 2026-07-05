@@ -17,7 +17,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.LAsMods
     {
         public override string Name => "Note Cleanup";
 
-        public override string Acronym => "NC";
+        public override string Acronym => "NCl";
 
         public override LocalisableString Description => NoteCleanupStrings.NOTE_CLEANUP_DESCRIPTION;
 
