@@ -27,6 +27,7 @@ using osu.Game.Replays;
 using osu.Game.Rulesets.Mania.Beatmaps;
 using osu.Game.Rulesets.Mania.Configuration;
 using osu.Game.Rulesets.Mania.EzMania;
+using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
 using osu.Game.Rulesets.Mania.Objects;
 using osu.Game.Rulesets.Mania.Objects.EzCurrentHitObject;
 using osu.Game.Rulesets.Mania.Replays;
@@ -100,6 +101,11 @@ namespace osu.Game.Rulesets.Mania.UI
 
         int IManiaGameplayModeSnapshot.HitMode => (int)gameplayHitMode;
         int IManiaGameplayModeSnapshot.HealthMode => (int)ManiaHealthProcessor.ActiveHealthMode;
+
+        /// <summary>
+        /// 本局冻结的判定上下文；热路径读取此实例，禁止再解析全局配置。
+        /// </summary>
+        public ManiaJudgementRound? JudgementRound { get; private set; }
 
         private readonly Bindable<EzManiaScrollingStyle> scrollingStyle = new Bindable<EzManiaScrollingStyle>();
         private readonly BindableDouble configBaseMs = new BindableDouble();
@@ -185,6 +191,9 @@ namespace osu.Game.Rulesets.Mania.UI
             base.LoadComplete();
 
             gameplayHitMode = hitModeBindable.Value;
+
+            var purpose = ReplayScore != null ? ReplayRunPurpose.ForStored : ReplayRunPurpose.ForLive;
+            JudgementRound = ManiaJudgementRound.Create(ezConfig.ResolveEnvironment(purpose, ReplayScore?.ScoreInfo));
 
             hitModeBindable.BindValueChanged(h =>
             {
