@@ -280,9 +280,38 @@ namespace osu.Game.EzOsuGame.Configuration
         #region 公共方法
 
         /// <summary>
-        /// 从当前配置读取实时游玩环境快照。
+        /// 从当前配置读取实时游玩环境快照（等同 <see cref="ResolveEnvironment"/> + <see cref="ReplayRunPurpose.ForLive"/>）。
         /// </summary>
-        public GameplayEnvironment GetGameplayEnvironment() => new GameplayEnvironment
+        public GameplayEnvironment GetGameplayEnvironment()
+            => ResolveEnvironment(ReplayRunPurpose.ForLive);
+
+        /// <summary>
+        /// 统一环境解析：Purpose 决定 HitMode/HealthMode 来源；score 可选。
+        /// </summary>
+        /// <param name="purpose">
+        /// <see cref="ReplayRunPurpose.ForStored"/>：读 score 嵌入 HitMode/HealthMode（无嵌入时 Mania 回退 Lazer）。
+        /// <see cref="ReplayRunPurpose.ForLive"/>：读当前全局配置。
+        /// </param>
+        /// <param name="score">可选；ForStored 时用于嵌入模式查询。</param>
+        /// <param name="ignoreOffset">
+        /// 为 true 时强制 offset = 0（Session / 分析的 <see cref="ReplayRunPurpose.ForLive"/>）。
+        /// 省略时：<see cref="ReplayRunPurpose.ForStored"/> 恒为 0；<see cref="ReplayRunPurpose.ForLive"/> 读全局设置。
+        /// </param>
+        public GameplayEnvironment ResolveEnvironment(ReplayRunPurpose purpose, ScoreInfo? score = null, bool ignoreOffset = false)
+        {
+            var live = readLiveGameplayEnvironment();
+
+            GameplayEnvironment resolved = purpose switch
+            {
+                ReplayRunPurpose.ForStored => resolveStoredModes(live, score),
+                _ => live,
+            };
+
+            double offset = purpose == ReplayRunPurpose.ForStored || ignoreOffset ? 0 : live.OffsetPlusMania;
+            return resolved with { OffsetPlusMania = offset };
+        }
+
+        private GameplayEnvironment readLiveGameplayEnvironment() => new GameplayEnvironment
         {
             ManiaHitMode = Get<EzEnumHitMode>(Ez2Setting.ManiaHitMode),
             ManiaHealthMode = Get<EzEnumHealthMode>(Ez2Setting.ManiaHealthMode),
@@ -291,60 +320,28 @@ namespace osu.Game.EzOsuGame.Configuration
             BmsPoorHitResultEnable = Get<bool>(Ez2Setting.BmsPoorHitResultEnable),
         };
 
-        /// <summary>
-        /// Drawable 判定环境：有 replay 成绩时用 ForStored 嵌入；否则实时全局（含 <see cref="GameplayEnvironment.OffsetPlusMania"/>）。
-        /// </summary>
-        public GameplayEnvironment ResolveForDrawable(ScoreInfo? replayScore = null)
+        private static GameplayEnvironment resolveStoredModes(GameplayEnvironment live, ScoreInfo? score)
         {
-            if (replayScore != null)
-                return ResolveForSession(ReplayRunPurpose.ForStored, replayScore);
-
-            return GetGameplayEnvironment();
-        }
-
-        /// <summary>
-        /// Replay 环境解析（含 OffsetPlusMania）。Session 路径请用 <see cref="ResolveForSession"/>。
-        /// </summary>
-        internal GameplayEnvironment ResolveForReplay(ReplayRunPurpose purpose, ScoreInfo? score = null)
-        {
-            var live = GetGameplayEnvironment();
-
-            switch (purpose)
+            if (score != null && score.TryGetManiaGameplayModes(out int hitMode, out int healthMode))
             {
-                case ReplayRunPurpose.ForStored:
-
-                    if (score != null && score.TryGetManiaGameplayModes(out int hitMode, out int healthMode))
-                    {
-                        return live with
-                        {
-                            ManiaHitMode = (EzEnumHitMode)hitMode,
-                            ManiaHealthMode = (EzEnumHealthMode)healthMode,
-                            OffsetPlusMania = 0,
-                        };
-                    }
-
-                    if (score?.Ruleset.OnlineID == 3)
-                    {
-                        return live with
-                        {
-                            ManiaHitMode = EzEnumHitMode.Lazer,
-                            ManiaHealthMode = EzEnumHealthMode.Lazer,
-                            OffsetPlusMania = 0,
-                        };
-                    }
-
-                    return live with { OffsetPlusMania = 0 };
-
-                default:
-                    return live;
+                return live with
+                {
+                    ManiaHitMode = (EzEnumHitMode)hitMode,
+                    ManiaHealthMode = (EzEnumHealthMode)healthMode,
+                };
             }
-        }
 
-        /// <summary>
-        /// 非对局 replay 环境：HitMode/HealthMode 等同 <see cref="ResolveForReplay"/>，且强制 <see cref="GameplayEnvironment.OffsetPlusMania"/> = 0。
-        /// </summary>
-        public GameplayEnvironment ResolveForSession(ReplayRunPurpose purpose, ScoreInfo score)
-            => ResolveForReplay(purpose, score) with { OffsetPlusMania = 0 };
+            if (score?.Ruleset.OnlineID == 3)
+            {
+                return live with
+                {
+                    ManiaHitMode = EzEnumHitMode.Lazer,
+                    ManiaHealthMode = EzEnumHealthMode.Lazer,
+                };
+            }
+
+            return live;
+        }
 
         /// <summary>
         /// 获取列宽

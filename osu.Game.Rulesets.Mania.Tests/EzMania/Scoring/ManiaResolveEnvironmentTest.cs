@@ -40,7 +40,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.Scoring
             var scoreInfo = new ScoreInfo { Ruleset = new ManiaRuleset().RulesetInfo };
             ReplayJudgeTestConfig.ApplyEmbeddedModes(new Score { ScoreInfo = scoreInfo }, ReplayJudgeTestConfig.Create(EzEnumHitMode.IIDX_HD, EzEnumHealthMode.IIDX_HD));
 
-            var env = GlobalConfigStore.EzConfig.ResolveForSession(ReplayRunPurpose.ForStored, scoreInfo);
+            var env = GlobalConfigStore.EzConfig.ResolveEnvironment(ReplayRunPurpose.ForStored, scoreInfo);
 
             Assert.That(env.ManiaHitMode, Is.EqualTo(EzEnumHitMode.IIDX_HD));
             Assert.That(env.ManiaHealthMode, Is.EqualTo(EzEnumHealthMode.IIDX_HD));
@@ -54,7 +54,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.Scoring
         {
             var scoreInfo = new ScoreInfo { Ruleset = new ManiaRuleset().RulesetInfo };
 
-            var stored = GlobalConfigStore.EzConfig.ResolveForSession(ReplayRunPurpose.ForStored, scoreInfo);
+            var stored = GlobalConfigStore.EzConfig.ResolveEnvironment(ReplayRunPurpose.ForStored, scoreInfo);
 
             Assert.That(stored.ManiaHitMode, Is.EqualTo(EzEnumHitMode.Lazer));
             Assert.That(stored.ManiaHealthMode, Is.EqualTo(EzEnumHealthMode.Lazer));
@@ -63,11 +63,11 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.Scoring
         }
 
         [Test]
-        public void TestResolveForSessionZerosOffset()
+        public void TestResolveEnvironmentZerosOffsetForSession()
         {
             var scoreInfo = new ScoreInfo { Ruleset = new ManiaRuleset().RulesetInfo };
 
-            var session = GlobalConfigStore.EzConfig.ResolveForSession(ReplayRunPurpose.ForLive, scoreInfo);
+            var session = GlobalConfigStore.EzConfig.ResolveEnvironment(ReplayRunPurpose.ForLive, scoreInfo, ignoreOffset: true);
             var live = GlobalConfigStore.EzConfig.GetGameplayEnvironment();
 
             Assert.That(session.OffsetPlusMania, Is.EqualTo(0));
