@@ -79,6 +79,11 @@ namespace osu.Game.Rulesets.Mania.Scoring
 
         private double totalMultiplier => speedMultiplier / difficultyMultiplier;
 
+        /// <summary>
+        /// Speed / difficulty 合成乘数（O2 press-time 判定用）。
+        /// </summary>
+        public double TotalMultiplier => totalMultiplier;
+
         private double overallDifficulty;
 
         private bool classicModActive;

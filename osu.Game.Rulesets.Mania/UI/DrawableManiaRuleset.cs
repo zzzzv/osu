@@ -194,6 +194,7 @@ namespace osu.Game.Rulesets.Mania.UI
 
             var purpose = ReplayScore != null ? ReplayRunPurpose.ForStored : ReplayRunPurpose.ForLive;
             JudgementRound = ManiaJudgementRound.Create(ezConfig.ResolveEnvironment(purpose, ReplayScore?.ScoreInfo));
+            ManiaWindowBaker.Align(Beatmap, JudgementRound.Environment);
 
             hitModeBindable.BindValueChanged(h =>
             {

@@ -72,6 +72,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
         {
             public double CurrentTime { get; init; }
 
+            public double Bpm { get; init; }
+
             public bool PillCheckPassed { get; init; }
 
             public bool UpgradeToPerfect { get; init; }
@@ -80,6 +82,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
         public readonly struct DrawableTailContext
         {
             public double CurrentTime { get; init; }
+
+            public double Bpm { get; init; }
 
             public bool PillCheckPassed { get; init; }
 
@@ -107,7 +111,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
             var outcome = EvaluatePress(timeOffset, hitWindows, new NotePressContext
             {
                 RawOffset = timeOffset,
-                Bpm = O2HitModeExtension.GetBPMAtTime(context.CurrentTime),
+                Bpm = context.Bpm,
                 PillModeEnabled = true,
                 PillCheckPassed = true,
                 UpgradeToPerfect = context.UpgradeToPerfect,
@@ -132,7 +136,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
                 HoldBroken = context.HoldBroken,
                 WasHoldingBeforeRelease = context.WasHolding,
                 PillModeEnabled = context.PillModeEnabled,
-                Bpm = O2HitModeExtension.GetBPMAtTime(context.CurrentTime),
+                Bpm = context.Bpm,
                 State = state,
             });
 
@@ -146,8 +150,15 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
         }
 
         public ManiaNoteJudgementOutcome EvaluateAutoMiss(double timeOffset, HitWindows hitWindows)
+            => EvaluateAutoMiss(timeOffset, hitWindows, bpm: 0);
+
+        public ManiaNoteJudgementOutcome EvaluateAutoMiss(double timeOffset, HitWindows hitWindows, double bpm)
         {
-            if (!hitWindows.CanBeHit(timeOffset))
+            bool canHit = bpm > 0
+                ? O2HitModeExtension.CanBeHit(timeOffset, bpm, ManiaJudgementRound.GetTotalMultiplier(hitWindows))
+                : hitWindows.CanBeHit(timeOffset);
+
+            if (!canHit)
                 return ManiaNoteJudgementOutcome.ApplyResult(MapTo(O2Judge.Miss));
 
             return ManiaNoteJudgementOutcome.Ignore;
@@ -157,7 +168,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
 
         public ManiaNoteJudgementOutcome EvaluatePress(double timeOffset, HitWindows hitWindows, in NotePressContext context)
         {
-            var judge = FromHitResult(hitWindows.ResultFor(timeOffset));
+            var judge = FromHitResult(resolveResult(timeOffset, hitWindows, context.Bpm));
 
             if (judge == O2Judge.None)
                 return ManiaNoteJudgementOutcome.Ignore;
@@ -175,7 +186,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
 
         public O2Judge EvaluateTailJudge(in HoldTailEvaluationContext context)
         {
-            var judge = FromHitResult(context.HitWindows.ResultFor(context.TimeOffsetForJudgement));
+            var judge = FromHitResult(resolveResult(context.TimeOffsetForJudgement, context.HitWindows, context.Bpm));
 
             if (context.PillModeEnabled)
                 ApplyPillLogic(Math.Abs(context.RawOffset), context.Bpm, context.State, ref judge);
@@ -220,6 +231,14 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
         public bool CanBeginHoldAt(double time, TailNote tail) => LazerHoldJudgementReplica.Instance.CanBeginHoldAt(time, tail);
 
         public bool IsHoldBreak(double rawOffset, HitWindows hitWindows) => LazerHoldJudgementReplica.Instance.IsHoldBreak(rawOffset, hitWindows);
+
+        private static HitResult resolveResult(double timeOffset, HitWindows hitWindows, double bpm)
+        {
+            if (bpm > 0)
+                return O2HitModeExtension.ResultFor(timeOffset, bpm, ManiaJudgementRound.GetTotalMultiplier(hitWindows));
+
+            return hitWindows.ResultFor(timeOffset);
+        }
 
         public HitResult RejudgeHitEvent(HitEvent hitEvent, HitWindows hitWindows)
         {
