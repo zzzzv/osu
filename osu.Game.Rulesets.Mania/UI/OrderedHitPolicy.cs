@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using osu.Framework.Extensions.IEnumerableExtensions;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.Rulesets.Mania.EzMania.Helper;
+using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
 using osu.Game.Rulesets.Mania.Objects.Drawables;
 using osu.Game.Rulesets.Objects;
 using osu.Game.Rulesets.Objects.Drawables;
@@ -20,17 +21,25 @@ namespace osu.Game.Rulesets.Mania.UI
         private readonly HitObjectContainer hitObjectContainer;
         private readonly OrderedHitPolicyHelper helper;
         private readonly bool enabledPrecedence;
+        private readonly ManiaLaneController? laneController;
 
-        public OrderedHitPolicy(HitObjectContainer hitObjectContainer)
+        public OrderedHitPolicy(HitObjectContainer hitObjectContainer, EzEnumJudgePrecedence judgePrecedence, ManiaLaneController? laneController = null)
         {
             this.hitObjectContainer = hitObjectContainer;
+            this.laneController = judgePrecedence == EzEnumJudgePrecedence.Earliest ? laneController : null;
             helper = new OrderedHitPolicyHelper(hitObjectContainer);
-
-            if (GlobalConfigStore.EzConfig.Get<EzEnumJudgePrecedence>(Ez2Setting.JudgePrecedence) != EzEnumJudgePrecedence.Earliest)
-                enabledPrecedence = true;
-            else
-                enabledPrecedence = false;
+            enabledPrecedence = judgePrecedence != EzEnumJudgePrecedence.Earliest;
         }
+
+        internal void RegisterDrawable(DrawableHitObject drawable) => laneController?.Register(drawable);
+
+        internal void EnsureRegistered(DrawableHitObject drawable) => laneController?.RegisterIfNeeded(drawable);
+
+        internal void UnregisterDrawable(DrawableHitObject drawable) => laneController?.Unregister(drawable);
+
+        internal void UnregisterByHitObject(HitObject hitObject) => laneController?.UnregisterByHitObject(hitObject);
+
+        internal void NotifyJudged(DrawableHitObject drawable) => laneController?.NotifyJudged(drawable);
 
         /// <summary>
         /// Determines whether a <see cref="DrawableHitObject"/> can be hit at a point in time.
@@ -43,9 +52,11 @@ namespace osu.Game.Rulesets.Mania.UI
         /// <returns>Whether <paramref name="hitObject"/> can be hit at the given <paramref name="time"/>.</returns>
         public bool IsHittable(DrawableHitObject hitObject, double time)
         {
-            // 非Earliest模式下，允许独立的优先级算法。
             if (enabledPrecedence)
                 return helper.IsHittableWithPrecedence(hitObject, time);
+
+            if (laneController != null)
+                return laneController.IsHittableEarliest(hitObject, time);
 
             var nextObject = hitObjectContainer.AliveObjects.GetNext(hitObject);
             return nextObject == null || time < nextObject.HitObject.StartTime;
@@ -71,16 +82,25 @@ namespace osu.Game.Rulesets.Mania.UI
 
                     ((DrawableManiaHitObject)obj).MissForcefully();
                 }
-            }
-            else
-            {
-                foreach (var obj in enumerateHitObjectsUpTo(hitObject.HitObject.StartTime))
-                {
-                    if (obj.Judged)
-                        continue;
 
-                    ((DrawableManiaHitObject)obj).MissForcefully();
-                }
+                return;
+            }
+
+            if (laneController != null)
+            {
+                foreach (var entry in laneController.EnumerateForceMissBefore(hitObject.HitObject.StartTime))
+                    ((DrawableManiaHitObject)entry.Drawable).MissForcefully();
+
+                laneController.NotifyJudged(hitObject);
+                return;
+            }
+
+            foreach (var obj in enumerateHitObjectsUpTo(hitObject.HitObject.StartTime))
+            {
+                if (obj.Judged)
+                    continue;
+
+                ((DrawableManiaHitObject)obj).MissForcefully();
             }
         }
 

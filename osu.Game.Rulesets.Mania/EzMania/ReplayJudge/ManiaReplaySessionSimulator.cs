@@ -291,7 +291,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
             foreach (var candidate in candidates)
             {
-                int index = laneStates.ToList().FindIndex(s => ReferenceEquals(s, candidate));
+                int index = indexOf(laneStates, candidate);
                 if (index < 0 || !IsHittableEarliest(laneStates, index, time))
                     continue;
 
@@ -538,6 +538,17 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
             double reference = target.GetEndTime();
             return candidateList.MinBy(t => Math.Abs(t - reference));
+        }
+
+        private static int indexOf(IReadOnlyList<LaneTargetState> laneStates, LaneTargetState candidate)
+        {
+            for (int i = 0; i < laneStates.Count; i++)
+            {
+                if (ReferenceEquals(laneStates[i], candidate))
+                    return i;
+            }
+
+            return -1;
         }
     }
 }

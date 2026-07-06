@@ -221,6 +221,28 @@ namespace osu.Game.Rulesets.Mania.Tests
                 });
         }
 
+        // ==================== POLICY-PARITY: JudgePrecedence × 叠键 ====================
+
+        [TestCase(EzEnumJudgePrecedence.Earliest)]
+        [TestCase(EzEnumJudgePrecedence.Combo)]
+        [TestCase(EzEnumJudgePrecedence.Duration)]
+        public void TestLazerOverlappingJackDrawableMatchesSession(EzEnumJudgePrecedence precedence)
+        {
+            var fixture = JudgePrecedenceReplayFixtures.CreateOverlappingJack(
+                EzEnumHitMode.Lazer, EzEnumHealthMode.Lazer, precedence);
+            runDrawableParityTestFromFixture(fixture);
+        }
+
+        [TestCase(EzEnumJudgePrecedence.Earliest)]
+        [TestCase(EzEnumJudgePrecedence.Combo)]
+        [TestCase(EzEnumJudgePrecedence.Duration)]
+        public void TestIidxOverlappingJackDrawableMatchesSession(EzEnumJudgePrecedence precedence)
+        {
+            var fixture = JudgePrecedenceReplayFixtures.CreateOverlappingJack(
+                EzEnumHitMode.IIDX_HD, EzEnumHealthMode.IIDX_HD, precedence);
+            runDrawableParityTestFromFixture(fixture);
+        }
+
         // ==================== P2-B: Parity 扩到完整 Score ====================
 
         [Test]
@@ -270,6 +292,14 @@ namespace osu.Game.Rulesets.Mania.Tests
                     new ManiaReplayFrame(5000, ManiaAction.Key2),
                     new ManiaReplayFrame(5100),
                 });
+        }
+
+        private void runDrawableParityTestFromFixture((Score score, IBeatmap beatmap, GameplayEnvironment environment) fixture)
+        {
+            parityEnvironment = fixture.environment;
+            runDrawableParityTest(
+                fixture.beatmap.HitObjects.Cast<ManiaHitObject>().ToList(),
+                fixture.score.Replay.Frames);
         }
 
         private void runDrawableParityTest(List<ManiaHitObject> hitObjects, List<ReplayFrame> frames)

@@ -31,18 +31,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
     internal static class ManiaColumnSimulator
     {
         internal static bool IsHittableEarliest(IReadOnlyList<LaneTargetState> column, int index, double time)
-        {
-            for (int i = index + 1; i < column.Count; i++)
-            {
-                if (column[i].Judged)
-                    continue;
-
-                if (time >= column[i].Target.StartTime)
-                    return false;
-            }
-
-            return true;
-        }
+            => ManiaLaneController.IsHittableEarliest(column, index, time);
 
         internal static IEnumerable<LaneTargetState> ForceMissEarlier(IReadOnlyList<LaneTargetState> column, double targetStartTime)
         {
