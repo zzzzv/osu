@@ -42,7 +42,7 @@ namespace osu.Game.Rulesets.Mania.EzMania
         {
             drawable.Anchor = Anchor.BottomCentre;
             drawable.Origin = Anchor.Centre;
-            drawable.Position = new Vector2(0, hitPosition);
+            drawable.Position = new Vector2(0, -hitPosition);
         }
 
         public static float CalculateMobileAdjust(int keyMode, ManiaMobileLayout mobileLayout, Vector2? containingCellSize)
