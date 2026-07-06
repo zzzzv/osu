@@ -19,7 +19,7 @@
 
 **禁止**恢复 drawable 分析 fallback；Session 做到等价即可。
 
-Parity 测试：`TestSceneReplaySessionParity`（Drawable replay vs Session，完整 HitEvent 字段）。
+Parity 测试：`TestSceneReplaySessionParity`（Drawable replay vs Session，完整 HitEvent 字段）；**POLICY-PARITY** 叠键 × Earliest/Combo/Duration 见 `ManiaJudgePrecedenceParityTest` + `TestSceneReplaySessionParity.Test*OverlappingJack*`。
 
 ---
 
@@ -278,5 +278,6 @@ flowchart LR
 4. **跑 parity**
    - `ManiaCrossSourceInvariantTest`（Run：HitEvents 聚合 ≡ Statistics、同环境 FromScore ≡ FromLive）
    - `TestSceneReplaySessionParity`（Drawable vs Session：Lazer tap/hold、IIDX tap/hold、O2 tap/hold/pill、Ez2AC hold、Malody hold）
-   - `JudgePrecedenceRoutingRegressionTest`
+   - **`POLICY-PARITY`**：`ManiaJudgePrecedenceParityTest` + `TestSceneReplaySessionParity` 叠键用例 — Earliest / Combo / Duration × Lazer + IIDX，Drawable `ScoreProcessor` HitEvents ≡ `ManiaReplaySession.RunHitEvents`
+   - `JudgePrecedenceRoutingRegressionTest`（helper 级路由，非 Drawable parity）
    - `dotnet test osu.Game.Rulesets.Mania.Tests`（全量）

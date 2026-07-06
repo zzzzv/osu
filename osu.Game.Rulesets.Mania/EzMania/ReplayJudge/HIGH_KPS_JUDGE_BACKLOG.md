@@ -15,6 +15,7 @@
 | **WINDOW-BAKE** | `ManiaWindowBaker.Align` 开局对齐 HitMode + 非 O2 窗口 | 全部 Ez + Session |
 | **O2-NOMUTATE** | O2 用户判定走 `ResultFor(bpm)`，去掉 per-note `updateWindows()` | O2Jam |
 | **O2-FRAME-BPM** | auto-miss 同帧共享一次 `GetBPMAtTime` | O2Jam |
+| **LANE-CURSOR** | Earliest：`ManiaLaneController` 列内有序目标 + 游标；`OrderedHitPolicy` / Session 共用 `IsHittableEarliest` | **全部**（Earliest） | Combo/Duration 仍走 `OrderedHitPolicyHelper` 全列扫描。 |
 
 ---
 
@@ -24,9 +25,8 @@
 
 | 代号 | TODO | 涉及 HitMode | 说明 |
 |------|------|----------------|------|
-| **LANE-CURSOR** | [x] Earliest：`ManiaLaneController` 列内有序目标 + 游标；`OrderedHitPolicy` / Session 共用 `IsHittableEarliest` | **全部**（Earliest） | Combo/Duration 仍走 `OrderedHitPolicyHelper` 全列扫描。 |
 | **COLUMN-INPUT** | [ ] 按键入口收敛到 `Column.OnPressed`：`selectTarget` → 单 drawable `UpdateResult` | **全部** | Earliest 下 `CheckHittable` 已 O(1) 拒绝非游标 note；输入仍冒泡到各 drawable。 |
-| **POLICY-PARITY** | [ ] Earliest / Combo / Duration 三路 Drawable ≡ Session 回归测试补齐 | BMS 尤甚 | 现有 ReplayJudge 68 项已过；专用 policy 用例待补。 |
+| **LANE-PRECEDENCE** | [ ] Combo / Duration：`ManiaLaneController` 列级目标选择，替代 `OrderedHitPolicyHelper` 全列 `AliveObjects` 扫描 | **全部**（Combo/Duration） | 高叠键列上 note-lock 扫描是 90 KPS 主瓶颈；依赖 `LANE-CURSOR` 列内有序结构。 |
 
 ### P1 — 与主线 Phase D 绑定（正确性 + 间接减负）
 
@@ -62,6 +62,7 @@
 - Lazer/Classic `Lazer*Replica` 与 ppy inline 合并（ppy 同步成本）。
 - `OffsetPlusMania` Realm 持久化（见 `REPLAY_JUDGE_MERGE.md` §1.5d follow-up）。
 - 单纯「禁止游戏中修改设置」的配置锁 UI。
+- **POLICY-PARITY**（Earliest / Combo / Duration Drawable ≡ Session）— 正确性/架构 parity，见 `REPLAY_JUDGE_MERGE.md` §4。
 
 ---
 
@@ -70,7 +71,7 @@
 ```mermaid
 flowchart LR
   doneAB["Phase A/B 已完成\nROUND-FREEZE / WINDOW-BAKE"]
-  phaseC["Phase C 当前主题\nLANE-CURSOR + COLUMN-INPUT"]
+  phaseC["Phase C 当前主题\nCOLUMN-INPUT + LANE-PRECEDENCE"]
   phaseD["Phase D\nKERNEL-ONE + DRAWABLE-THIN"]
   p2["P2 backlog\n以后另案"]
   doneAB --> phaseC --> phaseD
@@ -78,7 +79,7 @@ flowchart LR
   phaseD -.-> p2
 ```
 
-**下一步默认**：推进 **Phase C（LANE-CURSOR）**，P2 代号项仅在 profile 或 parity 需求明确时插入。
+**下一步默认**：推进 **Phase C（COLUMN-INPUT + LANE-PRECEDENCE）**，P2 代号项仅在 profile 或 parity 需求明确时插入。
 
 ---
 
@@ -88,3 +89,4 @@ flowchart LR
 |------|------|
 | 2026-07-06 | 初版：全 HitMode 高 KPS backlog；Phase A/B 已落地项归档 |
 | 2026-07-06 | Phase C（部分）：`LANE-CURSOR` Earliest 落地；`COLUMN-INPUT` 仍待办 |
+| 2026-07-06 | `POLICY-PARITY` 移出本 backlog；P0 新增 `LANE-PRECEDENCE`（Combo/Duration 列级扫描替代） |
