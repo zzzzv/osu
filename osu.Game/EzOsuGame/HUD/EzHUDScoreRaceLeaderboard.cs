@@ -127,6 +127,7 @@ namespace osu.Game.EzOsuGame.HUD
             stateLookup!.BindCollectionChanged(onStatesChanged, true);
 
             updateLoadingState();
+            rebuildRowsIfNeeded();
         }
 
         private void onStatesChanged(object? sender, NotifyDictionaryChangedEventArgs<string, EzScoreRaceState> e)
@@ -156,16 +157,24 @@ namespace osu.Game.EzOsuGame.HUD
 
         private bool shouldShowLoading()
         {
-            if (stateLookup == null || stateLookup.Count == 0)
-                return true;
+            if (!SupportsGhostRace || stateLookup == null || stateLookup.Count == 0)
+                return false;
+
+            bool anyPendingTimeline = false;
 
             foreach (var state in stateLookup)
             {
-                if (state.Value.Timeline != null)
-                    return false;
+                if (state.Value.Timeline == null)
+                {
+                    anyPendingTimeline = true;
+                    break;
+                }
             }
 
-            return true;
+            if (!anyPendingTimeline)
+                return false;
+
+            return scoreRaceService?.IsTimelineBuildInProgress == true;
         }
 
         protected override void OnSessionReady()
@@ -280,6 +289,7 @@ namespace osu.Game.EzOsuGame.HUD
         {
             if (!needsStructuralRebuild())
             {
+                ensureCurrentPlayerEntry();
                 refreshExistingRows();
                 return;
             }
@@ -326,8 +336,22 @@ namespace osu.Game.EzOsuGame.HUD
 
             var entry = new LeaderboardEntryState(playerScore, drawable);
             currentPlayerEntry = entry;
+            trackedScore = drawable;
             entryStates.Add(entry);
             Flow.Add(drawable);
+        }
+
+        private bool shouldHaveCurrentPlayerEntry() => GameplayState != null && ScoreProcessor != null;
+
+        private void ensureCurrentPlayerEntry()
+        {
+            if (currentPlayerEntry != null || !shouldHaveCurrentPlayerEntry())
+                return;
+
+            createCurrentPlayerEntry();
+            sorting.Invalidate();
+            sort();
+            updateLoadingState();
         }
 
         private void refreshExistingRows()
@@ -381,6 +405,9 @@ namespace osu.Game.EzOsuGame.HUD
             // currentPlayerEntry 不参与 ID 比较（它不是 ghost 条目）。
             // 只比较 ghost 条目数量：entryStates 含 player + ghosts，stateLookup 仅含 ghosts。
             int ghostCount = entryStates.Count - (currentPlayerEntry != null ? 1 : 0);
+
+            if (shouldHaveCurrentPlayerEntry() && currentPlayerEntry == null)
+                return true;
 
             if (stateLookup!.Count == 0)
                 return ghostCount > 0;

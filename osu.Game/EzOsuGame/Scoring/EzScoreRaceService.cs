@@ -50,6 +50,9 @@ namespace osu.Game.EzOsuGame.Scoring
 
         public IBindableDictionary<string, EzScoreRaceState> States => states;
 
+        /// <summary>进局后 ghost timeline 是否仍在后台构建。</summary>
+        public bool IsTimelineBuildInProgress { get; private set; }
+
         private readonly BindableDictionary<string, EzScoreRaceState> states = new BindableDictionary<string, EzScoreRaceState>();
 
         private readonly IEzScoreTimelineCache timelineCache = EzScoreTimelineBuilder.CreateSessionCache();
@@ -168,6 +171,7 @@ namespace osu.Game.EzOsuGame.Scoring
             timelineBuildCts = new CancellationTokenSource();
             var token = timelineBuildCts.Token;
             int version = ++timelineBuildVersion;
+            IsTimelineBuildInProgress = true;
 
             performTimelineBuildAsync(workingBeatmap!, beatmapInfo, token, version);
         }
@@ -179,7 +183,10 @@ namespace osu.Game.EzOsuGame.Scoring
                 var scoreInfos = states.Values.Select(s => s.ScoreInfo).ToList();
 
                 if (scoreInfos.Count == 0)
+                {
+                    Schedule(() => IsTimelineBuildInProgress = false);
                     return;
+                }
 
                 var rulesetInfo = beatmapInfo.Ruleset;
                 var results = new EzScoreTimeline?[scoreInfos.Count];
@@ -239,15 +246,18 @@ namespace osu.Game.EzOsuGame.Scoring
                         }
                     }
 
+                    IsTimelineBuildInProgress = false;
                     Logger.Log($"[EzScoreRaceService] Timeline build complete for {scoreInfos.Count} ghosts", Ez2ConfigManager.LOGGER_NAME, LogLevel.Debug);
                 });
             }
             catch (OperationCanceledException)
             {
+                Schedule(() => IsTimelineBuildInProgress = false);
                 Logger.Log("[EzScoreRaceService] Timeline build cancelled", Ez2ConfigManager.LOGGER_NAME, LogLevel.Debug);
             }
             catch (Exception ex)
             {
+                Schedule(() => IsTimelineBuildInProgress = false);
                 Logger.Error(ex, "[EzScoreRaceService] Timeline build failed", Ez2ConfigManager.LOGGER_NAME);
             }
         }
@@ -337,6 +347,7 @@ namespace osu.Game.EzOsuGame.Scoring
                 return;
 
             timelineBuildCts = null;
+            IsTimelineBuildInProgress = false;
 
             try
             {
