@@ -24,9 +24,9 @@
 
 | 代号 | TODO | 涉及 HitMode | 说明 |
 |------|------|----------------|------|
-| **LANE-CURSOR** | [ ] 实现 `ManiaLaneController`：列内目标序列 + 游标，替代 `OrderedHitPolicyHelper` 每次 `OnPressed` 扫 `AliveObjects` | **全部**（Earliest 先落地；Combo/Duration 次之） | Session 已有 `ManiaColumnSimulator` 思路；Drawable 列级共用。90 KPS 下 note-lock 扫描通常为最大单项开销。 |
-| **COLUMN-INPUT** | [ ] 按键入口收敛到 `Column.OnPressed`：`selectTarget` → 单 drawable `UpdateResult`；减少冒泡链上重复 `CheckHittable` | **全部** | 与 **LANE-CURSOR** 同批交付。 |
-| **POLICY-PARITY** | [ ] Earliest / Combo / Duration 三路 Drawable ≡ Session 回归测试补齐 | BMS 尤甚 | 重构 note-lock 前的安全网。 |
+| **LANE-CURSOR** | [x] Earliest：`ManiaLaneController` 列内有序目标 + 游标；`OrderedHitPolicy` / Session 共用 `IsHittableEarliest` | **全部**（Earliest） | Combo/Duration 仍走 `OrderedHitPolicyHelper` 全列扫描。 |
+| **COLUMN-INPUT** | [ ] 按键入口收敛到 `Column.OnPressed`：`selectTarget` → 单 drawable `UpdateResult` | **全部** | Earliest 下 `CheckHittable` 已 O(1) 拒绝非游标 note；输入仍冒泡到各 drawable。 |
+| **POLICY-PARITY** | [ ] Earliest / Combo / Duration 三路 Drawable ≡ Session 回归测试补齐 | BMS 尤甚 | 现有 ReplayJudge 68 项已过；专用 policy 用例待补。 |
 
 ### P1 — 与主线 Phase D 绑定（正确性 + 间接减负）
 
@@ -87,3 +87,4 @@ flowchart LR
 | 日期 | 说明 |
 |------|------|
 | 2026-07-06 | 初版：全 HitMode 高 KPS backlog；Phase A/B 已落地项归档 |
+| 2026-07-06 | Phase C（部分）：`LANE-CURSOR` Earliest 落地；`COLUMN-INPUT` 仍待办 |

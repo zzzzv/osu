@@ -15,6 +15,7 @@ using osu.Game.Extensions;
 using osu.Game.EzOsuGame;
 using osu.Game.EzOsuGame.Audio;
 using osu.Game.EzOsuGame.Configuration;
+using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
 using osu.Game.Rulesets.Judgements;
 using osu.Game.Rulesets.Mania.Beatmaps;
 using osu.Game.Rulesets.Mania.Configuration;
@@ -22,6 +23,7 @@ using osu.Game.Rulesets.Mania.Objects;
 using osu.Game.Rulesets.Mania.Objects.Drawables;
 using osu.Game.Rulesets.Mania.Skinning;
 using osu.Game.Rulesets.Mania.UI.Components;
+using osu.Game.Rulesets.Objects;
 using osu.Game.Rulesets.Objects.Drawables;
 using osu.Game.Rulesets.UI;
 using osu.Game.Rulesets.UI.Scrolling;
@@ -51,7 +53,8 @@ namespace osu.Game.Rulesets.Mania.UI
         internal readonly Container TopLevelContainer = new Container { RelativeSizeAxes = Axes.Both };
 
         private DrawablePool<PoolableHitExplosion> hitExplosionPool = null!;
-        private readonly OrderedHitPolicy hitPolicy;
+        private OrderedHitPolicy hitPolicy = null!;
+        private ManiaLaneController? laneController;
         public Container UnderlayElements => HitObjectArea.UnderlayElements;
 
         private GameplaySampleTriggerSource sampleTriggerSource = null!;
@@ -76,7 +79,6 @@ namespace osu.Game.Rulesets.Mania.UI
             RelativeSizeAxes = Axes.Y;
             Width = COLUMN_WIDTH;
 
-            hitPolicy = new OrderedHitPolicy(HitObjectContainer);
             HitObjectArea = new ColumnHitObjectArea
             {
                 RelativeSizeAxes = Axes.Both,
@@ -116,10 +118,28 @@ namespace osu.Game.Rulesets.Mania.UI
         public int KeyMode;
         public bool ConfigTimingBasedNoteColouring;
 
+        protected override ScrollingHitObjectContainer CreateScrollingHitObjectContainer()
+            => new LaneTrackingScrollingHitObjectContainer(this);
+
+        internal void RegisterLaneDrawable(DrawableHitObject drawable) => hitPolicy.RegisterDrawable(drawable);
+
+        internal void UnregisterLaneDrawable(DrawableHitObject drawable) => hitPolicy.UnregisterDrawable(drawable);
+
         [BackgroundDependencyLoader]
         private void load(GameHost host, ManiaRulesetConfigManager? rulesetConfig, StageDefinition stageDefinition)
         {
             KeyMode = stageDefinition.Columns;
+
+            // JudgePrecedence 来自全局配置（与 ManiaJudgementRound.Create 一致）；勿 [Resolved] DrawableManiaRuleset——
+            // 皮肤预览等场景会单独构造 Column，且 JudgementRound 在 ruleset LoadComplete 才冻结。
+            var judgePrecedence = ezConfig.Get<EzEnumJudgePrecedence>(Ez2Setting.JudgePrecedence);
+
+            // Earliest：列内有序目标 + 游标（ManiaLaneController），Drawable / Session 共用 note-lock 语义。
+            // Combo / Duration：暂不建 controller，OrderedHitPolicy 仍走 OrderedHitPolicyHelper 全列 AliveObjects 扫描。
+            // TODO(LANE-PRECEDENCE): Combo/Duration 也接入 ManiaLaneController 列级目标选择，替代热路径全列扫描（见 HIGH_KPS_JUDGE_BACKLOG.md）。
+            laneController = judgePrecedence == EzEnumJudgePrecedence.Earliest ? new ManiaLaneController() : null;
+            hitPolicy = new OrderedHitPolicy(HitObjectContainer, judgePrecedence, laneController);
+
             EzNoteTypeBindable = ezConfig.GetColumnTypeBindable(KeyMode, Index);
             EzNoteSizeBindable = ezFactory.GetNoteSizeBindable(KeyMode, Index);
             EzNoteColourBindable = ezConfig.GetColumnColorBindable(KeyMode, Index);
@@ -247,13 +267,41 @@ namespace osu.Game.Rulesets.Mania.UI
             DrawableManiaHitObject maniaObject = (DrawableManiaHitObject)drawableHitObject;
 
             maniaObject.AccentColour.BindTo(AccentColour);
-            maniaObject.CheckHittable = hitPolicy.IsHittable;
+            maniaObject.CheckHittable = (d, time) =>
+            {
+                hitPolicy.EnsureRegistered(d);
+                return hitPolicy.IsHittable(d, time);
+            };
+        }
+
+        private sealed partial class LaneTrackingScrollingHitObjectContainer : ScrollingHitObjectContainer
+        {
+            private readonly Column column;
+
+            public LaneTrackingScrollingHitObjectContainer(Column column)
+            {
+                this.column = column;
+            }
+
+            protected override void AddDrawable(HitObjectLifetimeEntry entry, DrawableHitObject drawable)
+            {
+                base.AddDrawable(entry, drawable);
+                column.RegisterLaneDrawable(drawable);
+            }
+
+            protected override void RemoveDrawable(HitObjectLifetimeEntry entry, DrawableHitObject drawable)
+            {
+                column.UnregisterLaneDrawable(drawable);
+                base.RemoveDrawable(entry, drawable);
+            }
         }
 
         internal void OnNewResult(DrawableHitObject judgedObject, JudgementResult result)
         {
             if (result.IsHit)
                 hitPolicy.HandleHit(judgedObject);
+            else
+                hitPolicy.NotifyJudged(judgedObject);
 
             if (!result.IsHit || !judgedObject.DisplayResult || !DisplayJudgements.Value)
                 return;
