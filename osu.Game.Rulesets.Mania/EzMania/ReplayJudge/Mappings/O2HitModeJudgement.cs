@@ -66,13 +66,13 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
             public bool PillCheckPassed { get; init; }
 
             public bool UpgradeToPerfect { get; init; }
+
+            public bool UsePressTimeBpmForJudgement { get; init; }
         }
 
         public readonly struct DrawableNoteContext
         {
             public double CurrentTime { get; init; }
-
-            public double Bpm { get; init; }
 
             public bool PillCheckPassed { get; init; }
 
@@ -82,8 +82,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
         public readonly struct DrawableTailContext
         {
             public double CurrentTime { get; init; }
-
-            public double Bpm { get; init; }
 
             public bool PillCheckPassed { get; init; }
 
@@ -111,7 +109,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
             var outcome = EvaluatePress(timeOffset, hitWindows, new NotePressContext
             {
                 RawOffset = timeOffset,
-                Bpm = context.Bpm,
+                Bpm = O2HitModeExtension.GetBPMAtTime(context.CurrentTime),
                 PillModeEnabled = true,
                 PillCheckPassed = true,
                 UpgradeToPerfect = context.UpgradeToPerfect,
@@ -136,8 +134,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
                 HoldBroken = context.HoldBroken,
                 WasHoldingBeforeRelease = context.WasHolding,
                 PillModeEnabled = context.PillModeEnabled,
-                Bpm = context.Bpm,
+                Bpm = O2HitModeExtension.GetBPMAtTime(context.CurrentTime),
                 State = state,
+                UsePressTimeBpmForJudgement = false,
             });
 
             if (judge == O2Judge.None)
@@ -168,7 +167,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
 
         public ManiaNoteJudgementOutcome EvaluatePress(double timeOffset, HitWindows hitWindows, in NotePressContext context)
         {
-            var judge = FromHitResult(resolveResult(timeOffset, hitWindows, context.Bpm));
+            var judge = FromHitResult(resolvePressResult(timeOffset, hitWindows, context.UsePressTimeBpmForJudgement, context.Bpm));
 
             if (judge == O2Judge.None)
                 return ManiaNoteJudgementOutcome.Ignore;
@@ -186,7 +185,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
 
         public O2Judge EvaluateTailJudge(in HoldTailEvaluationContext context)
         {
-            var judge = FromHitResult(resolveResult(context.TimeOffsetForJudgement, context.HitWindows, context.Bpm));
+            var judge = FromHitResult(resolvePressResult(context.TimeOffsetForJudgement, context.HitWindows, context.UsePressTimeBpmForJudgement, context.Bpm));
 
             if (context.PillModeEnabled)
                 ApplyPillLogic(Math.Abs(context.RawOffset), context.Bpm, context.State, ref judge);
@@ -232,9 +231,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
 
         public bool IsHoldBreak(double rawOffset, HitWindows hitWindows) => LazerHoldJudgementReplica.Instance.IsHoldBreak(rawOffset, hitWindows);
 
-        private static HitResult resolveResult(double timeOffset, HitWindows hitWindows, double bpm)
+        private static HitResult resolvePressResult(double timeOffset, HitWindows hitWindows, bool usePressTimeBpm, double bpm)
         {
-            if (bpm > 0)
+            if (usePressTimeBpm && bpm > 0)
                 return O2HitModeExtension.ResultFor(timeOffset, bpm, ManiaJudgementRound.GetTotalMultiplier(hitWindows));
 
             return hitWindows.ResultFor(timeOffset);

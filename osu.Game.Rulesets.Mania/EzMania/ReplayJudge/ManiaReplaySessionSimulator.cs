@@ -133,6 +133,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                         EventTime = input.Time,
                         Bpm = hitWindowHelper.BPM,
                         PillModeEnabled = pillModeEnabled,
+                        UsePressTimeBpmForJudgement = environment.ManiaHitMode == EzEnumHitMode.O2Jam,
                     });
 
                     if (environment.ManiaHitMode == EzEnumHitMode.Lazer && result == HitResult.None)
@@ -243,6 +244,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 {
                     RawOffset = rawOffset,
                     Bpm = bpm,
+                    UsePressTimeBpmForJudgement = true,
                     PillModeEnabled = pillModeEnabled,
                     State = state,
                 });

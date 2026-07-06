@@ -30,6 +30,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         public double Bpm { get; init; }
 
         public bool PillModeEnabled { get; init; }
+
+        /// <summary>
+        /// Session O2：true 时按 press-time BPM 走扩展 ResultFor；Drawable 为 false 并先同步 ManiaHitWindows BPM。
+        /// </summary>
+        public bool UsePressTimeBpmForJudgement { get; init; }
     }
 
     public interface IManiaHoldJudgementStrategy

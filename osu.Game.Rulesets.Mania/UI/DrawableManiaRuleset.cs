@@ -225,11 +225,7 @@ namespace osu.Game.Rulesets.Mania.UI
                 O2HitModeExtension.PILL_COUNT.Value = 0;
 
                 if (h.NewValue == EzEnumHitMode.O2Jam)
-                {
-                    O2HitModeExtension.SetOriginalBPM(Beatmap.BeatmapInfo.BPM);
-                    O2HitModeExtension.SetControlPoints(Beatmap.ControlPointInfo);
-                    O2HitModeExtension.PillActivated = true;
-                }
+                    O2HitModeExtension.InitializeRuntime(Beatmap, resetPillCount: false);
             }, true);
             barLinesBindable.BindValueChanged(b =>
             {

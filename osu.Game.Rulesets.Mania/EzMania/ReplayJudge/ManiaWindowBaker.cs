@@ -4,6 +4,7 @@
 using osu.Game.Beatmaps;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Scoring;
+using osu.Game.Rulesets.Mania.Objects.EzCurrentHitObject;
 using osu.Game.Rulesets.Mania.Scoring;
 using osu.Game.Rulesets.Objects;
 
@@ -18,6 +19,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         public static void Align(IBeatmap beatmap, IGameplayEnvironment environment)
         {
             bool isO2Jam = environment.ManiaHitMode == EzEnumHitMode.O2Jam;
+
+            if (isO2Jam)
+                O2HitModeExtension.InitializeRuntime(beatmap);
 
             foreach (var hitObject in beatmap.HitObjects)
                 alignRecursive(hitObject, environment, isO2Jam);

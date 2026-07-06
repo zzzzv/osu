@@ -3,6 +3,7 @@
 
 using System;
 using osu.Framework.Bindables;
+using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.ControlPoints;
 using osu.Game.Rulesets.Scoring;
 
@@ -34,6 +35,19 @@ namespace osu.Game.Rulesets.Mania.Objects.EzCurrentHitObject
         // 保存原始 BPM 值
         private static double originalBPM = 120.0;
         public static bool IsPlaying = true;
+
+        /// <summary>
+        /// 开局绑定谱面控制点与 BPM 基线；ManiaWindowBaker 在 O2Jam 开局对齐时会调用。
+        /// </summary>
+        public static void InitializeRuntime(IBeatmap beatmap, bool resetPillCount = true)
+        {
+            if (resetPillCount)
+                PILL_COUNT.Value = 0;
+
+            SetOriginalBPM(beatmap.BeatmapInfo.BPM);
+            SetControlPoints(beatmap.ControlPointInfo);
+            PillActivated = true;
+        }
 
         /// <summary>
         /// 设置当前谱面的控制点信息，用于动态 BPM 计算
