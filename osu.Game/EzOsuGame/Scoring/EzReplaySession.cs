@@ -98,12 +98,19 @@ namespace osu.Game.EzOsuGame.Scoring
 
         protected static GameplayEnvironment ResolveEnvironment(ReplayRunRequest request)
         {
-            var env = GlobalConfigStore.EzConfig.ResolveForSession(request.Purpose, request.Score.ScoreInfo);
-            return request.OffsetPlusMania == 0 ? env : env with { OffsetPlusMania = request.OffsetPlusMania };
+            if (request.Purpose == ReplayRunPurpose.ForLive)
+                return GlobalConfigStore.EzConfig.ResolveEnvironment(request.Purpose, request.Score.ScoreInfo, ignoreOffset: true);
+
+            return GlobalConfigStore.EzConfig.ResolveEnvironment(request.Purpose, request.Score.ScoreInfo);
         }
 
         protected static GameplayEnvironment ResolveEnvironment(Score score, ReplayRunPurpose purpose)
-            => GlobalConfigStore.EzConfig.ResolveForSession(purpose, score.ScoreInfo);
+        {
+            if (purpose == ReplayRunPurpose.ForLive)
+                return GlobalConfigStore.EzConfig.ResolveEnvironment(purpose, score.ScoreInfo, ignoreOffset: true);
+
+            return GlobalConfigStore.EzConfig.ResolveEnvironment(purpose, score.ScoreInfo);
+        }
 
         protected static Task<T> GetOrCreate<T>(ConcurrentDictionary<string, Lazy<Task<T>>> cache, string cacheKey, Func<Task<T>> factory)
         {

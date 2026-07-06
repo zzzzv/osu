@@ -43,7 +43,7 @@ namespace osu.Game.EzOsuGame.Scoring
                 return null;
 
             var playableBeatmap = resolvePlayableBeatmap(beatmaps, scoreInfo, sharedPlayableBeatmap);
-            var resolvedEnvironment = GlobalConfigStore.EzConfig.ResolveForSession(ReplayRunPurpose.ForLive, scoreInfo);
+            var resolvedEnvironment = GlobalConfigStore.EzConfig.ResolveEnvironment(ReplayRunPurpose.ForLive, scoreInfo, ignoreOffset: true);
 
             string? cacheKey = playableBeatmap != null
                 ? getCacheKey(scoreInfo, timelineMode, resolvedEnvironment, playableBeatmap)

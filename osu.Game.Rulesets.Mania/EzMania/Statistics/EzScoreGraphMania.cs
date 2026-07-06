@@ -13,7 +13,6 @@ using osu.Framework.Logging;
 using osu.Game.Beatmaps;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Extensions;
-using osu.Game.EzOsuGame.Scoring;
 using osu.Game.EzOsuGame.Statistics;
 using osu.Game.Rulesets.Mania.EzMania.Helper;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
@@ -31,8 +30,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
 {
     /// <summary>
     /// Mania 判定偏移分布图。Original 用 Realm 静态 <see cref="ScoreInfo"/>；
-    /// Now 经 <see cref="ManiaReplaySession"/>（ForLive，含 live config offset）；
-    /// offset 滑条同步控制展示层 fake 平移与 Session 真实 offset。
+    /// Now 经 <see cref="ManiaReplaySession"/>（ForLive，Session 强制 zero offset）；
+    /// offset 滑条仅控制展示层 fake 平移，不注入 Session。
     /// </summary>
     public partial class EzScoreGraphMania : EzScoreGraphBase
     {
@@ -151,9 +150,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
                 e.LastHitObject,
                 e.Position)).ToList();
         }
-
-        protected override ReplayRunRequest CreateReplayRunRequest(Score score)
-            => new ReplayRunRequest(score, Beatmap, ReplayRunPurpose.ForLive, offsetPlusMania.Value);
 
         protected override void CalculateNowAccuracy()
         {

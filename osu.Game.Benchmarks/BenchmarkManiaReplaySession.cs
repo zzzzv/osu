@@ -35,7 +35,7 @@ namespace osu.Game.Benchmarks
             beatmap = createTestBeatmap();
             score = createTestScore(beatmap);
 
-            var environment = GlobalConfigStore.EzConfig.ResolveForSession(ReplayRunPurpose.ForStored, score.ScoreInfo);
+            var environment = GlobalConfigStore.EzConfig.ResolveEnvironment(ReplayRunPurpose.ForStored, score.ScoreInfo);
             GlobalConfigStore.EzConfig.SetValue(Ez2Setting.ManiaHitMode, environment.ManiaHitMode);
             GlobalConfigStore.EzConfig.SetValue(Ez2Setting.ManiaHealthMode, environment.ManiaHealthMode);
             GlobalConfigStore.EzConfig.SetValue(Ez2Setting.JudgePrecedence, environment.JudgePrecedence);

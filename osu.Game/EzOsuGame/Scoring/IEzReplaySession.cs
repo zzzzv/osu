@@ -13,7 +13,7 @@ namespace osu.Game.EzOsuGame.Scoring
     /// <summary>
     /// 统一 Replay Session 入口：负责 async、环境解析与共享 cache。
     /// 进程内由 <see cref="EzReplaySessionRouter"/> 按 <see cref="ScoreInfo.Ruleset"/> 分发；Panel / Graph / Race 注入本接口即可。
-    /// <para>环境由 Session 按 <see cref="ReplayRunPurpose"/> 经 <see cref="Configuration.Ez2ConfigManager.ResolveForSession"/> 解析。</para>
+    /// <para>环境由 Session 按 <see cref="ReplayRunPurpose"/> 经 <see cref="Configuration.Ez2ConfigManager.ResolveEnvironment"/> 解析。</para>
     /// </summary>
     public interface IEzReplaySession
     {

@@ -40,7 +40,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
         }
 
         [Test]
-        public void TestResolveForSessionForStoredUsesEmbeddedModesOrLazerFallback()
+        public void TestResolveEnvironmentForStoredUsesEmbeddedModesOrLazerFallback()
         {
             var config = GlobalConfigStore.EzConfig;
             config.SetValue(Ez2Setting.ManiaHitMode, EzEnumHitMode.IIDX_HD);
@@ -54,12 +54,12 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
                 ManiaHealthMode = (int)EzEnumHealthMode.IIDX_HD,
             };
 
-            var stored = config.ResolveForSession(ReplayRunPurpose.ForStored, scoreInfo);
+            var stored = config.ResolveEnvironment(ReplayRunPurpose.ForStored, scoreInfo);
             Assert.That(stored.ManiaHitMode, Is.EqualTo(EzEnumHitMode.LR2_HD));
             Assert.That(stored.ManiaHealthMode, Is.EqualTo(EzEnumHealthMode.IIDX_HD));
             Assert.That(stored.OffsetPlusMania, Is.EqualTo(0));
 
-            var legacy = config.ResolveForSession(ReplayRunPurpose.ForStored, new ScoreInfo { Ruleset = new ManiaRuleset().RulesetInfo });
+            var legacy = config.ResolveEnvironment(ReplayRunPurpose.ForStored, new ScoreInfo { Ruleset = new ManiaRuleset().RulesetInfo });
             Assert.That(legacy.ManiaHitMode, Is.EqualTo(EzEnumHitMode.Lazer));
             Assert.That(legacy.ManiaHealthMode, Is.EqualTo(EzEnumHealthMode.Lazer));
 
@@ -68,7 +68,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             Assert.That(live.ManiaHealthMode, Is.EqualTo(EzEnumHealthMode.Lazer));
             Assert.That(live.OffsetPlusMania, Is.EqualTo(25.0));
 
-            var recalcStored = config.ResolveForSession(ReplayRunPurpose.ForStored, scoreInfo);
+            var recalcStored = config.ResolveEnvironment(ReplayRunPurpose.ForStored, scoreInfo);
             Assert.That(recalcStored.OffsetPlusMania, Is.EqualTo(0));
         }
     }

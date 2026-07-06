@@ -107,7 +107,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             ReplayJudgeTestConfig.ApplyToGlobalConfig(environment);
             ReplayJudgeTestConfig.ApplyEmbeddedModes(score, environment);
 
-            var fromScore = snapshotRun(score, beatmap, GlobalConfigStore.EzConfig.ResolveForSession(ReplayRunPurpose.ForStored, score.ScoreInfo));
+            var fromScore = snapshotRun(score, beatmap, GlobalConfigStore.EzConfig.ResolveEnvironment(ReplayRunPurpose.ForStored, score.ScoreInfo));
             var fromLive = snapshotRun(score, beatmap, GlobalConfigStore.EzConfig.GetGameplayEnvironment());
 
             Assert.That(ManiaReplayParityHelper.AreHitEventsEquivalent(fromScore.hitEvents, fromLive.hitEvents), Is.True);
@@ -157,7 +157,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             ReplayJudgeTestConfig.ApplyEmbeddedModes(score, iidxEnvironment);
             ReplayJudgeTestConfig.ApplyToGlobalConfig(lazerEnvironment);
 
-            var fromScore = snapshotRun(score, beatmap, GlobalConfigStore.EzConfig.ResolveForSession(ReplayRunPurpose.ForStored, score.ScoreInfo));
+            var fromScore = snapshotRun(score, beatmap, GlobalConfigStore.EzConfig.ResolveEnvironment(ReplayRunPurpose.ForStored, score.ScoreInfo));
             var fromLive = snapshotRun(score, beatmap, GlobalConfigStore.EzConfig.GetGameplayEnvironment());
 
             Assert.That(ManiaReplayParityHelper.AreHitEventsEquivalent(fromScore.hitEvents, fromLive.hitEvents), Is.False);
@@ -188,7 +188,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             ManiaReplaySessionService service, Score score, IBeatmap beatmap)
         {
             var combined = await service.RunRequestAsync(new ReplayRunRequest(score, beatmap, ReplayRunPurpose.ForStored)).ConfigureAwait(true);
-            var info = combined.Score!.ScoreInfo;
+            var info = combined.Score.ScoreInfo;
             return (info.HitEvents.ToList(), info.Statistics.ToDictionary(), info.Accuracy, info.TotalScore);
         }
     }

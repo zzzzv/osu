@@ -452,7 +452,7 @@ namespace osu.Game.EzOsuGame.Statistics
 
         // ==================== Graph-UX: 双轨刷新机制 ====================
 
-        /// <summary>Graph Session 请求；Mania 覆写以传入当前 offset。</summary>
+        /// <summary>Graph Session 请求；ForStored 默认零 offset，ForLive Session 在 EzReplaySession 内传 ignoreOffset。</summary>
         protected virtual ReplayRunRequest CreateReplayRunRequest(Score score)
             => new ReplayRunRequest(score, Beatmap, ReplayRunPurpose.ForLive);
 

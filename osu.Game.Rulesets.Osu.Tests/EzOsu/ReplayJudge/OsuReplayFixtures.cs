@@ -53,7 +53,7 @@ namespace osu.Game.Rulesets.Osu.Tests.EzOsu.ReplayJudge
             };
 
             var score = new Score { ScoreInfo = scoreInfo, Replay = replay };
-            var environment = GlobalConfigStore.EzConfig.ResolveForSession(ReplayRunPurpose.ForStored, scoreInfo);
+            var environment = GlobalConfigStore.EzConfig.ResolveEnvironment(ReplayRunPurpose.ForStored, scoreInfo);
 
             return (score, beatmap, environment);
         }
@@ -106,7 +106,7 @@ namespace osu.Game.Rulesets.Osu.Tests.EzOsu.ReplayJudge
             };
 
             var score = new Score { ScoreInfo = scoreInfo, Replay = replay };
-            var environment = GlobalConfigStore.EzConfig.ResolveForSession(ReplayRunPurpose.ForStored, scoreInfo);
+            var environment = GlobalConfigStore.EzConfig.ResolveEnvironment(ReplayRunPurpose.ForStored, scoreInfo);
 
             return (score, beatmap, environment);
         }
@@ -145,7 +145,7 @@ namespace osu.Game.Rulesets.Osu.Tests.EzOsu.ReplayJudge
             };
 
             var score = new Score { ScoreInfo = scoreInfo, Replay = new Replay { Frames = frames } };
-            var environment = GlobalConfigStore.EzConfig.ResolveForSession(ReplayRunPurpose.ForStored, scoreInfo);
+            var environment = GlobalConfigStore.EzConfig.ResolveEnvironment(ReplayRunPurpose.ForStored, scoreInfo);
 
             return (score, beatmap, environment);
         }
