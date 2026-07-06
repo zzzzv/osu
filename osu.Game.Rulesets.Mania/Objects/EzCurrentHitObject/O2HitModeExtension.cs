@@ -92,6 +92,46 @@ namespace osu.Game.Rulesets.Mania.Objects.EzCurrentHitObject
         /// <returns>Bad 判定范围</returns>
         public static double GetBadRangeAtTime(double time) => BASE_BAD / GetBPMAtTime(time);
 
+        public static double SafeBpm(double bpm) => double.IsFinite(bpm) && bpm > 0 ? Math.Max(bpm, 75.0) : 75.0;
+
+        public static void GetRanges(double bpm, double totalMultiplier, out double cool, out double good, out double bad)
+        {
+            double safe = SafeBpm(bpm);
+            cool = BASE_COOL / safe * totalMultiplier;
+            good = BASE_GOOD / safe * totalMultiplier;
+            bad = BASE_BAD / safe * totalMultiplier;
+        }
+
+        /// O2Jam 判定：按 press-time BPM 计算，不 mutate 物件 HitWindows 可变状态。
+        public static HitResult ResultFor(double timeOffset, double bpm, double totalMultiplier = 1)
+        {
+            GetRanges(bpm, totalMultiplier, out double cool, out double good, out double bad);
+            double absOffset = Math.Abs(timeOffset);
+
+            if (absOffset <= cool)
+                return HitResult.Perfect;
+
+            if (absOffset <= good)
+                return HitResult.Good;
+
+            if (absOffset <= bad)
+                return HitResult.Meh;
+
+            return HitResult.None;
+        }
+
+        public static bool CanBeHit(double timeOffset, double bpm, double totalMultiplier = 1)
+        {
+            GetRanges(bpm, totalMultiplier, out _, out _, out double bad);
+            return Math.Abs(timeOffset) <= bad;
+        }
+
+        public static double MissWindow(double bpm, double totalMultiplier = 1)
+        {
+            GetRanges(bpm, totalMultiplier, out _, out _, out double bad);
+            return bad;
+        }
+
         /// <summary>
         /// 更新 CoolCombo 值，自动处理溢出逻辑
         /// </summary>

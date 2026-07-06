@@ -195,14 +195,15 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
             if (hitMode is O2HitModeJudgement o2)
             {
-                (drawable.HitObject.HitWindows as ManiaHitWindows)?.UpdateO2JamBpmFromTime(drawable.Time.Current);
-
                 if (userTriggered)
                 {
+                    round.NotifyO2InputAt(drawable.Time.Current);
+                    double bpm = round.O2PressBpm;
                     bool cont = O2HitModeExtension.PillCheck(timeOffset, drawable.Time.Current, out bool _, out bool upgradeToPerfect);
                     var outcome = o2.EvaluateDrawableNotePress(timeOffset, drawable.HitObject.HitWindows!, new O2HitModeJudgement.DrawableNoteContext
                     {
                         CurrentTime = drawable.Time.Current,
+                        Bpm = bpm,
                         PillCheckPassed = cont,
                         UpgradeToPerfect = upgradeToPerfect,
                     }, round.MutableState);
@@ -213,7 +214,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                     return true;
                 }
 
-                ApplyNoteOutcome(drawable, round, o2.EvaluateAutoMiss(timeOffset, drawable.HitObject.HitWindows!));
+                double autoMissBpm = round.GetO2BpmForAutoMiss(drawable.Time.Current, getFrameStableId(drawable));
+                ApplyNoteOutcome(drawable, round, o2.EvaluateAutoMiss(timeOffset, drawable.HitObject.HitWindows!, autoMissBpm));
                 return true;
             }
 
@@ -274,7 +276,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
             if (hitMode is O2HitModeJudgement o2)
             {
-                (drawable.HitObject.HitWindows as ManiaHitWindows)?.UpdateO2JamBpmFromTime(drawable.Time.Current);
+                double mult = ManiaJudgementRound.GetTotalMultiplier(drawable.HitObject.HitWindows!);
 
                 if (!userTriggered)
                 {
@@ -287,16 +289,21 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                         return true;
                     }
 
-                    if (!drawable.HitObject.HitWindows!.CanBeHit(timeOffset))
+                    double autoMissBpm = round.GetO2BpmForAutoMiss(drawable.Time.Current, getFrameStableId(drawable));
+
+                    if (!O2HitModeExtension.CanBeHit(timeOffset, autoMissBpm, mult))
                         drawable.EzApplyMinResult();
 
                     return true;
                 }
 
+                round.NotifyO2InputAt(drawable.Time.Current);
+                double bpm = round.O2PressBpm;
                 bool cont = O2HitModeExtension.PillCheck(timeOffset, drawable.Time.Current, out bool _, out bool upgradeToPerfect);
                 var result = o2.EvaluateDrawableTailPress(timeOffset, drawable.HitObject.HitWindows!, new O2HitModeJudgement.DrawableTailContext
                 {
                     CurrentTime = drawable.Time.Current,
+                    Bpm = bpm,
                     PillCheckPassed = cont,
                     UpgradeToPerfect = upgradeToPerfect,
                     HeadHit = drawable.HoldNote.Head.IsHit,
@@ -372,5 +379,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             drawable.EzApplyFinalResult(genericResult, round.Environment.ManiaHitMode);
             return true;
         }
+
+        private static long getFrameStableId(DrawableHitObject drawable)
+            => (long)(drawable.Time.Current * 1000);
     }
 }
