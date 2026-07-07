@@ -1,9 +1,12 @@
 ﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using System.Collections.Generic;
 using System.ComponentModel;
 using osu.Framework.Allocation;
+using osu.Framework.Graphics;
 using osu.Framework.Input.Bindings;
+using osu.Game.Rulesets.Mania.UI;
 using osu.Game.Rulesets.UI;
 
 namespace osu.Game.Rulesets.Mania
@@ -14,6 +17,46 @@ namespace osu.Game.Rulesets.Mania
         public ManiaInputManager(RulesetInfo ruleset, int variant)
             : base(ruleset, variant, SimultaneousBindingMode.Unique)
         {
+        }
+
+        protected override KeyBindingContainer<ManiaAction> CreateKeyBindingContainer(RulesetInfo ruleset, int variant, SimultaneousBindingMode unique)
+            => new ManiaKeyBindingContainer(ruleset, variant, unique);
+
+        /// <summary>
+        /// COLUMN-INPUT：列级 <see cref="Column.OnPressed"/> 优先于列内 drawable，避免每键 N 路冒泡。
+        /// </summary>
+        private partial class ManiaKeyBindingContainer : RulesetKeyBindingContainer
+        {
+            private readonly List<Drawable> columnFirstQueue = new List<Drawable>();
+            private readonly List<Drawable> nonColumnQueue = new List<Drawable>();
+
+            public ManiaKeyBindingContainer(RulesetInfo ruleset, int variant, SimultaneousBindingMode unique)
+                : base(ruleset, variant, unique)
+            {
+            }
+
+            protected override IEnumerable<Drawable> KeyBindingInputQueue
+            {
+                get
+                {
+                    columnFirstQueue.Clear();
+                    nonColumnQueue.Clear();
+
+                    foreach (var drawable in base.KeyBindingInputQueue)
+                    {
+                        if (drawable is Column)
+                            columnFirstQueue.Add(drawable);
+                        else
+                            nonColumnQueue.Add(drawable);
+                    }
+
+                    if (columnFirstQueue.Count == 0)
+                        return base.KeyBindingInputQueue;
+
+                    columnFirstQueue.AddRange(nonColumnQueue);
+                    return columnFirstQueue;
+                }
+            }
         }
     }
 

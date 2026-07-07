@@ -12,7 +12,9 @@ using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Timing;
 using osu.Game.Audio;
+using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
 using osu.Game.Rulesets.Objects.Drawables;
+using osu.Game.Rulesets.Scoring;
 using osu.Game.Rulesets.UI.Scrolling;
 using osu.Game.Rulesets.Mania.UI;
 
@@ -35,6 +37,11 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
         [Resolved(canBeNull: true)]
         private ManiaPlayfield playfield { get; set; }
 
+        [Resolved(canBeNull: true)]
+        private DrawableManiaRuleset drawableManiaRuleset { get; set; }
+
+        internal DrawableManiaRuleset EzDrawableManiaRuleset => drawableManiaRuleset;
+
         protected override float SamplePlaybackPosition
         {
             get
@@ -51,6 +58,13 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
         /// If non-null, judgements will be ignored whilst the function returns false.
         /// </summary>
         public Func<DrawableHitObject, double, bool> CheckHittable;
+
+        /// <summary>
+        /// 列级按键已路由到其它 drawable 时跳过本物件的 <see cref="IKeyBindingHandler.OnPressed"/>。
+        /// </summary>
+        public Func<DrawableHitObject, bool> ShouldSkipColumnRoutedPress;
+
+        protected bool UsesColumnPressRouting => this.FindClosestParent<DrawableManiaRuleset>()?.ColumnRoutesInput == true;
 
         protected DrawableManiaHitObject(ManiaHitObject hitObject)
             : base(hitObject)
@@ -121,6 +135,21 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
                     this.FadeOut();
                     break;
             }
+        }
+
+        /// <summary>
+        /// 被动 miss：在通知 <see cref="ScoreProcessor"/> 前写入 stored TimeOffset（与 Session end-sweep 对齐）。
+        /// </summary>
+        internal void EzApplyPassiveMissWithStoredOffset()
+        {
+            ApplyResultWithStoredTiming(
+                static (r, _) =>
+                {
+                    r.Type = HitResult.Miss;
+                    r.IsComboHit = false;
+                },
+                0,
+                ManiaDrawableMissTiming.ResolveStoredOffset(this));
         }
 
         /// <summary>

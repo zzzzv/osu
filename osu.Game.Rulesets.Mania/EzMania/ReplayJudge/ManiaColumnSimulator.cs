@@ -43,8 +43,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 if (state.Target.StartTime >= targetStartTime)
                     break;
 
-                state.Judged = true;
-                state.Result = HitResult.Miss;
                 yield return state;
             }
         }

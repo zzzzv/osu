@@ -3,6 +3,7 @@
 
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Scoring;
+using osu.Game.Rulesets.Mania.EzMania.Diagnostics;
 using osu.Game.Rulesets.Mania.EzMania.Helper;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings;
 using osu.Game.Rulesets.Mania.Objects.EzCurrentHitObject;
@@ -68,7 +69,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         /// <summary>
         /// 列级按键：缓存本按 press-time BPM（O2 每输入至多查表一次）。
         /// </summary>
-        public void NotifyO2InputAt(double time) => O2PressBpm = O2HitModeExtension.GetBPMAtTime(time);
+        public void NotifyO2InputAt(double time)
+        {
+            O2PressBpm = O2HitModeExtension.GetBPMAtTime(time);
+            ManiaJudgeHotPathTrace.RecordO2BpmLookup();
+        }
 
         public double O2PressBpm { get; private set; }
 

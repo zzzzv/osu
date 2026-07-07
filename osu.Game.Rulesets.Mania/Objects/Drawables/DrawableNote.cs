@@ -15,6 +15,7 @@ using osu.Game.EzOsuGame.Configuration;
 using osu.Game.Rulesets.Mania.Configuration;
 using osu.Game.Rulesets.Mania.Skinning.Default;
 using osu.Game.Rulesets.Mania.EzMania.Helper;
+using osu.Game.Rulesets.Mania.EzMania.Diagnostics;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
 using osu.Game.Rulesets.Scoring;
 using osu.Game.Rulesets.UI.Scrolling;
@@ -87,6 +88,9 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
 
         protected override void CheckForResult(bool userTriggered, double timeOffset)
         {
+            if (!userTriggered)
+                ManiaJudgeHotPathTrace.RecordCheckForResult();
+
             if (ManiaEzDrawableJudgement.TryHitModeCheckForResult(this, userTriggered, timeOffset))
                 return;
 
@@ -95,7 +99,7 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
             if (!userTriggered)
             {
                 if (!HitObject.HitWindows.CanBeHit(timeOffset))
-                    ApplyMinResult();
+                    EzApplyPassiveMissWithStoredOffset();
 
                 return;
             }
@@ -116,6 +120,9 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
 
         public virtual bool OnPressed(KeyBindingPressEvent<ManiaAction> e)
         {
+            if (ShouldSkipColumnRoutedPress?.Invoke(this) == true)
+                return false;
+
             if (e.Action == Action.Value && ManiaEzDrawableJudgement.TryBmsOnPressed(this, e))
                 return true;
 
@@ -125,8 +132,10 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
             if (CheckHittable?.Invoke(this, Time.Current) == false)
                 return false;
 
-            return UpdateResult(true);
+            return ApplyColumnRoutedPress();
         }
+
+        internal bool ApplyColumnRoutedPress() => UpdateResult(true);
 
         public virtual void OnReleased(KeyBindingReleaseEvent<ManiaAction> e)
         {

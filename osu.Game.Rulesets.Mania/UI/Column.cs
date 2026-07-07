@@ -2,6 +2,7 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using System.Collections.Generic;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Extensions.ObjectExtensions;
@@ -15,7 +16,10 @@ using osu.Game.Extensions;
 using osu.Game.EzOsuGame;
 using osu.Game.EzOsuGame.Audio;
 using osu.Game.EzOsuGame.Configuration;
+using osu.Game.Rulesets.Mania.EzMania.Diagnostics;
+using osu.Game.Rulesets.Mania.EzMania.Helper;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
+using osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings;
 using osu.Game.Rulesets.Judgements;
 using osu.Game.Rulesets.Mania.Beatmaps;
 using osu.Game.Rulesets.Mania.Configuration;
@@ -54,7 +58,8 @@ namespace osu.Game.Rulesets.Mania.UI
 
         private DrawablePool<PoolableHitExplosion> hitExplosionPool = null!;
         private OrderedHitPolicy hitPolicy = null!;
-        private ManiaLaneController? laneController;
+        private EzEnumJudgePrecedence judgePrecedence;
+        private bool bmsMode;
         public Container UnderlayElements => HitObjectArea.UnderlayElements;
 
         private GameplaySampleTriggerSource sampleTriggerSource = null!;
@@ -101,6 +106,29 @@ namespace osu.Game.Rulesets.Mania.UI
         //
         // public IEzSkinInfo EzSkinInfo => ezSkinInfo;
 
+        [Resolved(canBeNull: true)]
+        private DrawableManiaRuleset? drawableRuleset { get; set; }
+
+        internal ManiaLaneController LaneController { get; private set; } = null!;
+
+        private readonly List<double> pressTimes = new List<double>();
+
+        internal void RecordPressTime(double time) => pressTimes.Add(time);
+
+        internal List<double> GetPressTimesSnapshot() => new List<double>(pressTimes);
+
+        internal bool TryGetBmsRoute(DrawableNote note, out BmsHitModeJudgement.BmsRouteState route)
+        {
+            if (LaneController.TryGetEntry(note, out var entry))
+            {
+                route = entry.BmsRoute;
+                return true;
+            }
+
+            route = null!;
+            return false;
+        }
+
         public Bindable<string> NoteSetNameBindable = null!;
         public Bindable<bool> ColorSettingsEnabledBindable = null!;
         public Bindable<Colour4> EzNoteColourBindable = null!;
@@ -132,13 +160,12 @@ namespace osu.Game.Rulesets.Mania.UI
 
             // JudgePrecedence 来自全局配置（与 ManiaJudgementRound.Create 一致）；勿 [Resolved] DrawableManiaRuleset——
             // 皮肤预览等场景会单独构造 Column，且 JudgementRound 在 ruleset LoadComplete 才冻结。
-            var judgePrecedence = ezConfig.Get<EzEnumJudgePrecedence>(Ez2Setting.JudgePrecedence);
+            judgePrecedence = ezConfig.Get<EzEnumJudgePrecedence>(Ez2Setting.JudgePrecedence);
+            var hitMode = ezConfig.Get<EzEnumHitMode>(Ez2Setting.ManiaHitMode);
+            bmsMode = HitModeHelper.IsBMSHitMode(hitMode);
 
-            // Earliest：列内有序目标 + 游标（ManiaLaneController），Drawable / Session 共用 note-lock 语义。
-            // Combo / Duration：暂不建 controller，OrderedHitPolicy 仍走 OrderedHitPolicyHelper 全列 AliveObjects 扫描。
-            // TODO(LANE-PRECEDENCE): Combo/Duration 也接入 ManiaLaneController 列级目标选择，替代热路径全列扫描（见 HIGH_KPS_JUDGE_BACKLOG.md）。
-            laneController = judgePrecedence == EzEnumJudgePrecedence.Earliest ? new ManiaLaneController() : null;
-            hitPolicy = new OrderedHitPolicy(HitObjectContainer, judgePrecedence, laneController);
+            LaneController = new ManiaLaneController();
+            hitPolicy = new OrderedHitPolicy(HitObjectContainer, judgePrecedence, LaneController, bmsMode);
 
             EzNoteTypeBindable = ezConfig.GetColumnTypeBindable(KeyMode, Index);
             EzNoteSizeBindable = ezFactory.GetNoteSizeBindable(KeyMode, Index);
@@ -272,6 +299,7 @@ namespace osu.Game.Rulesets.Mania.UI
                 hitPolicy.EnsureRegistered(d);
                 return hitPolicy.IsHittable(d, time);
             };
+            maniaObject.ShouldSkipColumnRoutedPress = hitPolicy.ShouldSkipDrawablePress;
         }
 
         private sealed partial class LaneTrackingScrollingHitObjectContainer : ScrollingHitObjectContainer
@@ -314,16 +342,49 @@ namespace osu.Game.Rulesets.Mania.UI
             if (e.Action != Action.Value)
                 return false;
 
-            // 记录延迟追踪按键输入
+            ManiaJudgeHotPathTrace.RecordColumnOnPressed();
+
             InputAudioLatencyTracker.Instance?.RecordColumnPress(Index);
+
+            if (e.Action == Action.Value)
+                RecordPressTime(Time.Current);
+
+            bool routed = false;
+
+            if (drawableRuleset?.ColumnRoutesInput == true)
+            {
+                if (drawableRuleset.JudgementRound is { IsO2Jam: true } round)
+                    round.NotifyO2InputAt(Time.Current);
+
+                if (hitPolicy.TryRoutePress(Time.Current, out var target))
+                    routed = hitPolicy.ApplyRoutedPress(target!, Time.Current, e);
+            }
 
             if (keySoundPreviewMode != KeySoundPreviewMode.AutoPlayPlus)
                 sampleTriggerSource.Play();
-            return true;
+
+            return routed;
         }
 
         public void OnReleased(KeyBindingReleaseEvent<ManiaAction> e)
         {
+            if (e.Action != Action.Value)
+                return;
+
+            if (drawableRuleset?.ColumnRoutesInput != true)
+                return;
+
+            var activeHold = LaneController.ActiveHold;
+
+            if (activeHold == null || !activeHold.IsHolding.Value)
+                return;
+
+            var round = drawableRuleset.JudgementRound;
+
+            if (round != null)
+                ManiaEzDrawableJudgement.TryColumnHoldTailRelease(activeHold, Time.Current, round);
+
+            LaneController.SetActiveHold(null);
         }
 
         public override bool ReceivePositionalInputAt(Vector2 screenSpacePos)

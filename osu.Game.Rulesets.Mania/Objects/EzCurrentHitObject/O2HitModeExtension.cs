@@ -108,6 +108,46 @@ namespace osu.Game.Rulesets.Mania.Objects.EzCurrentHitObject
 
         public static double SafeBpm(double bpm) => double.IsFinite(bpm) && bpm > 0 ? Math.Max(bpm, 75.0) : 75.0;
 
+        /// <summary>
+        /// Pill 逻辑：使用已算 BPM，避免 press 路径重复 <see cref="GetBPMAtTime"/>。
+        /// </summary>
+        public static bool PillCheckWithBpm(double timeOffset, double bpm, out bool applyComboBreak, out bool upgradeToPerfect)
+        {
+            applyComboBreak = false;
+            upgradeToPerfect = false;
+
+            if (!PillActivated)
+                return true;
+
+            double absOffset = Math.Abs(timeOffset);
+            GetRanges(SafeBpm(bpm), 1, out double coolRange, out double goodRange, out double badRange);
+
+            if (absOffset <= coolRange)
+            {
+                IncrementCoolCombo();
+            }
+            else if (absOffset <= goodRange)
+            {
+                CoolCombo = 0;
+            }
+            else if (absOffset <= badRange)
+            {
+                CoolCombo = 0;
+
+                if (PILL_COUNT.Value > 0)
+                {
+                    PILL_COUNT.Value = Math.Clamp(PILL_COUNT.Value - 1, 0, 5);
+                    upgradeToPerfect = true;
+                }
+                else
+                {
+                    applyComboBreak = true;
+                }
+            }
+
+            return true;
+        }
+
         public static void GetRanges(double bpm, double totalMultiplier, out double cool, out double good, out double bad)
         {
             double safe = SafeBpm(bpm);

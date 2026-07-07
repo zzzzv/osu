@@ -29,6 +29,16 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
         public void SetUp() => ReplayJudgeTestConfig.ApplyToGlobalConfig(LazerTapReplayFixtures.CreateTwoNoteColumnTap().environment);
 
         [Test]
+        public void TestOverlappingJackSessionIncludesMiddleMiss()
+        {
+            var (score, beatmap, environment) = JudgePrecedenceReplayFixtures.CreateOverlappingJack(
+                EzEnumHitMode.Lazer, EzEnumHealthMode.Lazer, EzEnumJudgePrecedence.Earliest);
+            var events = ManiaReplaySession.RunHitEvents(score, beatmap, environment);
+            Assert.That(events.Any(e => e.HitObject.StartTime == 1080 && e.Result == HitResult.Miss), Is.True,
+                () => ManiaReplayParityHelper.DescribeHitEvents(events));
+        }
+
+        [Test]
         public void TestForceMissEarlierMissesHaveDistinctStoredOffsets()
         {
             var (score, beatmap, environment) = createSkipFirstNoteTap();

@@ -7,6 +7,7 @@ using osu.Framework.Graphics;
 using osu.Framework.Input.Events;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Scoring;
+using osu.Game.Rulesets.Mania.EzMania.Diagnostics;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings;
 using osu.Game.Rulesets.Mania.Objects;
 using osu.Game.Rulesets.Mania.Objects.Drawables;
@@ -38,13 +39,24 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             => GlobalConfigStore.EzConfig.ResolveEnvironment(ReplayRunPurpose.ForLive).ManiaHitMode == EzEnumHitMode.O2Jam;
 
         internal static BmsHitModeJudgement.BmsRouteState GetBmsState(DrawableNote note)
-            => note_bms_states.GetValue(note, _ => new BmsHitModeJudgement.BmsRouteState());
+        {
+            if (note.FindClosestParent<Column>() is Column column && column.TryGetBmsRoute(note, out var route))
+                return route;
+
+            return note_bms_states.GetValue(note, _ => new BmsHitModeJudgement.BmsRouteState());
+        }
 
         internal static BmsHitModeJudgement.BmsRouteState GetBmsState(DrawableHoldNoteTail tail)
             => tail_bms_states.GetValue(tail, _ => new BmsHitModeJudgement.BmsRouteState());
 
         private static ManiaJudgementRound getJudgementRound(DrawableHitObject? drawable = null)
         {
+            if (drawable is DrawableManiaHitObject maniaDrawable
+                && maniaDrawable.EzDrawableManiaRuleset?.JudgementRound is { } cachedRound)
+            {
+                return cachedRound;
+            }
+
             if (drawable?.FindClosestParent<DrawableManiaRuleset>() is { JudgementRound: { } round })
                 return round;
 
@@ -127,12 +139,16 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             return O2HitModeJudgement.Instance.TryO2HoldCheckForResult(hold, userTriggered, timeOffset);
         }
 
-        internal static void ApplyNoteOutcome(DrawableNote drawable, ManiaJudgementRound round, ManiaNoteJudgementOutcome outcome)
+        internal static void ApplyNoteOutcome(DrawableNote drawable, ManiaJudgementRound round, ManiaNoteJudgementOutcome outcome, bool userTriggered = true)
         {
             switch (outcome.Kind)
             {
                 case ManiaNoteJudgementOutcomeKind.Apply:
-                    drawable.EzApplyFinalResult(outcome.Result, round.Environment.ManiaHitMode);
+                    if (!userTriggered && outcome.Result == HitResult.Miss)
+                        drawable.EzApplyPassiveMissWithStoredOffset();
+                    else
+                        drawable.EzApplyFinalResult(outcome.Result, round.Environment.ManiaHitMode);
+
                     break;
 
                 case ManiaNoteJudgementOutcomeKind.DispatchExtra:
@@ -167,9 +183,28 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 applyFinal(result);
         }
 
+        internal static bool TryColumnHoldTailRelease(DrawableHoldNote hold, double currentTime, ManiaJudgementRound round)
+        {
+            if (!hold.IsHolding.Value)
+                return false;
+
+            if (ManiaEzDrawableJudgement.TryMalodyHoldOnReleased(hold))
+                return true;
+
+            hold.Tail.UpdateResult();
+            hold.Body.TriggerResult(hold.Tail.IsHit);
+            hold.Result.ReportHoldState(currentTime, false);
+            return true;
+        }
+
         internal static bool TryApplyEzNoteCheckForResult(DrawableNote drawable, bool userTriggered, double timeOffset)
         {
+            ManiaJudgeHotPathTrace.RecordCheckForResult();
+
             var round = getJudgementRound(drawable);
+
+            if (!userTriggered && !ManiaAutoMissGate.ShouldEvaluateAutoMiss(drawable.HitObject, timeOffset))
+                return true;
 
             if (!round.IsEzHitMode)
                 return false;
@@ -195,25 +230,29 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
             if (hitMode is O2HitModeJudgement o2)
             {
-                (drawable.HitObject.HitWindows as ManiaHitWindows)?.UpdateO2JamBpmFromTime(drawable.Time.Current);
-
                 if (userTriggered)
                 {
-                    bool cont = O2HitModeExtension.PillCheck(timeOffset, drawable.Time.Current, out bool _, out bool upgradeToPerfect);
-                    var outcome = o2.EvaluateDrawableNotePress(timeOffset, drawable.HitObject.HitWindows!, new O2HitModeJudgement.DrawableNoteContext
+                    bool upgradeToPerfect = false;
+                    bool cont = !round.PillModeEnabled
+                                || O2HitModeExtension.PillCheckWithBpm(timeOffset, round.O2PressBpm, out bool _, out upgradeToPerfect);
+                    var outcome = o2.EvaluatePress(timeOffset, drawable.HitObject.HitWindows!, new O2HitModeJudgement.NotePressContext
                     {
-                        CurrentTime = drawable.Time.Current,
+                        RawOffset = timeOffset,
+                        Bpm = round.O2PressBpm,
+                        UsePressTimeBpmForJudgement = true,
+                        PillModeEnabled = round.PillModeEnabled,
                         PillCheckPassed = cont,
                         UpgradeToPerfect = upgradeToPerfect,
-                    }, round.MutableState);
+                        State = round.MutableState,
+                    });
 
-                    if (outcome != null)
-                        ApplyNoteOutcome(drawable, round, outcome.Value);
-
+                    ApplyNoteOutcome(drawable, round, outcome, userTriggered: true);
                     return true;
                 }
 
-                ApplyNoteOutcome(drawable, round, o2.EvaluateAutoMiss(timeOffset, drawable.HitObject.HitWindows!));
+                long frameId = (long)(drawable.Time.Current * 1000);
+                double bpm = round.GetO2BpmForAutoMiss(drawable.Time.Current, frameId);
+                ApplyNoteOutcome(drawable, round, o2.EvaluateAutoMiss(timeOffset, drawable.HitObject.HitWindows!, bpm), userTriggered: false);
                 return true;
             }
 
@@ -221,27 +260,32 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             {
                 if (userTriggered)
                 {
-                    ApplyNoteOutcome(drawable, round, ez2Ac.EvaluateDrawablePress(timeOffset, drawable.HitObject.HitWindows!, drawable.HitObject is HeadNote));
+                    ApplyNoteOutcome(drawable, round, ez2Ac.EvaluateDrawablePress(timeOffset, drawable.HitObject.HitWindows!, drawable.HitObject is HeadNote), userTriggered: true);
                     return true;
                 }
 
-                ApplyNoteOutcome(drawable, round, ez2Ac.EvaluateAutoMiss(timeOffset, drawable.HitObject.HitWindows!));
+                ApplyNoteOutcome(drawable, round, ez2Ac.EvaluateAutoMiss(timeOffset, drawable.HitObject.HitWindows!), userTriggered: false);
                 return true;
             }
 
             if (userTriggered)
             {
-                ApplyNoteOutcome(drawable, round, hitMode.EvaluatePress(timeOffset, drawable.HitObject.HitWindows!));
+                ApplyNoteOutcome(drawable, round, hitMode.EvaluatePress(timeOffset, drawable.HitObject.HitWindows!), userTriggered: true);
                 return true;
             }
 
-            ApplyNoteOutcome(drawable, round, hitMode.EvaluateAutoMiss(timeOffset, drawable.HitObject.HitWindows!));
+            ApplyNoteOutcome(drawable, round, hitMode.EvaluateAutoMiss(timeOffset, drawable.HitObject.HitWindows!), userTriggered: false);
             return true;
         }
 
         internal static bool TryApplyEzHoldTailCheckForResult(DrawableHoldNoteTail drawable, bool userTriggered, double timeOffset)
         {
+            ManiaJudgeHotPathTrace.RecordCheckForResult();
+
             var round = getJudgementRound(drawable);
+
+            if (!userTriggered && !ManiaAutoMissGate.ShouldEvaluateAutoMiss(drawable.HitObject, timeOffset))
+                return true;
 
             if (!round.IsEzHitMode)
                 return false;
