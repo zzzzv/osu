@@ -136,46 +136,23 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
             return DrawableAction.Extra(BmsJudge.KPoor, clearCanRouteToKPoor: true);
         }
 
+        public DrawableAction EvaluateAutoMissAction(ManiaHitWindows windows, double timeOffset)
+            => toDrawableAction(evaluatePressCore(windows, timeOffset, state: null, poorEnabled: false, autoMiss: true, forcePoorOnTailHoldBreak: false, checkCanRouteOnPress: false));
+
+        public DrawableAction EvaluatePressAction(
+            ManiaHitWindows windows,
+            double timeOffset,
+            BmsRouteState state,
+            bool poorEnabled,
+            bool checkCanRouteOnPress,
+            bool forcePoorOnTailHoldBreak = false)
+            => toDrawableAction(evaluatePressCore(windows, timeOffset, state, poorEnabled, autoMiss: false, forcePoorOnTailHoldBreak, checkCanRouteOnPress));
+
         public DrawableAction EvaluateDrawableAutoMiss(ManiaHitWindows windows, double timeOffset)
-        {
-            double badLate = WindowFor(windows, BmsJudge.Bad, false);
-
-            if (shouldAutoMiss(windows, timeOffset, badLate))
-                return DrawableAction.Final(BmsJudge.Poor);
-
-            return DrawableAction.Ignore;
-        }
+            => EvaluateAutoMissAction(windows, timeOffset);
 
         public DrawableAction EvaluateDrawablePress(ManiaHitWindows windows, double timeOffset, BmsRouteState state, bool poorEnabled, bool forcePoorOnTailHoldBreak = false)
-        {
-            double badLate = WindowFor(windows, BmsJudge.Bad, false);
-
-            if (poorEnabled && state.CanRouteToKPoor && windows.IsHitResultAllowed(MapTo(BmsJudge.KPoor)))
-                return DrawableAction.Extra(BmsJudge.KPoor, clearCanRouteToKPoor: true);
-
-            var judge = resolvePressedJudge(windows, timeOffset, badLate);
-
-            if (judge == BmsJudge.None)
-                return DrawableAction.Ignore;
-
-            if (forcePoorOnTailHoldBreak)
-                judge = BmsJudge.Poor;
-
-            if (judge == BmsJudge.KPoor)
-            {
-                if (!poorEnabled || !windows.IsHitResultAllowed(MapTo(BmsJudge.KPoor)))
-                    return DrawableAction.Ignore;
-
-                bool isLatePress = IsLateOutsideBad(timeOffset, badLate);
-
-                if (!isLatePress || !state.HasLateKPoor)
-                    return DrawableAction.Extra(BmsJudge.KPoor, setHasLateKPoor: isLatePress);
-
-                return DrawableAction.Ignore;
-            }
-
-            return DrawableAction.Final(judge, setCanRouteToKPoor: judge == BmsJudge.Bad && timeOffset < 0 && poorEnabled);
-        }
+            => EvaluatePressAction(windows, timeOffset, state, poorEnabled, checkCanRouteOnPress: true, forcePoorOnTailHoldBreak: forcePoorOnTailHoldBreak);
 
         public static void ApplyRouteState(BmsRouteState state, DrawableAction action)
         {
@@ -190,35 +167,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
         }
 
         internal SessionPressOutcome EvaluateSessionPress(ManiaHitWindows windows, double timeOffset, BmsRouteState state, bool poorEnabled)
-        {
-            var outcome = EvaluatePress(timeOffset, windows);
-
-            if (outcome.Kind == ManiaNoteJudgementOutcomeKind.None)
-                return default;
-
-            var judge = FromHitResult(outcome.Result);
-
-            if (outcome.Kind == ManiaNoteJudgementOutcomeKind.DispatchExtra)
-            {
-                double badLate = WindowFor(windows, BmsJudge.Bad, false);
-                bool isLatePress = IsLateOutsideBad(timeOffset, badLate);
-
-                if (isLatePress && state.HasLateKPoor)
-                    return default;
-
-                if (isLatePress)
-                    state.HasLateKPoor = true;
-
-                return new SessionPressOutcome { Kind = SessionPressKind.DispatchExtra, Judge = judge };
-            }
-
-            return new SessionPressOutcome
-            {
-                Kind = SessionPressKind.ApplyFinal,
-                Judge = judge,
-                EnableCanRouteToKPoor = judge == BmsJudge.Bad && timeOffset < 0 && poorEnabled,
-            };
-        }
+            => toSessionOutcome(evaluatePressCore(windows, timeOffset, state, poorEnabled, autoMiss: false, forcePoorOnTailHoldBreak: false, checkCanRouteOnPress: false), state);
 
         internal bool TryRoutePostBadKPoor(
             IReadOnlyList<LaneTargetState> laneStates,
@@ -338,6 +287,124 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
 
         private static bool shouldAutoMiss(ManiaHitWindows windows, double timeOffset, double badLate)
             => windows.ResultFor(timeOffset) == HitResult.None && IsLateOutsideBad(timeOffset, badLate);
+
+        private enum BmsPressCoreKind
+        {
+            None,
+            Ignore,
+            ApplyFinal,
+            DispatchExtra,
+        }
+
+        private readonly struct BmsPressCoreResult
+        {
+            public BmsPressCoreKind Kind { get; init; }
+
+            public BmsJudge Judge { get; init; }
+
+            public bool? SetCanRouteToKPoor { get; init; }
+
+            public bool? SetHasLateKPoor { get; init; }
+
+            public bool ClearCanRouteToKPoor { get; init; }
+        }
+
+        private static BmsPressCoreResult evaluatePressCore(
+            ManiaHitWindows windows,
+            double timeOffset,
+            BmsRouteState? state,
+            bool poorEnabled,
+            bool autoMiss,
+            bool forcePoorOnTailHoldBreak,
+            bool checkCanRouteOnPress)
+        {
+            double badLate = WindowFor(windows, BmsJudge.Bad, false);
+
+            if (autoMiss)
+            {
+                if (shouldAutoMiss(windows, timeOffset, badLate))
+                    return new BmsPressCoreResult { Kind = BmsPressCoreKind.ApplyFinal, Judge = BmsJudge.Poor };
+
+                return new BmsPressCoreResult { Kind = BmsPressCoreKind.Ignore };
+            }
+
+            if (checkCanRouteOnPress && state != null && poorEnabled && state.CanRouteToKPoor && windows.IsHitResultAllowed(MapTo(BmsJudge.KPoor)))
+                return new BmsPressCoreResult { Kind = BmsPressCoreKind.DispatchExtra, Judge = BmsJudge.KPoor, ClearCanRouteToKPoor = true };
+
+            var judge = resolvePressedJudge(windows, timeOffset, badLate);
+
+            if (judge == BmsJudge.None)
+                return new BmsPressCoreResult { Kind = BmsPressCoreKind.Ignore };
+
+            if (forcePoorOnTailHoldBreak)
+                judge = BmsJudge.Poor;
+
+            if (judge == BmsJudge.KPoor)
+            {
+                if (!poorEnabled || !windows.IsHitResultAllowed(MapTo(BmsJudge.KPoor)))
+                    return new BmsPressCoreResult { Kind = BmsPressCoreKind.Ignore };
+
+                bool isLatePress = IsLateOutsideBad(timeOffset, badLate);
+
+                if (state != null && isLatePress && state.HasLateKPoor)
+                    return new BmsPressCoreResult { Kind = BmsPressCoreKind.None };
+
+                return new BmsPressCoreResult
+                {
+                    Kind = BmsPressCoreKind.DispatchExtra,
+                    Judge = BmsJudge.KPoor,
+                    SetHasLateKPoor = isLatePress,
+                };
+            }
+
+            return new BmsPressCoreResult
+            {
+                Kind = BmsPressCoreKind.ApplyFinal,
+                Judge = judge,
+                SetCanRouteToKPoor = judge == BmsJudge.Bad && timeOffset < 0 && poorEnabled,
+            };
+        }
+
+        private static DrawableAction toDrawableAction(BmsPressCoreResult core)
+        {
+            switch (core.Kind)
+            {
+                case BmsPressCoreKind.Ignore:
+                    return DrawableAction.Ignore;
+
+                case BmsPressCoreKind.ApplyFinal:
+                    return DrawableAction.Final(core.Judge, setCanRouteToKPoor: core.SetCanRouteToKPoor);
+
+                case BmsPressCoreKind.DispatchExtra:
+                    return DrawableAction.Extra(core.Judge, setHasLateKPoor: core.SetHasLateKPoor, clearCanRouteToKPoor: core.ClearCanRouteToKPoor);
+
+                default:
+                    return DrawableAction.NotHandled;
+            }
+        }
+
+        private static SessionPressOutcome toSessionOutcome(BmsPressCoreResult core, BmsRouteState state)
+        {
+            switch (core.Kind)
+            {
+                case BmsPressCoreKind.ApplyFinal:
+                    return new SessionPressOutcome
+                    {
+                        Kind = SessionPressKind.ApplyFinal,
+                        Judge = core.Judge,
+                        EnableCanRouteToKPoor = core.SetCanRouteToKPoor == true,
+                    };
+
+                case BmsPressCoreKind.DispatchExtra:
+                    if (core.SetHasLateKPoor == true)
+                        state.HasLateKPoor = true;
+
+                    return new SessionPressOutcome { Kind = SessionPressKind.DispatchExtra, Judge = core.Judge };
+
+                default:
+                    return default;
+            }
+        }
 
         private static BmsJudge resolvePressedJudge(ManiaHitWindows windows, double timeOffset, double badLate)
         {

@@ -206,76 +206,33 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             if (!userTriggered && !ManiaAutoMissGate.ShouldEvaluateAutoMiss(drawable.HitObject, timeOffset))
                 return true;
 
-            if (!round.IsEzHitMode)
+            if (!round.IsEzHitMode || round.Strategy == null)
                 return false;
 
-            var hitMode = round.Strategy;
-            if (hitMode == null)
-                return false;
+            bool o2PillPassed = true;
+            bool o2Upgrade = false;
 
-            if (hitMode is BmsHitModeJudgement bms)
+            if (userTriggered && round.Strategy is O2HitModeJudgement && round.PillModeEnabled)
+                o2PillPassed = O2HitModeExtension.PillCheckWithBpm(timeOffset, round.O2PressBpm, out _, out o2Upgrade);
+
+            var bmsState = round.Strategy is BmsHitModeJudgement ? GetBmsState(drawable) : null;
+
+            var result = ManiaJudgementKernel.EvaluateNote(new ManiaJudgementKernel.NoteEvaluationRequest
             {
-                if (drawable.HitObject.HitWindows is not ManiaHitWindows maniaWindows)
-                    return true;
+                Round = round,
+                TimeOffset = timeOffset,
+                HitWindows = drawable.HitObject.HitWindows!,
+                UserTriggered = userTriggered,
+                IsLnHead = drawable.HitObject is HeadNote,
+                EventTime = drawable.Time.Current,
+                FrameStableId = getFrameStableId(drawable),
+                BmsState = bmsState,
+                CheckBmsCanRouteOnPress = userTriggered,
+                O2PillCheckPassed = o2PillPassed,
+                O2UpgradeToPerfect = o2Upgrade,
+            });
 
-                var state = GetBmsState(drawable);
-
-                var action = userTriggered
-                    ? bms.EvaluateDrawablePress(maniaWindows, timeOffset, state, round.PoorEnabled)
-                    : bms.EvaluateDrawableAutoMiss(maniaWindows, timeOffset);
-
-                ApplyBmsAction(drawable, round, action, state);
-                return true;
-            }
-
-            if (hitMode is O2HitModeJudgement o2)
-            {
-                if (userTriggered)
-                {
-                    bool upgradeToPerfect = false;
-                    bool cont = !round.PillModeEnabled
-                                || O2HitModeExtension.PillCheckWithBpm(timeOffset, round.O2PressBpm, out bool _, out upgradeToPerfect);
-                    var outcome = o2.EvaluatePress(timeOffset, drawable.HitObject.HitWindows!, new O2HitModeJudgement.NotePressContext
-                    {
-                        RawOffset = timeOffset,
-                        Bpm = round.O2PressBpm,
-                        UsePressTimeBpmForJudgement = true,
-                        PillModeEnabled = round.PillModeEnabled,
-                        PillCheckPassed = cont,
-                        UpgradeToPerfect = upgradeToPerfect,
-                        State = round.MutableState,
-                    });
-
-                    ApplyNoteOutcome(drawable, round, outcome, userTriggered: true);
-                    return true;
-                }
-
-                long frameId = (long)(drawable.Time.Current * 1000);
-                double bpm = round.GetO2BpmForAutoMiss(drawable.Time.Current, frameId);
-                ApplyNoteOutcome(drawable, round, o2.EvaluateAutoMiss(timeOffset, drawable.HitObject.HitWindows!, bpm), userTriggered: false);
-                return true;
-            }
-
-            if (hitMode is Ez2AcHitModeJudgement ez2Ac)
-            {
-                if (userTriggered)
-                {
-                    ApplyNoteOutcome(drawable, round, ez2Ac.EvaluateDrawablePress(timeOffset, drawable.HitObject.HitWindows!, drawable.HitObject is HeadNote), userTriggered: true);
-                    return true;
-                }
-
-                ApplyNoteOutcome(drawable, round, ez2Ac.EvaluateAutoMiss(timeOffset, drawable.HitObject.HitWindows!), userTriggered: false);
-                return true;
-            }
-
-            if (userTriggered)
-            {
-                ApplyNoteOutcome(drawable, round, hitMode.EvaluatePress(timeOffset, drawable.HitObject.HitWindows!), userTriggered: true);
-                return true;
-            }
-
-            ApplyNoteOutcome(drawable, round, hitMode.EvaluateAutoMiss(timeOffset, drawable.HitObject.HitWindows!), userTriggered: false);
-            return true;
+            return applyNoteEvaluation(drawable, round, result, bmsState, userTriggered);
         }
 
         internal static bool TryApplyEzHoldTailCheckForResult(DrawableHoldNoteTail drawable, bool userTriggered, double timeOffset)
@@ -290,131 +247,111 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             if (!round.IsEzHitMode)
                 return false;
 
-            var hitMode = round.Strategy;
+            bool o2PillPassed = true;
+            bool o2Upgrade = false;
 
-            if (hitMode is MalodyHitModeJudgement)
+            if (userTriggered && round.Strategy is O2HitModeJudgement && round.PillModeEnabled)
+                o2PillPassed = O2HitModeExtension.PillCheckWithBpm(timeOffset, round.O2PressBpm, out _, out o2Upgrade);
+
+            var bmsState = round.Strategy is BmsHitModeJudgement ? GetBmsState(drawable) : null;
+
+            var result = ManiaJudgementKernel.EvaluateHoldTail(new ManiaJudgementKernel.HoldTailEvaluationRequest
             {
-                if (!userTriggered && timeOffset >= 0)
-                    drawable.EzApplyFinalResult(HitResult.IgnoreHit, round.Environment.ManiaHitMode);
-
-                return true;
-            }
-
-            if (hitMode is BmsHitModeJudgement bms)
-            {
-                if (drawable.HitObject.HitWindows is not ManiaHitWindows maniaWindows)
-                    return true;
-
-                var state = GetBmsState(drawable);
-                bool forcePoor = !drawable.HoldNote.IsHolding.Value && drawable.HoldNote.Body.HasHoldBreak;
-
-                var action = userTriggered
-                    ? bms.EvaluateDrawablePress(maniaWindows, timeOffset, state, round.PoorEnabled, forcePoorOnTailHoldBreak: forcePoor)
-                    : bms.EvaluateDrawableAutoMiss(maniaWindows, timeOffset);
-
-                ApplyBmsAction(drawable, round, action, state);
-                return true;
-            }
-
-            if (hitMode is O2HitModeJudgement o2)
-            {
-                (drawable.HitObject.HitWindows as ManiaHitWindows)?.UpdateO2JamBpmFromTime(drawable.Time.Current);
-
-                if (!userTriggered)
-                {
-                    if (drawable.HoldNote.Body.HasHoldBreak)
-                    {
-                        if (timeOffset < 0)
-                            return true;
-
-                        drawable.EzApplyFinalResult(O2HitModeJudgement.MapTo(O2Judge.Miss), round.Environment.ManiaHitMode);
-                        return true;
-                    }
-
-                    if (!drawable.HitObject.HitWindows!.CanBeHit(timeOffset))
-                        drawable.EzApplyMinResult();
-
-                    return true;
-                }
-
-                bool cont = O2HitModeExtension.PillCheck(timeOffset, drawable.Time.Current, out bool _, out bool upgradeToPerfect);
-                var result = o2.EvaluateDrawableTailPress(timeOffset, drawable.HitObject.HitWindows!, new O2HitModeJudgement.DrawableTailContext
-                {
-                    CurrentTime = drawable.Time.Current,
-                    PillCheckPassed = cont,
-                    UpgradeToPerfect = upgradeToPerfect,
-                    HeadHit = drawable.HoldNote.Head.IsHit,
-                    HoldBroken = drawable.HoldNote.Body.HasHoldBreak,
-                    WasHolding = drawable.HoldNote.IsHolding.Value,
-                    PillModeEnabled = round.PillModeEnabled,
-                }, round.MutableState);
-
-                if (result != null)
-                    drawable.EzApplyFinalResult(result.Value, round.Environment.ManiaHitMode);
-
-                return true;
-            }
-
-            if (hitMode is Ez2AcHitModeJudgement ez2Ac)
-            {
-                bool headMissOrBreak = !drawable.HoldNote.Head.IsHit || drawable.HoldNote.Body.HasHoldBreak;
-
-                if (!userTriggered)
-                {
-                    if (timeOffset < 0)
-                        return true;
-
-                    if (headMissOrBreak)
-                    {
-                        if (!drawable.HitObject.HitWindows!.CanBeHit(timeOffset))
-                            drawable.EzApplyMinResult();
-
-                        return true;
-                    }
-                }
-
-                var tailJudge = ez2Ac.EvaluateTailJudge(new HoldTailEvaluationContext
-                {
-                    RawOffset = timeOffset,
-                    TimeOffsetForJudgement = timeOffset,
-                    HitWindows = drawable.HitObject.HitWindows!,
-                    HeadHit = drawable.HoldNote.Head.IsHit,
-                    HoldBreak = ez2Ac.IsHoldBreak(timeOffset, drawable.HitObject.HitWindows!),
-                    HoldBroken = drawable.HoldNote.Body.HasHoldBreak,
-                    WasHoldingBeforeRelease = drawable.HoldNote.IsHolding.Value,
-                });
-
-                if (tailJudge == Ez2AcJudge.None)
-                {
-                    if (!userTriggered && !drawable.HitObject.HitWindows!.CanBeHit(timeOffset))
-                        drawable.EzApplyMinResult();
-
-                    return true;
-                }
-
-                drawable.EzApplyFinalResult(Ez2AcHitModeJudgement.MapTo(tailJudge), round.Environment.ManiaHitMode);
-                return true;
-            }
-
-            if (hitMode == null)
-                return false;
-
-            var genericResult = hitMode.EvaluateTail(new HoldTailEvaluationContext
-            {
+                Round = round,
+                TimeOffset = timeOffset,
                 RawOffset = timeOffset,
-                TimeOffsetForJudgement = timeOffset,
                 HitWindows = drawable.HitObject.HitWindows!,
+                UserTriggered = userTriggered,
                 HeadHit = drawable.HoldNote.Head.IsHit,
-                HoldBreak = hitMode.IsHoldBreak(timeOffset, drawable.HitObject.HitWindows!),
                 HoldBroken = drawable.HoldNote.Body.HasHoldBreak,
-                WasHoldingBeforeRelease = drawable.HoldNote.IsHolding.Value,
+                WasHolding = drawable.HoldNote.IsHolding.Value,
+                HasHoldBreak = drawable.HoldNote.Body.HasHoldBreak,
+                EventTime = drawable.Time.Current,
+                FrameStableId = getFrameStableId(drawable),
+                BmsState = bmsState,
+                O2PillCheckPassed = o2PillPassed,
+                O2UpgradeToPerfect = o2Upgrade,
             });
 
-            if (genericResult == HitResult.None)
-                return true;
+            if (!result.Handled)
+                return false;
 
-            drawable.EzApplyFinalResult(genericResult, round.Environment.ManiaHitMode);
+            if (result.ApplyMinResult)
+            {
+                if (!userTriggered)
+                    drawable.EzApplyPassiveMissWithStoredOffset();
+                else
+                    drawable.EzApplyMinResult();
+
+                return true;
+            }
+
+            if (result.BmsAction.Handled)
+            {
+                if (!userTriggered && result.BmsAction.ApplyFinal)
+                    applyBmsAutoMissFinal(drawable, round, result.BmsAction, bmsState!);
+                else
+                    ApplyBmsAction(drawable, round, result.BmsAction, bmsState!);
+
+                return true;
+            }
+
+            if (result.FinalResult != null)
+            {
+                drawable.EzApplyFinalResult(result.FinalResult.Value, round.Environment.ManiaHitMode);
+                return true;
+            }
+
             return true;
         }
+
+        private static bool applyNoteEvaluation(
+            DrawableNote drawable,
+            ManiaJudgementRound round,
+            ManiaJudgementKernel.NoteEvaluationResult result,
+            BmsHitModeJudgement.BmsRouteState? bmsState,
+            bool userTriggered)
+        {
+            switch (result.Kind)
+            {
+                case ManiaJudgementKernel.NoteEvaluationKind.NotHandled:
+                    return false;
+
+                case ManiaJudgementKernel.NoteEvaluationKind.Ignore:
+                    return true;
+
+                case ManiaJudgementKernel.NoteEvaluationKind.ApplyBmsAction:
+                    if (!userTriggered && result.BmsAction.ApplyFinal)
+                        applyBmsAutoMissFinal(drawable, round, result.BmsAction, bmsState!);
+                    else
+                        ApplyBmsAction(drawable, round, result.BmsAction, bmsState!);
+
+                    return true;
+
+                case ManiaJudgementKernel.NoteEvaluationKind.ApplyNoteOutcome:
+                    ApplyNoteOutcome(drawable, round, result.NoteOutcome, userTriggered);
+                    return true;
+
+                default:
+                    return true;
+            }
+        }
+
+        private static void applyBmsAutoMissFinal(
+            DrawableManiaHitObject drawable,
+            ManiaJudgementRound round,
+            BmsHitModeJudgement.DrawableAction action,
+            BmsHitModeJudgement.BmsRouteState state)
+        {
+            if (!action.Handled || !action.ApplyFinal)
+                return;
+
+            BmsHitModeJudgement.ApplyRouteState(state, action);
+            var result = BmsHitModeJudgement.MapTo(action.Judge);
+            drawable.EzApplyBmsAutoMissFinalWithStoredOffset(result, round.Environment.ManiaHitMode);
+        }
+
+        private static long getFrameStableId(DrawableHitObject drawable)
+            => (long)(drawable.Time.Current * 1000);
     }
 }

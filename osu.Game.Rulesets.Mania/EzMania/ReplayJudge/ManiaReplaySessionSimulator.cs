@@ -42,6 +42,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
             bool pillModeEnabled = environment.ManiaHealthMode.ToString().Contains("O2Jam");
             var bms = noteStrategy as BmsHitModeJudgement;
+            var judgementRound = createJudgementRound(environment);
 
             var hitWindowHelper = new HitModeHelper(environment.ManiaHitMode)
             {
@@ -49,7 +50,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 BPM = getBpmAtTime(beatmap, 0),
             };
 
-            var judgementState = new ManiaReplayJudgementState();
             var headWasHit = new Dictionary<HeadNote, bool>();
             var keyHeldByColumn = new Dictionary<int, bool>();
 
@@ -120,24 +120,54 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
                 if (isTail)
                 {
-                    result = holdStrategy.EvaluateTail(new HoldTailEvaluationContext
+                    if (judgementRound.IsEzHitMode)
                     {
-                        RawOffset = rawOffset,
-                        TimeOffsetForJudgement = timeOffsetForJudgement,
-                        HitWindows = target.HitWindows!,
-                        HeadHit = headHit,
-                        HoldBreak = holdBreak,
-                        HoldBroken = selected.HoldBroken,
-                        WasHoldingBeforeRelease = wasHoldingBeforeEvent,
-                        State = judgementState,
-                        EventTime = input.Time,
-                        Bpm = hitWindowHelper.BPM,
-                        PillModeEnabled = pillModeEnabled,
-                        UsePressTimeBpmForJudgement = environment.ManiaHitMode == EzEnumHitMode.O2Jam,
-                    });
+                        var tailEval = ManiaJudgementKernel.EvaluateHoldTail(new ManiaJudgementKernel.HoldTailEvaluationRequest
+                        {
+                            Round = judgementRound,
+                            TimeOffset = timeOffsetForJudgement,
+                            RawOffset = rawOffset,
+                            HitWindows = target.HitWindows!,
+                            UserTriggered = true,
+                            HeadHit = headHit,
+                            HoldBroken = selected.HoldBroken,
+                            WasHolding = wasHoldingBeforeEvent,
+                            HasHoldBreak = holdBreak,
+                            EventTime = input.Time,
+                            PressBpm = hitWindowHelper.BPM,
+                            FrameStableId = (long)(input.Time * 1000),
+                            BmsState = bms != null ? selected.BmsRoute : null,
+                            O2PillCheckPassed = true,
+                        });
 
-                    if (environment.ManiaHitMode == EzEnumHitMode.Lazer && result == HitResult.None)
-                        continue;
+                        if (!tryMapTailEvaluation(tailEval, out result))
+                        {
+                            if (environment.ManiaHitMode == EzEnumHitMode.Lazer)
+                                continue;
+
+                            result = HitResult.None;
+                        }
+                    }
+                    else
+                    {
+                        result = holdStrategy.EvaluateTail(new HoldTailEvaluationContext
+                        {
+                            RawOffset = rawOffset,
+                            TimeOffsetForJudgement = timeOffsetForJudgement,
+                            HitWindows = target.HitWindows!,
+                            HeadHit = headHit,
+                            HoldBreak = holdBreak,
+                            HoldBroken = selected.HoldBroken,
+                            WasHoldingBeforeRelease = wasHoldingBeforeEvent,
+                            State = judgementRound.MutableState,
+                            EventTime = input.Time,
+                            Bpm = hitWindowHelper.BPM,
+                            PillModeEnabled = pillModeEnabled,
+                        });
+
+                        if (environment.ManiaHitMode == EzEnumHitMode.Lazer && result == HitResult.None)
+                            continue;
+                    }
                 }
                 else if (bms != null && target.HitWindows is ManiaHitWindows bmsWindows)
                 {
@@ -162,13 +192,33 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                     result = BmsHitModeJudgement.MapTo(sessionOutcome.Judge);
                     selected.BmsRoute.CanRouteToKPoor = sessionOutcome.EnableCanRouteToKPoor;
                 }
+                else if (judgementRound.IsEzHitMode)
+                {
+                    var noteEval = ManiaJudgementKernel.EvaluateNote(new ManiaJudgementKernel.NoteEvaluationRequest
+                    {
+                        Round = judgementRound,
+                        TimeOffset = timeOffsetForJudgement,
+                        HitWindows = target.HitWindows!,
+                        UserTriggered = true,
+                        IsLnHead = target is HeadNote,
+                        EventTime = input.Time,
+                        PressBpm = hitWindowHelper.BPM,
+                        FrameStableId = (long)(input.Time * 1000),
+                        BmsState = bms != null ? selected.BmsRoute : null,
+                        O2PillCheckPassed = true,
+                    });
+
+                    if (!tryMapNoteEvaluation(noteEval, out result))
+                        continue;
+                }
                 else
                 {
-                    result = evaluateNotePress(
-                        target, noteStrategy, timeOffsetForJudgement, rawOffset, judgementState, hitWindowHelper.BPM, pillModeEnabled, environment.ManiaHitMode);
+                    var outcome = noteStrategy.EvaluatePress(timeOffsetForJudgement, target.HitWindows!);
 
-                    if (result == HitResult.None)
+                    if (outcome.Kind != ManiaNoteJudgementOutcomeKind.Apply)
                         continue;
+
+                    result = outcome.Result;
                 }
 
                 foreach (var forced in ForceMissEarlier(laneStates, target.StartTime))
@@ -229,42 +279,71 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             }
         }
 
-        private static HitResult evaluateNotePress(
-            HitObject target,
-            IManiaNoteJudgementStrategy noteStrategy,
-            double timeOffsetForJudgement,
-            double rawOffset,
-            ManiaReplayJudgementState state,
-            double bpm,
-            bool pillModeEnabled,
-            EzEnumHitMode hitMode)
+        private static ManiaJudgementRound createJudgementRound(IGameplayEnvironment environment)
         {
-            ManiaNoteJudgementOutcome outcome;
-
-            if (hitMode == EzEnumHitMode.O2Jam && noteStrategy is O2HitModeJudgement o2)
+            GameplayEnvironment gameplay = environment as GameplayEnvironment ?? new GameplayEnvironment
             {
-                outcome = o2.EvaluatePress(timeOffsetForJudgement, target.HitWindows!, new O2HitModeJudgement.NotePressContext
-                {
-                    RawOffset = rawOffset,
-                    Bpm = bpm,
-                    UsePressTimeBpmForJudgement = true,
-                    PillModeEnabled = pillModeEnabled,
-                    State = state,
-                });
-            }
-            else if (hitMode == EzEnumHitMode.EZ2AC && noteStrategy is Ez2AcHitModeJudgement ez2Ac)
+                ManiaHitMode = environment.ManiaHitMode,
+                ManiaHealthMode = environment.ManiaHealthMode,
+                JudgePrecedence = environment.JudgePrecedence,
+                OffsetPlusMania = environment.OffsetPlusMania,
+                BmsPoorHitResultEnable = environment.BmsPoorHitResultEnable,
+            };
+
+            return ManiaJudgementRound.Create(gameplay);
+        }
+
+        private static bool tryMapNoteEvaluation(ManiaJudgementKernel.NoteEvaluationResult evaluation, out HitResult result)
+        {
+            result = default;
+
+            switch (evaluation.Kind)
             {
-                outcome = ez2Ac.EvaluatePress(timeOffsetForJudgement, target.HitWindows!, target is HeadNote);
+                case ManiaJudgementKernel.NoteEvaluationKind.ApplyNoteOutcome:
+                    if (evaluation.NoteOutcome.Kind != ManiaNoteJudgementOutcomeKind.Apply)
+                        return false;
+
+                    result = evaluation.NoteOutcome.Result;
+                    return true;
+
+                case ManiaJudgementKernel.NoteEvaluationKind.ApplyBmsAction:
+                    if (!evaluation.BmsAction.Handled || !evaluation.BmsAction.ApplyFinal)
+                        return false;
+
+                    result = BmsHitModeJudgement.MapTo(evaluation.BmsAction.Judge);
+                    return result != HitResult.None;
+
+                default:
+                    return false;
             }
-            else
+        }
+
+        private static bool tryMapTailEvaluation(ManiaJudgementKernel.HoldTailEvaluationResult evaluation, out HitResult result)
+        {
+            result = default;
+
+            if (!evaluation.Handled)
+                return false;
+
+            if (evaluation.ApplyMinResult)
             {
-                outcome = noteStrategy.EvaluatePress(timeOffsetForJudgement, target.HitWindows!);
+                result = HitResult.Miss;
+                return true;
             }
 
-            if (outcome.Kind == ManiaNoteJudgementOutcomeKind.None)
-                return HitResult.None;
+            if (evaluation.FinalResult != null)
+            {
+                result = evaluation.FinalResult.Value;
+                return result != HitResult.None;
+            }
 
-            return outcome.Result;
+            if (evaluation.BmsAction.Handled && evaluation.BmsAction.ApplyFinal)
+            {
+                result = BmsHitModeJudgement.MapTo(evaluation.BmsAction.Judge);
+                return result != HitResult.None;
+            }
+
+            return false;
         }
 
         private static LaneTargetState? selectCandidate(

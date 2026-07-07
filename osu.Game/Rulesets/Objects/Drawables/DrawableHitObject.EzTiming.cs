@@ -19,7 +19,7 @@ namespace osu.Game.Rulesets.Objects.Drawables
             if (Result.HasResult)
                 throw new InvalidOperationException("Cannot apply result on a hitobject that already has a result.");
 
-            application?.Invoke(Result, state);
+            application.Invoke(Result, state);
 
             if (!Result.HasResult)
                 throw new InvalidOperationException($"{GetType().Name} applied a {nameof(JudgementResult)} but did not update {nameof(JudgementResult.Type)}.");
