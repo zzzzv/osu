@@ -321,26 +321,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             if (candidates.Count == 0)
                 return null;
 
-            candidates.Sort((a, b) => a.Target.StartTime.CompareTo(b.Target.StartTime));
-
-            return environment.JudgePrecedence switch
-            {
-                EzEnumJudgePrecedence.Combo => OrderedHitPolicyHelper.SelectFold(
-                    candidates,
-                    s => s.Judged,
-                    s => s.Target.StartTime,
-                    s => s.Target.HitWindows as ManiaHitWindows,
-                    inputTime,
-                    comboAlgorithm: true),
-                EzEnumJudgePrecedence.Duration => OrderedHitPolicyHelper.SelectFold(
-                    candidates,
-                    s => s.Judged,
-                    s => s.Target.StartTime,
-                    s => s.Target.HitWindows as ManiaHitWindows,
-                    inputTime,
-                    comboAlgorithm: false),
-                _ => candidates[0]
-            } ?? candidates[0];
+            return ManiaLanePressSelector.SelectSessionTarget(
+                candidates,
+                inputTime,
+                environment.JudgePrecedence,
+                HitModeHelper.IsBMSHitMode(environment.ManiaHitMode));
         }
 
         private static IEnumerable<LaneTargetState> collectCandidatesForInput(

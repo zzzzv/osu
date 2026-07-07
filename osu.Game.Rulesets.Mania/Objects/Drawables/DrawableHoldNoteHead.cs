@@ -43,6 +43,8 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
                 MissingStartTime.BindTo(parentHold.MissingStartTime);
         }
 
+        public DrawableHoldNote ParentHold => ParentHitObject as DrawableHoldNote;
+
         protected override void OnFree()
         {
             base.OnFree();

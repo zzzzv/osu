@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using osu.Framework.Logging;
 using osu.Game.EzOsuGame.Configuration;
+using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
 using osu.Game.Rulesets.Mania.Objects.Drawables;
 using osu.Game.Rulesets.Mania.Scoring;
 using osu.Game.Rulesets.Objects.Drawables;
@@ -21,12 +22,14 @@ namespace osu.Game.Rulesets.Mania.EzMania.Helper
     public class OrderedHitPolicyHelper
     {
         private readonly HitObjectContainer hitObjectContainer;
+        private readonly ManiaLaneController? laneController;
         private readonly Ez2ConfigManager ezConfig;
         private const string log_prefix = "[JudgeDiag][PolicyHelper]";
 
-        public OrderedHitPolicyHelper(HitObjectContainer hitObjectContainer)
+        public OrderedHitPolicyHelper(HitObjectContainer hitObjectContainer, ManiaLaneController? laneController = null)
         {
             this.hitObjectContainer = hitObjectContainer;
+            this.laneController = laneController;
             ezConfig = GlobalConfigStore.EzConfig;
         }
 
@@ -40,6 +43,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.Helper
         public bool IsHittableWithPrecedence(DrawableHitObject hitObject, double time)
         {
             var judgePrecedence = ezConfig.Get<EzEnumJudgePrecedence>(Ez2Setting.JudgePrecedence);
+
+            if (laneController != null && hitObject is not DrawableHoldNoteTail)
+                return laneController.IsHittable(hitObject, time, judgePrecedence, isBMS());
 
             if (isBMS())
             {

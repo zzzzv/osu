@@ -167,6 +167,20 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 applyFinal(result);
         }
 
+        internal static bool TryColumnHoldTailRelease(DrawableHoldNote hold, double currentTime, ManiaJudgementRound round)
+        {
+            if (!hold.IsHolding.Value)
+                return false;
+
+            if (ManiaEzDrawableJudgement.TryMalodyHoldOnReleased(hold))
+                return true;
+
+            hold.Tail.UpdateResult();
+            hold.Body.TriggerResult(hold.Tail.IsHit);
+            hold.Result.ReportHoldState(currentTime, false);
+            return true;
+        }
+
         internal static bool TryApplyEzNoteCheckForResult(DrawableNote drawable, bool userTriggered, double timeOffset)
         {
             var round = getJudgementRound(drawable);
