@@ -173,6 +173,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
                 foreach (var forced in ForceMissEarlier(laneStates, target.StartTime))
                 {
+                    if (!IsWithinMissWindow(forced.Target, input.Time, useTailReleaseLenience: false))
+                        continue;
+
                     forced.Judged = true;
                     forced.Result = HitResult.Miss;
                     ApplyFinalResult(

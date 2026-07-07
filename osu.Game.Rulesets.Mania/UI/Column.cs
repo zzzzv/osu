@@ -2,6 +2,7 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using System.Collections.Generic;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Extensions.ObjectExtensions;
@@ -109,6 +110,12 @@ namespace osu.Game.Rulesets.Mania.UI
         private DrawableManiaRuleset? drawableRuleset { get; set; }
 
         internal ManiaLaneController LaneController { get; private set; } = null!;
+
+        private readonly List<double> pressTimes = new List<double>();
+
+        internal void RecordPressTime(double time) => pressTimes.Add(time);
+
+        internal List<double> GetPressTimesSnapshot() => new List<double>(pressTimes);
 
         internal bool TryGetBmsRoute(DrawableNote note, out BmsHitModeJudgement.BmsRouteState route)
         {
@@ -338,6 +345,9 @@ namespace osu.Game.Rulesets.Mania.UI
             ManiaJudgeHotPathTrace.RecordColumnOnPressed();
 
             InputAudioLatencyTracker.Instance?.RecordColumnPress(Index);
+
+            if (e.Action == Action.Value)
+                RecordPressTime(Time.Current);
 
             bool routed = false;
 

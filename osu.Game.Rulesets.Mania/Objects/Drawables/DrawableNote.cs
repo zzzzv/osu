@@ -99,7 +99,7 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
             if (!userTriggered)
             {
                 if (!HitObject.HitWindows.CanBeHit(timeOffset))
-                    ApplyMinResult();
+                    EzApplyPassiveMissWithStoredOffset();
 
                 return;
             }

@@ -12,7 +12,9 @@ using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Timing;
 using osu.Game.Audio;
+using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
 using osu.Game.Rulesets.Objects.Drawables;
+using osu.Game.Rulesets.Scoring;
 using osu.Game.Rulesets.UI.Scrolling;
 using osu.Game.Rulesets.Mania.UI;
 
@@ -133,6 +135,21 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
                     this.FadeOut();
                     break;
             }
+        }
+
+        /// <summary>
+        /// 被动 miss：在通知 <see cref="ScoreProcessor"/> 前写入 stored TimeOffset（与 Session end-sweep 对齐）。
+        /// </summary>
+        internal void EzApplyPassiveMissWithStoredOffset()
+        {
+            ApplyResultWithStoredTiming(
+                static (r, _) =>
+                {
+                    r.Type = HitResult.Miss;
+                    r.IsComboHit = false;
+                },
+                0,
+                ManiaDrawableMissTiming.ResolveStoredOffset(this));
         }
 
         /// <summary>
