@@ -12,6 +12,8 @@ using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Timing;
 using osu.Game.Audio;
+using osu.Game.EzOsuGame.Configuration;
+using osu.Game.Rulesets.Mania.EzMania.Helper;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
 using osu.Game.Rulesets.Objects.Drawables;
 using osu.Game.Rulesets.Scoring;
@@ -149,6 +151,23 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
                     r.IsComboHit = false;
                 },
                 0,
+                ManiaDrawableMissTiming.ResolveStoredOffset(this));
+        }
+
+        internal void EzApplyBmsAutoMissFinalWithStoredOffset(HitResult result, EzEnumHitMode hitMode)
+        {
+            ApplyResultWithStoredTiming(
+                static (r, data) =>
+                {
+                    r.Type = data.result;
+
+                    if (data.result == HitResult.Miss
+                        || (data.result == HitResult.Meh && HitModeHelper.MehBreaksCombo(data.hitMode)))
+                    {
+                        r.IsComboHit = false;
+                    }
+                },
+                (result, hitMode),
                 ManiaDrawableMissTiming.ResolveStoredOffset(this));
         }
 

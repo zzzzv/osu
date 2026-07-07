@@ -20,6 +20,11 @@
 | **COLUMN-INPUT** | `Column.OnPressed` → `TryRoutePress` → 单 target；`ManiaKeyBindingContainer` 列优先队列；drawable `ShouldSkipColumnRoutedPress` 兜底 | 全部 |
 | **TRACE-JUDGE** | `ManiaJudgeHotPathTrace`（`IsHittable` / `CheckForResult` / O2 BPM / press 计数） | 观测 |
 | **BENCH-KPS** | `BenchmarkManiaReplaySession`：jack 80ms×4K + 三档 `JudgePrecedence` | 观测 |
+| **PERF-IDLE-PRESS** | 增量 lane index、列 press 去重、`KeyBindingInputQueue` 无 `ToList`、O2 press 无 `maniaWindows.BPM` 突变 | 全部 |
+| **AUTO-MISS-GATE** | `ManiaAutoMissGate.ShouldEvaluateAutoMiss` 未进 miss 早窗早退 | 全部 Ez |
+| **O2-PILL-1PASS** | press 路径 `PillCheckWithBpm` + `EvaluatePress(NotePressContext)` | O2Jam |
+| **MISS-STORED-OFFSET** | Drawable 被动 miss / Session end-sweep：`ResolveMissStoredOffset`（列 press 最近邻） | 全部 |
+| **FORCE-MISS-WINDOW** | Session `ForceMissEarlier` 跳过 miss 窗外物件（对齐 `IsUserTriggerJudgeableNow`）；枚举不再预写 `Judged` | Lazer/Classic + Session |
 
 ---
 
@@ -27,9 +32,15 @@
 
 | 代号 | 说明 |
 |------|------|
-| **KERNEL-ONE** | `ManiaJudgementKernel` Ez note/hold-tail 单源 |
-| **DRAWABLE-THIN** | Drawable `CheckForResult` 收敛为 kernel → ApplyResult |
 | **STATE-ONE** | O2 Pill / BMS KPoor 路由状态合并进 `ManiaReplayJudgementState` |
+
+## Phase D 进行中（`mania-judgement-kernel-d`）
+
+| 代号 | 说明 |
+|------|------|
+| **KERNEL-ONE** | [x] `ManiaJudgementKernel`：Drawable + Session 共用 note/hold-tail 判定 |
+| **DRAWABLE-THIN** | [x] `ManiaEzDrawableJudgement` 收敛为 kernel → ApplyResult（保留 AutoMissGate / stored offset） |
+| **BMS-PRESS-CORE** | [x] `evaluatePressCore` 统一 Drawable / Session BMS press |
 
 ---
 
@@ -37,8 +48,6 @@
 
 | 代号 | TODO | 说明 |
 |------|------|------|
-| **AUTO-MISS-GATE** | [ ] 未进 miss 早窗跳过 auto-miss 链（`ManiaAutoMissGate` 原型在库，待 parity 验收） | 全部 Ez |
-| **O2-PILL-1PASS** | [ ] press 路径单次 BPM / `PillCheckWithBpm` | O2Jam |
 | **O2-COLUMN-BPM** | [x] `Column.OnPressed` 每列每按键 `NotifyO2InputAt` | O2Jam |
 | **BMS-ROUTE-COL** | [ ] tail `BmsRouteState` 完全列级化 | BMS |
 | **HOLD-TAIL-FAST** | [ ] `Column.OnReleased` → 列级 tail release | LN |
@@ -63,10 +72,11 @@ flowchart LR
   E0["E0 度量\nTRACE + BENCH"]
   C1["C1 LANE-PRECEDENCE ✓"]
   C2["C2 COLUMN-INPUT ✓"]
-  D["Phase D\n暂缓"]
+  D["Phase D\nkernel-d"]
   P2["P2 backlog"]
   E0 --> C1 --> C2 --> D
   C2 -.-> P2
+  D -.-> P2
 ```
 
 **预期收益（定性）**
@@ -75,7 +85,7 @@ flowchart LR
 - **C2**：每键 `CheckForResult` O(存活数) → O(1)
 - **整体**：Drawable 与 Session 在列级 target 选择层面对齐
 
-**下一步默认**：P2 按 profile 排期；Phase D 待帧成本问题解决后再议。
+**下一步默认**：`mania-judgement-kernel-d` 实机 profile 对比 `mania-perf-fix`；`STATE-ONE` 与 P2 按 profile 排期。
 
 ---
 
@@ -85,3 +95,5 @@ flowchart LR
 |------|------|
 | 2026-07-06 | 初版：全 HitMode 高 KPS backlog；Phase A/B 已落地项归档 |
 | 2026-07-06 | Phase C 完成：`LANE-PRECEDENCE` + `COLUMN-INPUT`；Phase D 标注暂缓 |
+| 2026-07-07 | `mania-perf-fix`：idle/press 热路径减负 + 叠键 miss `TimeOffset` parity（`MISS-STORED-OFFSET` / `FORCE-MISS-WINDOW`） |
+| 2026-07-07 | `mania-judgement-kernel-d`：`KERNEL-ONE` + `DRAWABLE-THIN`；O2-NOMUTATE；BMS auto-miss stored offset |
