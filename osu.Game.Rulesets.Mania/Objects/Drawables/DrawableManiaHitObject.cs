@@ -35,6 +35,11 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
         [Resolved(canBeNull: true)]
         private ManiaPlayfield playfield { get; set; }
 
+        [Resolved(canBeNull: true)]
+        private DrawableManiaRuleset drawableManiaRuleset { get; set; }
+
+        internal DrawableManiaRuleset EzDrawableManiaRuleset => drawableManiaRuleset;
+
         protected override float SamplePlaybackPosition
         {
             get
@@ -51,6 +56,13 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
         /// If non-null, judgements will be ignored whilst the function returns false.
         /// </summary>
         public Func<DrawableHitObject, double, bool> CheckHittable;
+
+        /// <summary>
+        /// 列级按键已路由到其它 drawable 时跳过本物件的 <see cref="IKeyBindingHandler.OnPressed"/>。
+        /// </summary>
+        public Func<DrawableHitObject, bool> ShouldSkipColumnRoutedPress;
+
+        protected bool UsesColumnPressRouting => this.FindClosestParent<DrawableManiaRuleset>()?.ColumnRoutesInput == true;
 
         protected DrawableManiaHitObject(ManiaHitObject hitObject)
             : base(hitObject)

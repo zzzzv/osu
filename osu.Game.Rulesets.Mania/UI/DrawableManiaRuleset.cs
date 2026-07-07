@@ -103,6 +103,12 @@ namespace osu.Game.Rulesets.Mania.UI
         int IManiaGameplayModeSnapshot.HealthMode => (int)ManiaHealthProcessor.ActiveHealthMode;
 
         /// <summary>
+        /// 列级按键输入由 <see cref="UI.Column"/> 路由到单一 press 目标（C2 COLUMN-INPUT）。
+        /// 回放仍走 drawable 按键链，与 Session 输入模型一致。
+        /// </summary>
+        public bool ColumnRoutesInput => JudgementRound != null && ReplayScore == null;
+
+        /// <summary>
         /// 本局冻结的判定上下文；热路径读取此实例，禁止再解析全局配置。
         /// </summary>
         public ManiaJudgementRound? JudgementRound { get; private set; }

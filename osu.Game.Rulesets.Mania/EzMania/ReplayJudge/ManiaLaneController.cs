@@ -23,6 +23,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         private readonly Dictionary<DrawableHitObject, int> drawableIndices = new Dictionary<DrawableHitObject, int>();
         private int cursor;
 
+        private double lastSelectPressTime = double.NaN;
+        private EzEnumJudgePrecedence lastSelectPrecedence;
+        private bool lastSelectBmsMode;
+        private ManiaLaneEntry? lastSelectResult;
+
         public IReadOnlyList<ManiaLaneEntry> Entries => entries;
 
         public void Register(DrawableHitObject drawable)
@@ -37,11 +42,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             if (insertIndex < 0)
                 insertIndex = ~insertIndex;
 
-            entries.Insert(insertIndex, entry);
-            rebuildDrawableIndices();
-
-            if (insertIndex < cursor)
-                cursor++;
+            insertEntryAt(insertIndex, entry);
         }
 
         public void RegisterIfNeeded(DrawableHitObject drawable)
@@ -58,10 +59,15 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 return;
 
             entries.RemoveAt(index);
-            rebuildDrawableIndices();
+            drawableIndices.Remove(drawable);
+
+            for (int i = index; i < entries.Count; i++)
+                drawableIndices[entries[i].Drawable] = i;
 
             if (index < cursor)
                 cursor--;
+
+            invalidateSelectPressCache();
         }
 
         public void UnregisterByHitObject(HitObject hitObject)
@@ -99,21 +105,24 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             if (!drawableIndices.TryGetValue(drawable, out int index))
                 return false;
 
-            if (drawable.Judged || index != cursor)
+            if (index != cursor)
+                return false;
+
+            if (entries[index].IsPressJudged)
                 return false;
 
             return IsHittableEarliestIndex(index, time);
         }
 
         public bool IsHittableEarliestIndex(int index, double time)
-            => IsHittableEarliest(entries, index, time, static e => e.IsJudged, static e => e.StartTime);
+            => IsHittableEarliest(entries, index, time, static e => e.IsPressJudged, static e => e.StartTime);
 
         public bool IsHittable(DrawableHitObject drawable, double time, EzEnumJudgePrecedence precedence, bool bmsMode)
         {
             if (precedence == EzEnumJudgePrecedence.Earliest)
                 return IsHittableEarliest(drawable, time);
 
-            var entry = SelectPressEntry(time, precedence, bmsMode);
+            var entry = selectPressEntry(time, precedence, bmsMode);
 
             if (entry == null)
                 return true;
@@ -241,6 +250,25 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         /// 按 JudgePrecedence 选择本列 press 目标（含 BMS post-Bad KPoor）。
         /// </summary>
         public ManiaLaneEntry? SelectPressEntry(double time, EzEnumJudgePrecedence precedence, bool allowBmsFallbackToEarliest)
+            => selectPressEntry(time, precedence, allowBmsFallbackToEarliest);
+
+        private ManiaLaneEntry? selectPressEntry(double time, EzEnumJudgePrecedence precedence, bool allowBmsFallbackToEarliest)
+        {
+            if (time == lastSelectPressTime
+                && precedence == lastSelectPrecedence
+                && allowBmsFallbackToEarliest == lastSelectBmsMode)
+            {
+                return lastSelectResult;
+            }
+
+            lastSelectPressTime = time;
+            lastSelectPrecedence = precedence;
+            lastSelectBmsMode = allowBmsFallbackToEarliest;
+            lastSelectResult = selectPressEntryCore(time, precedence, allowBmsFallbackToEarliest);
+            return lastSelectResult;
+        }
+
+        private ManiaLaneEntry? selectPressEntryCore(double time, EzEnumJudgePrecedence precedence, bool allowBmsFallbackToEarliest)
         {
             if (allowBmsFallbackToEarliest && trySelectPostBadEntry(time, out var postBad))
                 return postBad;
@@ -414,16 +442,28 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
         private void advanceCursor()
         {
-            while (cursor < entries.Count && entries[cursor].IsJudged)
+            while (cursor < entries.Count && entries[cursor].IsPressJudged)
                 cursor++;
         }
 
-        private void rebuildDrawableIndices()
+        private void insertEntryAt(int insertIndex, ManiaLaneEntry entry)
         {
-            drawableIndices.Clear();
+            entries.Insert(insertIndex, entry);
+            drawableIndices[entry.Drawable] = insertIndex;
 
-            for (int i = 0; i < entries.Count; i++)
+            for (int i = insertIndex + 1; i < entries.Count; i++)
                 drawableIndices[entries[i].Drawable] = i;
+
+            if (insertIndex < cursor)
+                cursor++;
+
+            invalidateSelectPressCache();
+        }
+
+        private void invalidateSelectPressCache()
+        {
+            lastSelectPressTime = double.NaN;
+            lastSelectResult = null;
         }
     }
 
