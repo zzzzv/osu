@@ -129,6 +129,8 @@ namespace osu.Game.EzOsuGame.HUD
         [Resolved(canBeNull: true)]
         private EzScoreRaceService? scoreRaceService { get; set; }
 
+        private bool interestRegistered;
+
         public EzHUDScoreCompareBars()
         {
             Width = 3 * BarWidth.Value + 2 * bar_spacing + container_padding * 2;
@@ -241,6 +243,12 @@ namespace osu.Game.EzOsuGame.HUD
                 return;
             }
 
+            if (!interestRegistered)
+            {
+                scoreRaceService.RegisterInterest();
+                interestRegistered = true;
+            }
+
             stateLookup = scoreRaceService.States;
             stateLookup.BindCollectionChanged(onStatesChanged, true);
         }
@@ -271,6 +279,12 @@ namespace osu.Game.EzOsuGame.HUD
         {
             if (isDisposing)
             {
+                if (interestRegistered && scoreRaceService != null)
+                {
+                    scoreRaceService.UnregisterInterest();
+                    interestRegistered = false;
+                }
+
                 ghostProcessor1?.Dispose();
                 ghostProcessor2?.Dispose();
                 captureController?.Dispose();

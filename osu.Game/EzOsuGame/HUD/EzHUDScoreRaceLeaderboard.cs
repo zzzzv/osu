@@ -57,6 +57,7 @@ namespace osu.Game.EzOsuGame.HUD
 
         private IBindableDictionary<string, EzScoreRaceState>? stateLookup;
         private EzScoreRaceService? scoreRaceService;
+        private bool interestRegistered;
 
         private LeaderboardEntryState? currentPlayerEntry;
         private double lastUpdateScoreDisplayScroll = double.MinValue;
@@ -120,6 +121,9 @@ namespace osu.Game.EzOsuGame.HUD
             }
 
             scoreRaceService = service;
+            service.RegisterInterest();
+            interestRegistered = true;
+
             ModFilterSetting.BindTo(service.ModFilter);
             MaxEntriesSetting.BindTo(service.MaxEntries);
 
@@ -467,6 +471,12 @@ namespace osu.Game.EzOsuGame.HUD
         {
             if (isDisposing)
             {
+                if (interestRegistered && scoreRaceService != null)
+                {
+                    scoreRaceService.UnregisterInterest();
+                    interestRegistered = false;
+                }
+
                 foreach (var entry in entryStates)
                     entry.Processor?.Dispose();
 

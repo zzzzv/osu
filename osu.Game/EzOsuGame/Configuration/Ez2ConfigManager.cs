@@ -220,6 +220,7 @@ namespace osu.Game.EzOsuGame.Configuration
             SetDefault(Ez2Setting.EzJudgmentDiagEnabled, false);
             SetDefault(Ez2Setting.EzSubFrameCorrectionEnabled, false);
             SetDefault(Ez2Setting.EzTimingTraceEnabled, false);
+            SetDefault(Ez2Setting.EzScoreRaceServiceEnabled, true);
 
             #endregion
         }
@@ -994,6 +995,9 @@ namespace osu.Game.EzOsuGame.Configuration
         EzJudgmentDiagEnabled,
         EzSubFrameCorrectionEnabled,
         EzTimingTraceEnabled,
+
+        /// <summary>全局角逐/时间线服务；关闭后不做选歌查询与 PlayerLoader timeline 构建。</summary>
+        EzScoreRaceServiceEnabled,
     }
 
     public enum EzColumnType : byte

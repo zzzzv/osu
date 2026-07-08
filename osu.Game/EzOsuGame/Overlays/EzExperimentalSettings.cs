@@ -57,6 +57,15 @@ namespace osu.Game.EzOsuGame.Overlays
                 {
                     Keywords = new[] { "latency", "audio", "input" }
                 },
+                new SettingsItemV2(new FormCheckBox
+                {
+                    Current = ezConfig.GetBindable<bool>(Ez2Setting.EzScoreRaceServiceEnabled),
+                    Caption = EZ_SCORE_RACE_SERVICE_ENABLED,
+                    HintText = EZ_SCORE_RACE_SERVICE_ENABLED_TOOLTIP,
+                })
+                {
+                    Keywords = new[] { "race", "timeline", "角逐", "时间线", "fps" }
+                },
             });
         }
 
@@ -103,5 +112,16 @@ namespace osu.Game.EzOsuGame.Overlays
             "(Testing feature) When enabled, it can track the latency between key input and audio, used for debugging and optimizing the synchronization of hit sound effects. "
             + "A statistics window will pop up after the game ends. More detailed information can be found in the runtime.log file."
             + "\nLatency detection pipeline: Key Press → Check Hit and Apply → Apply Hit Result → Play Note Audio");
+
+        internal static readonly LocalisableString EZ_SCORE_RACE_SERVICE_ENABLED = new EzLocalizationManager.EzLocalisableString(
+            "启用角逐/时间线全局服务", "Enable Score Race / Timeline Global Service");
+
+        internal static readonly LocalisableString EZ_SCORE_RACE_SERVICE_ENABLED_TOOLTIP = new EzLocalizationManager.EzLocalisableString(
+            "关闭后不再进行选歌界面的本地成绩查询，以及进局时的 ghost 时间线构建。"
+            + "\n角逐排行榜 / 分数对比 HUD 将不可用。"
+            + "\n用于排查启动间全程帧率异常时，可跨多次冷启动做 A/B 对比。",
+            "When disabled, skips local score queries on song select and ghost timeline builds when entering play."
+            + "\nScore race / compare HUD components will not work."
+            + "\nUse for A/B isolation of startup-wide FPS regressions across cold launches.");
     }
 }
