@@ -40,13 +40,16 @@ namespace osu.Game.EzOsuGame.HUD
         /// </summary>
         protected bool SupportsGhostRace => EzScoreRaceRulesetSupport.SupportsGhostRace(GameplayState?.Ruleset.RulesetInfo);
 
+        protected EzScoreRaceService? ScoreRaceService { get; private set; }
+
         private protected OsuSpriteText? LoadingText;
+
+        private bool scoreRaceInterestRegistered;
 
         protected override void LoadComplete()
         {
             base.LoadComplete();
 
-            // 延迟查找父时钟：HUD 可能先于 GameplayClockContainer 完成加载。
             Schedule(() =>
             {
                 if (GameplayClockContainer == null)
@@ -102,30 +105,65 @@ namespace osu.Game.EzOsuGame.HUD
         }
 
         /// <summary>
-        /// 绑定全局 <see cref="EzScoreRaceService"/> 的 States / ModFilter / MaxEntries。
+        /// 绑定全局 <see cref="EzScoreRaceService"/> 的 States / ModFilter / MaxEntries，并注册 consumer interest。
         /// </summary>
         protected bool TryBindScoreRaceService(
-            ref EzScoreRaceService? service,
             ref IBindableDictionary<string, EzScoreRaceState>? stateLookup,
             Bindable<EzScoreModFilter>? modFilter = null,
             BindableNumber<int>? maxEntries = null)
         {
-            service ??= (EzScoreRaceService?)Dependencies.Get(typeof(EzScoreRaceService));
+            ScoreRaceService ??= (EzScoreRaceService?)Dependencies.Get(typeof(EzScoreRaceService));
 
-            if (service == null)
+            if (ScoreRaceService == null)
                 return false;
 
-            modFilter?.BindTo(service.ModFilter);
+            registerScoreRaceInterest();
 
-            maxEntries?.BindTo(service.MaxEntries);
+            modFilter?.BindTo(ScoreRaceService.ModFilter);
+            maxEntries?.BindTo(ScoreRaceService.MaxEntries);
 
             if (stateLookup == null)
             {
-                stateLookup = service.States;
+                stateLookup = ScoreRaceService.States;
                 stateLookup.BindCollectionChanged(onScoreRaceStatesChanged, true);
             }
 
             return true;
+        }
+
+        protected void RegisterScoreRaceInterest() => registerScoreRaceInterest();
+
+        protected void UnregisterScoreRaceInterest() => unregisterScoreRaceInterest();
+
+        private void registerScoreRaceInterest()
+        {
+            if (scoreRaceInterestRegistered)
+                return;
+
+            ScoreRaceService ??= (EzScoreRaceService?)Dependencies.Get(typeof(EzScoreRaceService));
+
+            if (ScoreRaceService == null)
+                return;
+
+            ScoreRaceService.RegisterInterest();
+            scoreRaceInterestRegistered = true;
+        }
+
+        private void unregisterScoreRaceInterest()
+        {
+            if (!scoreRaceInterestRegistered)
+                return;
+
+            ScoreRaceService?.UnregisterInterest();
+            scoreRaceInterestRegistered = false;
+        }
+
+        protected override void Dispose(bool isDisposing)
+        {
+            if (isDisposing)
+                unregisterScoreRaceInterest();
+
+            base.Dispose(isDisposing);
         }
 
         private void onScoreRaceStatesChanged(object? sender, NotifyDictionaryChangedEventArgs<string, EzScoreRaceState> e)

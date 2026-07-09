@@ -126,11 +126,6 @@ namespace osu.Game.EzOsuGame.HUD
 
         private IBindableDictionary<string, EzScoreRaceState>? stateLookup;
 
-        [Resolved(canBeNull: true)]
-        private EzScoreRaceService? scoreRaceService { get; set; }
-
-        private bool interestRegistered;
-
         public EzHUDScoreCompareBars()
         {
             Width = 3 * BarWidth.Value + 2 * bar_spacing + container_padding * 2;
@@ -237,26 +232,15 @@ namespace osu.Game.EzOsuGame.HUD
             if (stateLookup != null)
                 return;
 
-            if (scoreRaceService == null)
+            if (!TryBindScoreRaceService(ref stateLookup))
             {
                 Schedule(bindStateLookupWhenAvailable);
                 return;
             }
-
-            if (!interestRegistered)
-            {
-                scoreRaceService.RegisterInterest();
-                interestRegistered = true;
-            }
-
-            stateLookup = scoreRaceService.States;
-            stateLookup.BindCollectionChanged(onStatesChanged, true);
         }
 
-        private void onStatesChanged(object? sender, NotifyDictionaryChangedEventArgs<string, EzScoreRaceState> e)
+        protected override void OnScoreRaceStatesChanged()
         {
-            // 使用 AddOnce + 标志位合并同一帧内的多次字典变化事件，
-            // 避免 publishStates 的 Clear + N 次 Add 触发 N 次 refreshPickedGhosts。
             if (!refreshScheduled)
             {
                 refreshScheduled = true;
@@ -279,12 +263,6 @@ namespace osu.Game.EzOsuGame.HUD
         {
             if (isDisposing)
             {
-                if (interestRegistered && scoreRaceService != null)
-                {
-                    scoreRaceService.UnregisterInterest();
-                    interestRegistered = false;
-                }
-
                 ghostProcessor1?.Dispose();
                 ghostProcessor2?.Dispose();
                 captureController?.Dispose();

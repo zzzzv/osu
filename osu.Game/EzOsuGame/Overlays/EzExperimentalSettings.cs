@@ -119,9 +119,11 @@ namespace osu.Game.EzOsuGame.Overlays
         internal static readonly LocalisableString EZ_SCORE_RACE_SERVICE_ENABLED_TOOLTIP = new EzLocalizationManager.EzLocalisableString(
             "关闭后不再进行选歌界面的本地成绩查询，以及进局时的 ghost 时间线构建。"
             + "\n角逐排行榜 / 分数对比 HUD 将不可用。"
+            + "\n关闭后同进程内帧率需等后台 replay 中止后才会回升；完全恢复建议重启。"
             + "\n用于排查启动间全程帧率异常时，可跨多次冷启动做 A/B 对比。",
             "When disabled, skips local score queries on song select and ghost timeline builds when entering play."
             + "\nScore race / compare HUD components will not work."
+            + "\nFPS may take time to recover in the same session until background replay work stops; restart for a clean baseline."
             + "\nUse for A/B isolation of startup-wide FPS regressions across cold launches.");
     }
 }
