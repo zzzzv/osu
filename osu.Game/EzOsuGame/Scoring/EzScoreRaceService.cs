@@ -150,7 +150,7 @@ namespace osu.Game.EzOsuGame.Scoring
                 refreshMetadata(currentBeatmap.Value);
 
             if (awaitingPlayerLoaderBuild || game.ScreenStack.CurrentScreen is PlayerLoader)
-                requestTimelineBuild(priority: true);
+                scheduleTimelineBuildIfNeeded();
         }
 
         private void enterQuiescentState(bool releaseScreenHooks)
@@ -250,6 +250,7 @@ namespace osu.Game.EzOsuGame.Scoring
             {
                 touchMetadataCacheLru(queryKey);
                 publishStatesDiff(cached);
+                scheduleTimelineBuildIfNeeded();
                 return;
             }
 
@@ -267,6 +268,24 @@ namespace osu.Game.EzOsuGame.Scoring
 
             storeMetadataCache(queryKey, metadataStates);
             publishStatesDiff(metadataStates);
+            scheduleTimelineBuildIfNeeded();
+        }
+
+        /// <summary>
+        /// 选歌 / PlayerLoader 阶段后台构建 timeline；进 <see cref="Player"/> 后由 screen hook 硬停。
+        /// </summary>
+        private void scheduleTimelineBuildIfNeeded()
+        {
+            if (!isServiceActive || !hasConsumers || IsTimelineBuildInProgress)
+                return;
+
+            if (isActiveGameplayScreen())
+                return;
+
+            if (states.Values.All(s => s.Timeline != null))
+                return;
+
+            Schedule(() => requestTimelineBuild(priority: false));
         }
 
         private void requestTimelineBuild(bool priority)
@@ -279,6 +298,9 @@ namespace osu.Game.EzOsuGame.Scoring
                 awaitingPlayerLoaderBuild = true;
                 return;
             }
+
+            if (isActiveGameplayScreen())
+                return;
 
             awaitingPlayerLoaderBuild = false;
 
@@ -322,7 +344,7 @@ namespace osu.Game.EzOsuGame.Scoring
                         results[i] = existing.Timeline;
                 }
 
-                await Task.Run(() =>
+                await Task.Factory.StartNew(() =>
                 {
                     IBeatmap? sharedPlayable = null;
 
@@ -330,10 +352,10 @@ namespace osu.Game.EzOsuGame.Scoring
                     {
                         token.ThrowIfCancellationRequested();
 
-                        if (!isBuildStillValid(version))
+                        if (!isBuildStillValid(version) || isActiveGameplayScreen())
                             return;
 
-                        sleepIfRequiredDuringGameplay(token);
+                        waitWhileGameplayCpuSensitive(token);
 
                         if (results[i] != null)
                             continue;
@@ -347,8 +369,15 @@ namespace osu.Game.EzOsuGame.Scoring
                             sharedPlayable,
                             timelineCache,
                             token);
+
+                        if (results[i] != null)
+                        {
+                            int index = i;
+                            var builtTimeline = results[i];
+                            Schedule(() => applySingleTimelineResult(scoreInfos[index], builtTimeline, version));
+                        }
                     }
-                }, token).ConfigureAwait(false);
+                }, token, TaskCreationOptions.LongRunning, TaskScheduler.Default).ConfigureAwait(false);
 
                 if (!isBuildStillValid(version))
                     return;
@@ -364,6 +393,26 @@ namespace osu.Game.EzOsuGame.Scoring
             {
                 Schedule(() => finishTimelineBuild(version));
                 Logger.Error(ex, "[EzScoreRaceService] Timeline build failed", Ez2ConfigManager.LOGGER_NAME);
+            }
+        }
+
+        private void applySingleTimelineResult(ScoreInfo scoreInfo, EzScoreTimeline? timeline, int version)
+        {
+            if (!isBuildStillValid(version))
+                return;
+
+            string id = scoreInfo.ID.ToString();
+
+            if (states.TryGetValue(id, out var state))
+                state.Timeline = timeline;
+
+            if (activeQueryKey != null && metadataCache.TryGetValue(activeQueryKey, out var cached))
+            {
+                foreach (var cachedState in cached)
+                {
+                    if (cachedState.ScoreInfo.ID == scoreInfo.ID)
+                        cachedState.Timeline = timeline;
+                }
             }
         }
 
@@ -406,9 +455,13 @@ namespace osu.Game.EzOsuGame.Scoring
         private bool isBuildStillValid(int version)
             => version == timelineBuildVersion && isServiceActive && hasConsumers;
 
-        private void sleepIfRequiredDuringGameplay(CancellationToken cancellationToken)
+        private bool isActiveGameplayScreen()
+            => game.ScreenStack.CurrentScreen is Player;
+
+        private void waitWhileGameplayCpuSensitive(CancellationToken cancellationToken)
         {
-            while (localUserPlayInfo?.PlayingState.Value != LocalUserPlayingState.NotPlaying
+            while (isActiveGameplayScreen()
+                   || localUserPlayInfo?.PlayingState.Value is LocalUserPlayingState.Playing or LocalUserPlayingState.Break
                    || highPerformanceSessionManager?.IsSessionActive == true)
             {
                 cancellationToken.WaitHandle.WaitOne(time_to_sleep_during_gameplay_ms);

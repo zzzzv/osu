@@ -189,13 +189,16 @@ namespace osu.Game.EzOsuGame.HUD
             // Pause 时 GameplayClockContainer.CurrentTime 停止前进，processor 自然停止 ghost 推進。
             // 不做节流：QueryAtTime 是 O(log n) 二分查找，开销可忽略；
             // 框架 Bindable.Value setter 内置去重，值不变时不触发下游事件链。
-            if (Time.Current - lastProcessorUpdateTime >= 50)
+            if (Time.Current - lastProcessorUpdateTime >= 100)
             {
                 foreach (var entry in entryStates)
                     entry.Processor?.UpdateScore();
 
                 lastProcessorUpdateTime = Time.Current;
             }
+
+            if (Alpha <= 0)
+                return;
 
             updateScoreDisplay();
 
