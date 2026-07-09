@@ -13,7 +13,6 @@ using osu.Framework.Logging;
 using osu.Game.Beatmaps;
 using osu.Game.Database;
 using osu.Game.EzOsuGame.Configuration;
-using osu.Game.Performance;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Scoring;
 using osu.Game.Screens.Play;
@@ -23,14 +22,12 @@ namespace osu.Game.EzOsuGame.Scoring
     /// <summary>
     /// 全局 ghost 角逐服务。
     ///
-    /// - 仅在有角逐 HUD 消费者（interest &gt; 0）时查询元数据 / 构建 timeline
-    /// - timeline 在专用后台线程串行构建；局内暂停构建，避免与 Update/Draw 争用 CPU
+    /// - 默认仅在有角逐 HUD 消费者（interest &gt; 0）时查询元数据 / 构建 timeline
+    /// - 进局（osu.Game.Screens.Play.PlayerLoader）或 HUD 首次注册时后台构建 timeline
     /// - 可通过实验性开关 <see cref="Ez2Setting.EzScoreRaceServiceEnabled"/> 整服务 no-op
     /// </summary>
     public partial class EzScoreRaceService : Component, IEzScoreRaceStateLookup
     {
-        private const int time_to_sleep_during_gameplay_ms = 30_000;
-
         [Resolved]
         private RealmAccess realm { get; set; } = null!;
 
@@ -42,12 +39,6 @@ namespace osu.Game.EzOsuGame.Scoring
 
         [Resolved]
         private IBindable<WorkingBeatmap> currentBeatmap { get; set; } = null!;
-
-        [Resolved(CanBeNull = true)]
-        private ILocalUserPlayInfo? localUserPlayInfo { get; set; }
-
-        [Resolved(CanBeNull = true)]
-        private IHighPerformanceSessionManager? highPerformanceSessionManager { get; set; }
 
         /// <summary>Mod 过滤策略（HUD ModFilterSetting 绑定到此）。</summary>
         public Bindable<EzScoreModFilter> ModFilter { get; } = new Bindable<EzScoreModFilter>(EzScoreModFilter.Any);
@@ -103,8 +94,7 @@ namespace osu.Game.EzOsuGame.Scoring
             MaxEntries.BindValueChanged(_ => onQueryContextChanged());
             currentBeatmap.BindValueChanged(onBeatmapChanged, true);
 
-            if (hasConsumers && isServiceActive)
-                activateConsumerSession();
+            subscribeScreenHooks();
         }
 
         /// <summary>
@@ -118,13 +108,19 @@ namespace osu.Game.EzOsuGame.Scoring
             if (ConsumerInterestCount != 1 || !isServiceActive)
                 return;
 
+            // HUD 可能在本服务 LoadComplete / Resolved 注入之前拿到 DI 缓存实例。
+            // 此时仅累加计数；LoadComplete 里的 BindValueChanged(true) 会在就绪后拉起查询。
             if (LoadState < LoadState.Ready)
                 return;
 
-            activateConsumerSession();
+            if (currentBeatmap.Value?.BeatmapInfo != null)
+                refreshMetadata(currentBeatmap.Value);
+
+            if (awaitingPlayerLoaderBuild || game.ScreenStack.CurrentScreen is PlayerLoader)
+                requestTimelineBuild(priority: true);
         }
 
-        /// <summary>角逐 HUD 卸载时注销兴趣；归零后进入静默态并释放 screen hooks。</summary>
+        /// <summary>角逐 HUD 卸载时注销兴趣；归零后取消进行中的 build 并清空 States。</summary>
         public void UnregisterInterest()
         {
             if (ConsumerInterestCount <= 0)
@@ -135,51 +131,33 @@ namespace osu.Game.EzOsuGame.Scoring
             if (ConsumerInterestCount > 0)
                 return;
 
-            enterQuiescentState(releaseScreenHooks: true);
+            cancelTimelineBuild();
+            awaitingPlayerLoaderBuild = false;
+            publishStatesDiff(Array.Empty<EzScoreRaceState>());
         }
 
         private bool isServiceActive => serviceEnabled.Value;
 
         private bool hasConsumers => ConsumerInterestCount > 0;
 
-        private void activateConsumerSession()
-        {
-            ensureScreenHooksSubscribed();
-
-            if (currentBeatmap.Value?.BeatmapInfo != null)
-                refreshMetadata(currentBeatmap.Value);
-
-            if (awaitingPlayerLoaderBuild || game.ScreenStack.CurrentScreen is PlayerLoader)
-                requestTimelineBuild(priority: true);
-        }
-
-        private void enterQuiescentState(bool releaseScreenHooks)
-        {
-            cancelTimelineBuild();
-            timelineBuildVersion++;
-            timelineCache.Clear();
-            metadataCache.Clear();
-            metadataCacheLru.Clear();
-            activeQueryKey = null;
-            awaitingPlayerLoaderBuild = false;
-            publishStatesDiff(Array.Empty<EzScoreRaceState>());
-
-            if (releaseScreenHooks)
-                unsubscribeScreenHooks();
-        }
-
         private void onServiceEnabledChanged(ValueChangedEvent<bool> e)
         {
             if (!e.NewValue)
             {
-                enterQuiescentState(releaseScreenHooks: true);
+                cancelTimelineBuild();
+                awaitingPlayerLoaderBuild = false;
+                publishStatesDiff(Array.Empty<EzScoreRaceState>());
                 return;
             }
 
             if (!hasConsumers)
                 return;
 
-            activateConsumerSession();
+            if (currentBeatmap.Value?.BeatmapInfo != null)
+                refreshMetadata(currentBeatmap.Value);
+
+            if (awaitingPlayerLoaderBuild || game.ScreenStack.CurrentScreen is PlayerLoader)
+                requestTimelineBuild(priority: true);
         }
 
         private void onBeatmapChanged(ValueChangedEvent<WorkingBeatmap> e)
@@ -274,6 +252,7 @@ namespace osu.Game.EzOsuGame.Scoring
             if (!isServiceActive)
                 return;
 
+            // PlayerLoader 时常早于 HUD LoadComplete；记录等待态，待首次 RegisterInterest 补 build。
             if (!hasConsumers)
             {
                 awaitingPlayerLoaderBuild = true;
@@ -309,36 +288,42 @@ namespace osu.Game.EzOsuGame.Scoring
 
                 if (scoreInfos.Count == 0)
                 {
-                    Schedule(() => finishTimelineBuild(version));
+                    Schedule(() => IsTimelineBuildInProgress = false);
                     return;
                 }
 
                 var rulesetInfo = beatmapInfo.Ruleset;
                 var results = new EzScoreTimeline?[scoreInfos.Count];
 
+                // 同一谱面只转一次 playable，各 ghost 只读共享，避免 Parallel 内重复转谱。
+                IBeatmap? sharedPlayable = null;
+
+                bool anyNeedsBuild = false;
+
                 for (int i = 0; i < scoreInfos.Count; i++)
                 {
                     if (states.TryGetValue(scoreInfos[i].ID.ToString(), out var existing) && existing.Timeline != null)
+                    {
                         results[i] = existing.Timeline;
+                        continue;
+                    }
+
+                    anyNeedsBuild = true;
                 }
+
+                if (anyNeedsBuild)
+                    sharedPlayable = workingBeatmap.GetPlayableBeatmap(rulesetInfo, Array.Empty<Mod>());
 
                 await Task.Run(() =>
                 {
-                    IBeatmap? sharedPlayable = null;
-
-                    for (int i = 0; i < scoreInfos.Count; i++)
+                    Parallel.For(0, scoreInfos.Count, new ParallelOptions
                     {
-                        token.ThrowIfCancellationRequested();
-
-                        if (!isBuildStillValid(version))
-                            return;
-
-                        sleepIfRequiredDuringGameplay(token);
-
+                        CancellationToken = token,
+                        MaxDegreeOfParallelism = Math.Max(1, Math.Min(2, Environment.ProcessorCount / 2)),
+                    }, i =>
+                    {
                         if (results[i] != null)
-                            continue;
-
-                        sharedPlayable ??= workingBeatmap.GetPlayableBeatmap(rulesetInfo, Array.Empty<Mod>());
+                            return;
 
                         results[i] = EzScoreTimelineBuilder.TryBuild(
                             scoreManager,
@@ -347,72 +332,49 @@ namespace osu.Game.EzOsuGame.Scoring
                             sharedPlayable,
                             timelineCache,
                             token);
-                    }
+                    });
                 }, token).ConfigureAwait(false);
 
-                if (!isBuildStillValid(version))
+                if (token.IsCancellationRequested || version != timelineBuildVersion)
                     return;
 
-                Schedule(() => applyTimelineBuildResults(scoreInfos, results, version));
+                Schedule(() =>
+                {
+                    if (token.IsCancellationRequested || version != timelineBuildVersion)
+                        return;
+
+                    for (int i = 0; i < scoreInfos.Count; i++)
+                    {
+                        string id = scoreInfos[i].ID.ToString();
+
+                        if (!states.TryGetValue(id, out var state))
+                            continue;
+
+                        state.Timeline = results[i];
+                    }
+
+                    if (activeQueryKey != null && metadataCache.TryGetValue(activeQueryKey, out var cached))
+                    {
+                        foreach (var cachedState in cached)
+                        {
+                            if (states.TryGetValue(cachedState.ScoreInfo.ID.ToString(), out var live))
+                                cachedState.Timeline = live.Timeline;
+                        }
+                    }
+
+                    IsTimelineBuildInProgress = false;
+                    Logger.Log($"[EzScoreRaceService] Timeline build complete for {scoreInfos.Count} ghosts", Ez2ConfigManager.LOGGER_NAME, LogLevel.Debug);
+                });
             }
             catch (OperationCanceledException)
             {
-                Schedule(() => finishTimelineBuild(version));
+                Schedule(() => IsTimelineBuildInProgress = false);
                 Logger.Log("[EzScoreRaceService] Timeline build cancelled", Ez2ConfigManager.LOGGER_NAME, LogLevel.Debug);
             }
             catch (Exception ex)
             {
-                Schedule(() => finishTimelineBuild(version));
+                Schedule(() => IsTimelineBuildInProgress = false);
                 Logger.Error(ex, "[EzScoreRaceService] Timeline build failed", Ez2ConfigManager.LOGGER_NAME);
-            }
-        }
-
-        private void applyTimelineBuildResults(IReadOnlyList<ScoreInfo> scoreInfos, EzScoreTimeline?[] results, int version)
-        {
-            if (!isBuildStillValid(version))
-                return;
-
-            for (int i = 0; i < scoreInfos.Count; i++)
-            {
-                string id = scoreInfos[i].ID.ToString();
-
-                if (!states.TryGetValue(id, out var state))
-                    continue;
-
-                state.Timeline = results[i];
-            }
-
-            if (activeQueryKey != null && metadataCache.TryGetValue(activeQueryKey, out var cached))
-            {
-                foreach (var cachedState in cached)
-                {
-                    if (states.TryGetValue(cachedState.ScoreInfo.ID.ToString(), out var live))
-                        cachedState.Timeline = live.Timeline;
-                }
-            }
-
-            finishTimelineBuild(version);
-            Logger.Log($"[EzScoreRaceService] Timeline build complete for {scoreInfos.Count} ghosts", Ez2ConfigManager.LOGGER_NAME, LogLevel.Debug);
-        }
-
-        private void finishTimelineBuild(int version)
-        {
-            if (version != timelineBuildVersion)
-                return;
-
-            IsTimelineBuildInProgress = false;
-        }
-
-        private bool isBuildStillValid(int version)
-            => version == timelineBuildVersion && isServiceActive && hasConsumers;
-
-        private void sleepIfRequiredDuringGameplay(CancellationToken cancellationToken)
-        {
-            while (localUserPlayInfo?.PlayingState.Value != LocalUserPlayingState.NotPlaying
-                   || highPerformanceSessionManager?.IsSessionActive == true)
-            {
-                cancellationToken.WaitHandle.WaitOne(time_to_sleep_during_gameplay_ms);
-                cancellationToken.ThrowIfCancellationRequested();
             }
         }
 
@@ -435,6 +397,7 @@ namespace osu.Game.EzOsuGame.Scoring
                     if (ReferenceEquals(existing, state))
                         continue;
 
+                    // 保留已有实例引用，避免 HUD processor 绑定失效。
                     if (state.Timeline != null)
                         existing.Timeline = state.Timeline;
 

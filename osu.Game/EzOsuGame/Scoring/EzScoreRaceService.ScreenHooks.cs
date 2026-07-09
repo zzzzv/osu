@@ -19,35 +19,23 @@ namespace osu.Game.EzOsuGame.Scoring
 
         private IBindable<IReadOnlyList<Mod>>? boundScreenMods;
         private OsuScreen? boundModsScreen;
-        private bool screenHooksSubscribed;
 
-        private void ensureScreenHooksSubscribed()
+        private void subscribeScreenHooks()
         {
-            if (screenHooksSubscribed)
-                return;
-
             game.ScreenStack.ScreenPushed += onScreenPushed;
             game.ScreenStack.ScreenExited += onScreenExited;
             bindModsFromScreen(game.ScreenStack.CurrentScreen as OsuScreen);
-            screenHooksSubscribed = true;
         }
 
         private void unsubscribeScreenHooks()
         {
-            if (!screenHooksSubscribed)
-                return;
-
             game.ScreenStack.ScreenPushed -= onScreenPushed;
             game.ScreenStack.ScreenExited -= onScreenExited;
             unbindScreenMods();
-            screenHooksSubscribed = false;
         }
 
         private void onScreenPushed(IScreen lastScreen, IScreen newScreen)
         {
-            if (!isServiceActive || !hasConsumers)
-                return;
-
             bindModsFromScreen(newScreen as OsuScreen);
 
             if (newScreen is PlayerLoader)
@@ -55,12 +43,7 @@ namespace osu.Game.EzOsuGame.Scoring
         }
 
         private void onScreenExited(IScreen lastScreen, IScreen newScreen)
-        {
-            if (!isServiceActive || !hasConsumers)
-                return;
-
-            bindModsFromScreen(newScreen as OsuScreen);
-        }
+            => bindModsFromScreen(newScreen as OsuScreen);
 
         private void bindModsFromScreen(OsuScreen? screen)
         {

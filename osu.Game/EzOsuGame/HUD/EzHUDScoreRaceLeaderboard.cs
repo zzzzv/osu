@@ -56,6 +56,8 @@ namespace osu.Game.EzOsuGame.HUD
         private readonly Cached sorting = new Cached();
 
         private IBindableDictionary<string, EzScoreRaceState>? stateLookup;
+        private EzScoreRaceService? scoreRaceService;
+        private bool interestRegistered;
 
         private LeaderboardEntryState? currentPlayerEntry;
         private double lastUpdateScoreDisplayScroll = double.MinValue;
@@ -110,18 +112,32 @@ namespace osu.Game.EzOsuGame.HUD
             if (stateLookup != null)
                 return;
 
-            if (!TryBindScoreRaceService(ref stateLookup, ModFilterSetting, MaxEntriesSetting))
+            var service = (EzScoreRaceService?)Dependencies.Get(typeof(EzScoreRaceService));
+
+            if (service == null)
             {
                 Schedule(bindStateLookupWhenAvailable);
                 return;
             }
 
+            scoreRaceService = service;
+            service.RegisterInterest();
+            interestRegistered = true;
+
+            ModFilterSetting.BindTo(service.ModFilter);
+            MaxEntriesSetting.BindTo(service.MaxEntries);
+
+            stateLookup = service.States;
+            stateLookup!.BindCollectionChanged(onStatesChanged, true);
+
             updateLoadingState();
             rebuildRowsIfNeeded();
         }
 
-        protected override void OnScoreRaceStatesChanged()
+        private void onStatesChanged(object? sender, NotifyDictionaryChangedEventArgs<string, EzScoreRaceState> e)
         {
+            // 使用 AddOnce + 标志位合并同一帧内的多次字典变化事件，
+            // 避免 publishStates 的 Clear + N 次 Add 触发 N 次 rebuildRowsIfNeeded。
             if (!rebuildScheduled)
             {
                 rebuildScheduled = true;
@@ -162,7 +178,7 @@ namespace osu.Game.EzOsuGame.HUD
             if (!anyPendingTimeline)
                 return false;
 
-            return ScoreRaceService?.IsTimelineBuildInProgress == true;
+            return scoreRaceService?.IsTimelineBuildInProgress == true;
         }
 
         protected override void OnSessionReady()
@@ -455,6 +471,12 @@ namespace osu.Game.EzOsuGame.HUD
         {
             if (isDisposing)
             {
+                if (interestRegistered && scoreRaceService != null)
+                {
+                    scoreRaceService.UnregisterInterest();
+                    interestRegistered = false;
+                }
+
                 foreach (var entry in entryStates)
                     entry.Processor?.Dispose();
 
