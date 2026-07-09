@@ -48,16 +48,10 @@ namespace osu.Game.EzOsuGame.Scoring
             if (!isServiceActive || !hasConsumers)
                 return;
 
-            if (newScreen is Player)
-            {
-                cancelTimelineBuild();
-                return;
-            }
-
             bindModsFromScreen(newScreen as OsuScreen);
 
             if (newScreen is PlayerLoader)
-                scheduleTimelineBuildIfNeeded();
+                requestTimelineBuild(priority: true);
         }
 
         private void onScreenExited(IScreen lastScreen, IScreen newScreen)
@@ -66,9 +60,6 @@ namespace osu.Game.EzOsuGame.Scoring
                 return;
 
             bindModsFromScreen(newScreen as OsuScreen);
-
-            if (lastScreen is Player)
-                scheduleTimelineBuildIfNeeded();
         }
 
         private void bindModsFromScreen(OsuScreen? screen)

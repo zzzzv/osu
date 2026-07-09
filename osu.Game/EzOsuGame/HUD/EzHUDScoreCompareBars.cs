@@ -209,7 +209,7 @@ namespace osu.Game.EzOsuGame.HUD
             updateCurrentAndTheoreticalBars();
             base.CornerRadius = CornerRadius.Value * Math.Min(DrawWidth, DrawHeight);
 
-            if (Time.Current - lastProcessorUpdateTime >= 100)
+            if (Time.Current - lastProcessorUpdateTime >= 50)
             {
                 ghostProcessor1?.UpdateScore();
                 ghostProcessor2?.UpdateScore();

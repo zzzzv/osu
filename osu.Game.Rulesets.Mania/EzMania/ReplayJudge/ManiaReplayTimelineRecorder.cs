@@ -36,22 +36,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             if (clockTime <= lastClockTime)
                 clockTime = lastClockTime + 0.001;
 
-            var candidate = EzScoreTimelineSnapshot.Create(clockTime, scoreProcessor, gameplayRate);
-
-            if (snapshots.Count > 0 && snapshotMatches(snapshots[^1], candidate))
-            {
-                lastClockTime = clockTime;
-                return;
-            }
-
             lastClockTime = clockTime;
-            snapshots.Add(candidate);
-        }
 
-        private static bool snapshotMatches(EzScoreTimelineSnapshot a, EzScoreTimelineSnapshot b)
-            => a.TotalScore == b.TotalScore
-               && a.Accuracy == b.Accuracy
-               && a.HighestCombo == b.HighestCombo
-               && a.MissCount == b.MissCount;
+            snapshots.Add(EzScoreTimelineSnapshot.Create(clockTime, scoreProcessor, gameplayRate));
+        }
     }
 }
