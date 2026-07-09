@@ -42,6 +42,14 @@ namespace osu.Game.EzOsuGame.Scoring
             return timeline;
         }
 
+        public EzScoreTimeline RunTimelineDirect(Score score, IBeatmap beatmap, ReplayRunPurpose purpose, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var resolvedEnv = ResolveEnvironment(score, purpose);
+            var (_, timeline) = RunWithTimeline(score, beatmap, resolvedEnv, cancellationToken);
+            return timeline;
+        }
+
         public async Task<ReplayRunResult> RunRequestAsync(ReplayRunRequest request, CancellationToken cancellationToken = default)
         {
             try

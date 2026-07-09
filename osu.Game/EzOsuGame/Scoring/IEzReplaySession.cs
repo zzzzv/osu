@@ -33,6 +33,12 @@ namespace osu.Game.EzOsuGame.Scoring
         Task<EzScoreTimeline> RunTimelineDirectAsync(Score score, IBeatmap beatmap, ReplayRunPurpose purpose, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// <see cref="RunTimelineDirectAsync"/> 的同步版本：直接在当前线程运行判定，不额外开 <c>Task.Run</c>。
+        /// 供已在后台线程串行构建的角逐热路径调用，避免「嵌套 Task.Run + 同步阻塞」占用两个线程池线程。
+        /// </summary>
+        EzScoreTimeline RunTimelineDirect(Score score, IBeatmap beatmap, ReplayRunPurpose purpose, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// 统一请求入口：支持更复杂的场景（如同时需要 Score + Timeline）。
         /// </summary>
         Task<ReplayRunResult> RunRequestAsync(ReplayRunRequest request, CancellationToken cancellationToken = default);
