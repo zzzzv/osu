@@ -36,12 +36,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             if (clockTime <= lastClockTime)
                 clockTime = lastClockTime + 0.001;
 
-            if (snapshots.Count > 0 && clockTime - snapshots[^1].ClockTime < 32)
-            {
-                lastClockTime = clockTime;
-                return;
-            }
-
             var candidate = EzScoreTimelineSnapshot.Create(clockTime, scoreProcessor, gameplayRate);
 
             if (snapshots.Count > 0 && snapshotMatches(snapshots[^1], candidate))

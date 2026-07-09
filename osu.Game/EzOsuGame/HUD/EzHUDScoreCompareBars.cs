@@ -114,7 +114,6 @@ namespace osu.Game.EzOsuGame.HUD
         private bool refreshScheduled;
         private long lastNowBarScore = long.MinValue;
         private double lastProcessorUpdateTime;
-        private double lastDisplayUpdateTime;
 
         [Resolved]
         private OsuColour colours { get; set; } = null!;
@@ -207,12 +206,7 @@ namespace osu.Game.EzOsuGame.HUD
         {
             base.Update();
 
-            if (Time.Current - lastDisplayUpdateTime >= 100)
-            {
-                updateCurrentAndTheoreticalBars();
-                lastDisplayUpdateTime = Time.Current;
-            }
-
+            updateCurrentAndTheoreticalBars();
             base.CornerRadius = CornerRadius.Value * Math.Min(DrawWidth, DrawHeight);
 
             if (Time.Current - lastProcessorUpdateTime >= 100)

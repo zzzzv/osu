@@ -61,7 +61,6 @@ namespace osu.Game.EzOsuGame.HUD
         private double lastUpdateScoreDisplayScroll = double.MinValue;
         private double lastScrollTarget = double.MinValue;
         private double lastProcessorUpdateTime;
-        private double lastDisplayUpdateTime;
         private bool rebuildScheduled;
 
         public EzHUDScoreRaceLeaderboard()
@@ -201,11 +200,7 @@ namespace osu.Game.EzOsuGame.HUD
             if (Alpha <= 0)
                 return;
 
-            if (Time.Current - lastDisplayUpdateTime >= 100)
-            {
-                updateScoreDisplay();
-                lastDisplayUpdateTime = Time.Current;
-            }
+            updateScoreDisplay();
 
             if (LoadingText?.Alpha > 0)
                 updateLoadingState();

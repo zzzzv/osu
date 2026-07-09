@@ -57,7 +57,7 @@ namespace osu.Game.EzOsuGame.Scoring
             bindModsFromScreen(newScreen as OsuScreen);
 
             if (newScreen is PlayerLoader)
-                beginScoreRacePreparation();
+                scheduleTimelineBuildIfNeeded();
         }
 
         private void onScreenExited(IScreen lastScreen, IScreen newScreen)
