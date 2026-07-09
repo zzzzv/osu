@@ -53,7 +53,7 @@ namespace osu.Game.EzOsuGame.HUD
 
         public bool UsesFixedAnchor { get; set; }
 
-        public bool WantsAcrylicCapture => BackgroundVisible.Value && BackdropBlurEnabled.Value;
+        public bool WantsAcrylicCapture => ServiceEnabledValue && BackgroundVisible.Value && BackdropBlurEnabled.Value;
 
         [SettingSource(typeof(EzHUDStrings), nameof(EzHUDStrings.SCORE_COMPARE_CONDITION1_LABEL), nameof(EzHUDStrings.SCORE_COMPARE_CONDITION1_DESCRIPTION))]
         public Bindable<EzScoreRaceMetric> CompareCondition1Setting { get; } = new Bindable<EzScoreRaceMetric>(EzScoreRaceMetric.Accuracy);
@@ -211,6 +211,10 @@ namespace osu.Game.EzOsuGame.HUD
         {
             base.Update();
 
+            // 服务关闭：完全跳过每帧处理，保证 0 影响。
+            if (!ServiceEnabledValue)
+                return;
+
             updateCurrentAndTheoreticalBars();
             base.CornerRadius = CornerRadius.Value * Math.Min(DrawWidth, DrawHeight);
 
@@ -234,14 +238,28 @@ namespace osu.Game.EzOsuGame.HUD
 
         private void bindStateLookupWhenAvailable()
         {
-            if (stateLookup != null)
-                return;
-
             if (scoreRaceService == null)
             {
                 Schedule(bindStateLookupWhenAvailable);
                 return;
             }
+
+            // 建立服务开关联动：启用时 activate，关闭时 deactivate（0 影响）。
+            BindServiceEnabled(scoreRaceService);
+        }
+
+        protected override void OnServiceEnabledChanged(bool enabled)
+        {
+            if (enabled)
+                activate();
+            else
+                deactivate();
+        }
+
+        private void activate()
+        {
+            if (scoreRaceService == null)
+                return;
 
             if (!interestRegistered)
             {
@@ -249,8 +267,33 @@ namespace osu.Game.EzOsuGame.HUD
                 interestRegistered = true;
             }
 
-            stateLookup = scoreRaceService.States;
-            stateLookup.BindCollectionChanged(onStatesChanged, true);
+            if (stateLookup == null)
+            {
+                stateLookup = scoreRaceService.States;
+                stateLookup.BindCollectionChanged(onStatesChanged, true);
+            }
+
+            barsContainer.Alpha = 1;
+            updateBackgroundVisibility();
+            refreshPickedGhosts();
+        }
+
+        private void deactivate()
+        {
+            if (interestRegistered && scoreRaceService != null)
+            {
+                scoreRaceService.UnregisterInterest();
+                interestRegistered = false;
+            }
+
+            bindProcessorToState(ghostProcessor1, ref boundState1, null);
+            bindProcessorToState(ghostProcessor2, ref boundState2, null);
+
+            if (barsContainer != null)
+                barsContainer.Alpha = 0;
+
+            backgroundLayer.Alpha = 0;
+            SyncAcrylicCaptureState();
         }
 
         private void onStatesChanged(object? sender, NotifyDictionaryChangedEventArgs<string, EzScoreRaceState> e)
@@ -420,7 +463,7 @@ namespace osu.Game.EzOsuGame.HUD
 
         private void updateBackgroundVisibility()
         {
-            backgroundLayer.Alpha = BackgroundVisible.Value ? 1 : 0;
+            backgroundLayer.Alpha = ServiceEnabledValue && BackgroundVisible.Value ? 1 : 0;
             SyncAcrylicCaptureState();
         }
 

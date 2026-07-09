@@ -15,6 +15,7 @@ using osu.Game.Database;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Scoring;
+using osu.Game.Screens;
 using osu.Game.Screens.Play;
 
 namespace osu.Game.EzOsuGame.Scoring
@@ -57,6 +58,12 @@ namespace osu.Game.EzOsuGame.Scoring
 
         /// <summary>当前角逐 HUD 消费者数量；为 0 时不做 Realm 查询与 timeline 构建。</summary>
         public int ConsumerInterestCount { get; private set; }
+
+        /// <summary>
+        /// 服务总开关（实验设置 <see cref="Ez2Setting.EzScoreRaceServiceEnabled"/>）的只读视图。
+        /// false 时整个角逐功能应为 0 影响：服务不做任何查询/构建/屏幕绑定，HUD 消费者也应完全 inert。
+        /// </summary>
+        public IBindable<bool> Enabled => serviceEnabled;
 
         private readonly BindableDictionary<string, EzScoreRaceState> states = new BindableDictionary<string, EzScoreRaceState>();
 
@@ -104,9 +111,13 @@ namespace osu.Game.EzOsuGame.Scoring
         /// </summary>
         public void RegisterInterest()
         {
+            // 服务关闭时不计入兴趣：保证 0 影响，且消费者应通过 Enabled 联动仅在启用时注册。
+            if (!isServiceActive)
+                return;
+
             ConsumerInterestCount++;
 
-            if (ConsumerInterestCount != 1 || !isServiceActive)
+            if (ConsumerInterestCount != 1)
                 return;
 
             // HUD 可能在本服务 LoadComplete / Resolved 注入之前拿到 DI 缓存实例。
@@ -144,8 +155,13 @@ namespace osu.Game.EzOsuGame.Scoring
             if (!e.NewValue)
             {
                 enterQuiescentState();
+                // 关闭时同时断开屏幕 mod 绑定，确保切屏零残留处理。
+                unbindScreenMods();
                 return;
             }
+
+            // 重新启用：补绑当前屏幕的 mod（关闭期间屏幕钩子不做绑定）。
+            bindModsFromScreen(game.ScreenStack.CurrentScreen as OsuScreen);
 
             if (!hasConsumers)
                 return;

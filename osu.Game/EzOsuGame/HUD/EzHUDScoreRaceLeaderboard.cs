@@ -109,7 +109,7 @@ namespace osu.Game.EzOsuGame.HUD
 
         private void bindStateLookupWhenAvailable()
         {
-            if (stateLookup != null)
+            if (scoreRaceService != null)
                 return;
 
             var service = (EzScoreRaceService?)Dependencies.Get(typeof(EzScoreRaceService));
@@ -121,17 +121,68 @@ namespace osu.Game.EzOsuGame.HUD
             }
 
             scoreRaceService = service;
-            service.RegisterInterest();
-            interestRegistered = true;
 
             ModFilterSetting.BindTo(service.ModFilter);
             MaxEntriesSetting.BindTo(service.MaxEntries);
 
-            stateLookup = service.States;
-            stateLookup!.BindCollectionChanged(onStatesChanged, true);
+            // 建立服务开关联动：启用时 activate，关闭时 deactivate（0 影响）。
+            BindServiceEnabled(service);
+        }
+
+        protected override void OnServiceEnabledChanged(bool enabled)
+        {
+            if (enabled)
+                activate();
+            else
+                deactivate();
+        }
+
+        private void activate()
+        {
+            if (scoreRaceService == null)
+                return;
+
+            if (!interestRegistered)
+            {
+                scoreRaceService.RegisterInterest();
+                interestRegistered = true;
+            }
+
+            if (stateLookup == null)
+            {
+                stateLookup = scoreRaceService.States;
+                stateLookup.BindCollectionChanged(onStatesChanged, true);
+            }
+
+            scroll.Alpha = 1;
 
             updateLoadingState();
             rebuildRowsIfNeeded();
+        }
+
+        private void deactivate()
+        {
+            if (interestRegistered && scoreRaceService != null)
+            {
+                scoreRaceService.UnregisterInterest();
+                interestRegistered = false;
+            }
+
+            foreach (var entry in entryStates)
+            {
+                if (entry.Processor != null)
+                    RemoveInternal(entry.Processor, true);
+            }
+
+            Flow.Clear();
+            entryStates.Clear();
+            currentPlayerEntry = null;
+            trackedScore = null;
+
+            scroll.Alpha = 0;
+
+            if (LoadingText != null)
+                LoadingText.Alpha = 0;
         }
 
         private void onStatesChanged(object? sender, NotifyDictionaryChangedEventArgs<string, EzScoreRaceState> e)
@@ -200,6 +251,10 @@ namespace osu.Game.EzOsuGame.HUD
         protected override void Update()
         {
             base.Update();
+
+            // 服务关闭：完全跳过每帧处理，保证 0 影响。
+            if (!ServiceEnabledValue)
+                return;
 
             // 对齐官方 MultiSpectatorLeaderboardProvider：每帧驱动 processor 的 UpdateScore。
             // Pause 时 GameplayClockContainer.CurrentTime 停止前进，processor 自然停止 ghost 推進。

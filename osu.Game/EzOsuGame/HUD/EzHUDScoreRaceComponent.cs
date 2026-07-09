@@ -42,6 +42,33 @@ namespace osu.Game.EzOsuGame.HUD
 
         private protected OsuSpriteText? LoadingText;
 
+        /// <summary>
+        /// 角逐服务总开关的本地视图。绑定前默认 false（组件保持 inert），
+        /// 由派生类解析到 <see cref="EzScoreRaceService"/> 后调用 <see cref="BindServiceEnabled"/> 建立联动。
+        /// </summary>
+        private IBindable<bool>? serviceEnabled;
+
+        /// <summary>服务是否启用。绑定前默认 false（组件保持 inert）。</summary>
+        protected bool ServiceEnabledValue => serviceEnabled?.Value ?? false;
+
+        /// <summary>
+        /// 建立「服务开关 → <see cref="OnServiceEnabledChanged"/>」联动（幂等）。
+        /// 绑定后会立即以当前值回调一次。
+        /// </summary>
+        protected void BindServiceEnabled(EzScoreRaceService service)
+        {
+            if (serviceEnabled != null)
+                return;
+
+            serviceEnabled = service.Enabled.GetBoundCopy();
+            serviceEnabled.BindValueChanged(e => OnServiceEnabledChanged(e.NewValue), true);
+        }
+
+        /// <summary>服务开关变化（含首次绑定）时调用。派生类在此激活 / 停用自身。</summary>
+        protected virtual void OnServiceEnabledChanged(bool enabled)
+        {
+        }
+
         protected override void LoadComplete()
         {
             base.LoadComplete();
