@@ -166,9 +166,15 @@ namespace osu.Game.EzOsuGame.Analysis
             rulesetInfo ??= beatmapInfo.Ruleset;
 
             var localBeatmapInfo = beatmapInfo as BeatmapInfo;
+            var localRulesetInfo = (rulesetInfo as RulesetInfo) ?? localBeatmapInfo?.Ruleset;
 
-            if (runtimeAnalysisEnabled.Value && localBeatmapInfo != null && rulesetInfo is RulesetInfo localRulesetInfo)
+            if (runtimeAnalysisEnabled.Value && localBeatmapInfo != null && localRulesetInfo != null)
+            {
+                if (!analysisDatabase.IsSqliteAnalysisEnabled)
+                    return GetDynamicAnalysisAsync(localBeatmapInfo, localRulesetInfo, mods, cancellationToken, computationDelay);
+
                 return getDynamicWithStoredFallbackAsync(localBeatmapInfo, localRulesetInfo);
+            }
 
             if (localBeatmapInfo != null
                 && EzAnalysisDatabase.CanUseStoredAnalysis(localBeatmapInfo, rulesetInfo, mods)
@@ -184,7 +190,8 @@ namespace osu.Game.EzOsuGame.Analysis
                 if (dynamicAnalysis != null)
                     return dynamicAnalysis;
 
-                if (EzAnalysisDatabase.CanUseStoredAnalysis(dynamicBeatmapInfo, dynamicRulesetInfo, mods)
+                if (analysisDatabase.IsSqliteAnalysisEnabled
+                    && EzAnalysisDatabase.CanUseStoredAnalysis(dynamicBeatmapInfo, dynamicRulesetInfo, mods)
                     && analysisDatabase.TryGetStoredSqliteSlice(dynamicBeatmapInfo, dynamicRulesetInfo, out var fallbackStoredSlice))
                     return fallbackStoredSlice;
 
@@ -325,11 +332,15 @@ namespace osu.Game.EzOsuGame.Analysis
         {
             try
             {
-                if (EzAnalysisDatabase.CanUseStoredAnalysis(lookup.BeatmapInfo, lookup.Ruleset, lookup.OrderedMods))
+                if (analysisDatabase.IsSqliteAnalysisEnabled
+                    && EzAnalysisDatabase.CanUseStoredAnalysis(lookup.BeatmapInfo, lookup.Ruleset, lookup.OrderedMods))
                 {
-                    return analysisDatabase.BackfillStoredDataAsync(lookup.BeatmapInfo, skipExistingComparison: false, cancellationToken)
-                                           .GetAwaiter()
-                                           .GetResult();
+                    var backfillResult = analysisDatabase.BackfillStoredDataAsync(lookup.BeatmapInfo, skipExistingComparison: false, cancellationToken)
+                                                         .GetAwaiter()
+                                                         .GetResult();
+
+                    if (backfillResult != null)
+                        return backfillResult;
                 }
 
                 return EzAnalysisComputation.Compute(beatmapManager, lookup, cancellationToken);

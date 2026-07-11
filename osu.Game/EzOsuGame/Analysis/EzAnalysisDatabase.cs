@@ -80,6 +80,11 @@ namespace osu.Game.EzOsuGame.Analysis
         }
 
         /// <summary>
+        /// 主 SQLite 读写是否可用（设置开关与 <see cref="EzAnalysisPersistentStore.Enabled"/> 同时为 true）。
+        /// </summary>
+        public bool IsSqliteAnalysisEnabled => sqliteAnalysisEnabled.Value && EzAnalysisPersistentStore.Enabled;
+
+        /// <summary>
         /// 读取主 SQLite 中的 kps/KPC 切片（NoMod）。不含 xxy/PP。
         /// </summary>
         public bool TryGetStoredSqliteSlice(IBeatmapInfo beatmapInfo, IRulesetInfo? rulesetInfo, out EzAnalysisResult result)

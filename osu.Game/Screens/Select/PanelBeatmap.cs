@@ -344,13 +344,8 @@ namespace osu.Game.Screens.Select
                 displaySR.Hide();
             }
 
-            if (supportsEzAnalysis && showXxy)
-                ezDisplayKpc.Show();
-            else
-            {
-                ezDisplayKpc.ManiaSummary = null;
-                ezDisplayKpc.Hide();
-            }
+            ezDisplayKpc.ManiaSummary = null;
+            ezDisplayKpc.Hide();
         }
 
         private Drawable getRulesetIcon(RulesetInfo rulesetInfo)
@@ -394,6 +389,7 @@ namespace osu.Game.Screens.Select
 
             displaySR.Current.Value = EzManiaSummary.EMPTY;
             ezDisplayKpc.ManiaSummary = null;
+            ezDisplayKpc.Hide();
             applyPanelKps(EzSongSelectAnalysisDisplay.Empty);
             ezDisplayKps.SetPp(null);
         }
@@ -404,9 +400,23 @@ namespace osu.Game.Screens.Select
             ezDisplayKps.SetKpsMetrics(metrics);
         }
 
+        private void applyPanelKpc(EzManiaSummary? maniaSummary)
+        {
+            if (maniaSummary?.ColumnCounts.Count > 0)
+            {
+                ezDisplayKpc.ManiaSummary = maniaSummary;
+                ezDisplayKpc.Show();
+            }
+            else
+            {
+                ezDisplayKpc.ManiaSummary = null;
+                ezDisplayKpc.Hide();
+            }
+        }
+
         private void updateKPS(EzAnalysisResult ezAnalysisResult)
         {
-            if (Item?.IsVisible != true)
+            if (Item == null)
                 return;
 
             if (!EzSongSelectAnalysisDisplay.ShouldApplyPanelKpsUpdate(ezAnalysisResult, mods.Value))
@@ -419,11 +429,16 @@ namespace osu.Game.Screens.Select
                 return;
 
             var maniaSummary = metrics.ManiaSummary;
-            var columnCounts = maniaSummary?.ColumnCounts ?? new Dictionary<int, int>();
+            var columnCounts = maniaSummary?.ColumnCounts;
 
-            scratchText = EzBeatmapCalculator.GetScratchFromPrecomputed(columnCounts, metrics.MaxKps, metrics.KpsList);
+            applyPanelKpc(maniaSummary);
+
+            string? scratch = EzBeatmapCalculator.GetScratchFromPrecomputed(columnCounts, metrics.MaxKps, metrics.KpsList);
+
+            if (scratch != null)
+                scratchText = scratch;
+
             updateKeyCount();
-            ezDisplayKpc.ManiaSummary = maniaSummary;
 
             var summaryForDisplay = maniaSummary ?? EzManiaSummary.EMPTY;
             if (displaySR.Current.Value.XxySr != summaryForDisplay.XxySr)
