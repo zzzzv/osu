@@ -1266,11 +1266,17 @@ namespace osu.Game
             loadComponentSingleFile(new MedalOverlay(), topMostOverlayContent.Add);
 
             loadComponentSingleFile(new BackgroundDataStoreProcessor(), Add, true);
-            loadComponentSingleFile(new EzAnalysisWarmupProcessor(), Add, true);
-            loadComponentSingleFile(new EzScoreRaceService(), Add, true);
-            loadComponentSingleFile(new PixivAutoDownloadProcessor(), Add, true);
             loadComponentSingleFile<BeatmapStore>(detachedBeatmapStore = new RealmDetachedBeatmapStore(), Add, true);
             loadComponentSingleFile(new QueueController(), Add, true);
+
+            if (Ez2ConfigManager.Get<bool>(Ez2Setting.EzAnalysisSqliteEnabled))
+                loadComponentSingleFile(new EzAnalysisWarmupProcessor(), Add, true);
+
+            // 角逐服务：仅实验开关开启时注册 DI 并挂载；关闭时 DI 解析为 null，进程内零实例零开销。
+            if (Ez2ConfigManager.Get<bool>(Ez2Setting.EzScoreRaceServiceEnabled))
+                loadComponentSingleFile(new EzScoreRaceService(), Add, true);
+
+            loadComponentSingleFile(new PixivAutoDownloadProcessor(), Add, true);
 
             Add(externalLinkOpener = new ExternalLinkOpener());
             Add(new MusicKeyBindingHandler());

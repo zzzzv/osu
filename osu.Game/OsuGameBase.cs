@@ -211,8 +211,6 @@ namespace osu.Game
 
         protected EzSkinInfo EzSkinInfo { get; private set; }
 
-        protected EzLocalTextureFactory NoteFactory { get; private set; }
-
         protected EzResourceStore EzResourceStore { get; private set; }
 
         protected IEzReplaySession ReplaySession { get; private set; }
@@ -221,6 +219,8 @@ namespace osu.Game
         private Bindable<FrameSync> ezDrawFrameLimiter = null!;
         private Bindable<double> ezBaseFrameLimiter = null!;
         private bool ezFrameLimiterDisplayModeBound;
+
+        private Bindable<bool> ezAnalysisSqliteEnabled = null!;
 
         /// <summary>
         /// The language in which the game is currently displayed in.
@@ -291,7 +291,6 @@ namespace osu.Game
         private readonly BindableNumber<double> globalTrackVolumeAdjust = new BindableNumber<double>(global_track_volume_adjust);
 
         private Bindable<string> frameworkLocale = null!;
-        private IBindable<bool> ezAnalysisSqliteEnabled;
 
         private IBindable<LocalisationParameters> localisationParameters = null!;
 
@@ -331,10 +330,6 @@ namespace osu.Game
 
             // 初始化并注册EzSkinSettingsManager
             Ez2ConfigManager = new Ez2ConfigManager(Storage);
-            ezAnalysisSqliteEnabled = Ez2ConfigManager.GetBindable<bool>(Ez2Setting.EzAnalysisSqliteEnabled);
-            EzAnalysisPersistentStore.Enabled = ezAnalysisSqliteEnabled.Value;
-            ezAnalysisSqliteEnabled.BindValueChanged(v => EzAnalysisPersistentStore.Enabled = v.NewValue, true);
-
             GlobalConfigStore.Config = LocalConfig;
             GlobalConfigStore.EzConfig = Ez2ConfigManager;
             dependencies.Cache(Ez2ConfigManager);
@@ -345,17 +340,12 @@ namespace osu.Game
             dependencies.CacheAs<IEzSkinInfo>(EzSkinInfo);
             dependencies.CacheAs(EzResourceStore = new EzResourceStore(Ez2ConfigManager, Host.Renderer, Audio, Storage, realm));
             dependencies.CacheAs<IStorageResourceProvider>(EzResourceStore);
-            dependencies.Cache(NoteFactory = new EzLocalTextureFactory(
-                Ez2ConfigManager,
-                EzResourceStore));
+            dependencies.Cache(new EzLocalTextureFactory(Ez2ConfigManager, EzResourceStore));
 
             dependencies.Cache(realm = new RealmAccess(Storage, CLIENT_DATABASE_FILENAME, Host.UpdateThread));
 
             dependencies.CacheAs<RulesetStore>(RulesetStore = new RealmRulesetStore(realm, Storage));
             dependencies.CacheAs<IRulesetStore>(RulesetStore);
-
-            ReplaySession = new EzReplaySessionRouter(RulesetStore.AvailableRulesets.Cast<RulesetInfo>());
-            dependencies.CacheAs<IEzReplaySession>(ReplaySession);
 
             Decoder.RegisterDependencies(RulesetStore);
 
@@ -402,12 +392,23 @@ namespace osu.Game
             dependencies.Cache(BeatmapManager = new BeatmapManager(Storage, realm, API, Audio, Resources, Host, defaultBeatmap, difficultyCache, performOnlineLookups: true));
             dependencies.CacheAs<IWorkingBeatmapCache>(BeatmapManager);
 
+            ezAnalysisSqliteEnabled = Ez2ConfigManager.GetBindable<bool>(Ez2Setting.EzAnalysisSqliteEnabled);
+            ezAnalysisSqliteEnabled.BindValueChanged(v => EzAnalysisPersistentStore.Enabled = v.NewValue, true);
+            // EzAnalysisPersistentStore.Enabled = ezAnalysisSqliteEnabled.Value;
+
             ezAnalysisPersistentStore = new EzAnalysisPersistentStore(Storage);
             var ezAnalysisDatabase = new EzAnalysisDatabase(ezAnalysisPersistentStore, BeatmapManager, RulesetStore, Ez2ConfigManager);
-            ezAnalysisCache = new EzAnalysisCache(ezAnalysisDatabase, Ez2ConfigManager);
             dependencies.Cache(ezAnalysisPersistentStore);
             dependencies.Cache(ezAnalysisDatabase);
-            dependencies.Cache(ezAnalysisCache);
+            dependencies.Cache(ezAnalysisCache = new EzAnalysisCache());
+
+            ReplaySession = new EzReplaySessionRouter(RulesetStore.AvailableRulesets);
+            dependencies.CacheAs<IEzReplaySession>(ReplaySession);
+
+            if (Ez2ConfigManager.Get<bool>(Ez2Setting.EzScoreRaceServiceEnabled))
+            {
+                // TODO：Score Race Service
+            }
 
             dependencies.Cache(BeatmapDownloader = new BeatmapModelDownloader(BeatmapManager, API));
             dependencies.Cache(ScoreDownloader = new ScoreModelDownloader(ScoreManager, API));
