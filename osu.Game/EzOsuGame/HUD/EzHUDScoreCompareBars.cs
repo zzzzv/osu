@@ -23,6 +23,7 @@ using osu.Game.Graphics.Sprites;
 using osu.Game.Localisation.SkinComponents;
 using osu.Game.Overlays.Settings;
 using osu.Game.Rulesets.Scoring;
+using osu.Game.Scoring;
 using osu.Game.Screens.Play;
 using osu.Game.Skinning;
 using osuTK;
@@ -42,18 +43,16 @@ namespace osu.Game.EzOsuGame.HUD
 
     /// <summary>
     /// BMS 风格三柱分数对比：当前局 + 两条按对比条件选出的参考柱。
-    /// 对齐官方观战 HUD 架构：
-    /// - <see cref="EzScoreRaceService"/> 提供 <c>States</c> 字典（选歌界面预加载完成）
-    /// - 本组件订阅字典变化，维护两个 processor，每个绑定到一个 ghost state
-    /// - 直接订阅 processor bindable，不需要 Session/Entry 中间层
+    /// 服务注册时 ghost 柱绑定 timeline processor；未注册时展示 ScoreInfo 静态终值。
     /// </summary>
     public partial class EzHUDScoreCompareBars : EzHUDScoreRaceComponent, ISerialisableDrawable, IAcrylicBackdropConsumer
     {
         private const float backdrop_blur_strength = 16;
+        private const int static_ghost_query_limit = 10;
 
         public bool UsesFixedAnchor { get; set; }
 
-        public bool WantsAcrylicCapture => ServiceEnabledValue && BackgroundVisible.Value && BackdropBlurEnabled.Value;
+        public bool WantsAcrylicCapture => BackgroundVisible.Value && BackdropBlurEnabled.Value;
 
         [SettingSource(typeof(EzHUDStrings), nameof(EzHUDStrings.SCORE_COMPARE_CONDITION1_LABEL), nameof(EzHUDStrings.SCORE_COMPARE_CONDITION1_DESCRIPTION))]
         public Bindable<EzScoreRaceMetric> CompareCondition1Setting { get; } = new Bindable<EzScoreRaceMetric>(EzScoreRaceMetric.Accuracy);
@@ -110,10 +109,16 @@ namespace osu.Game.EzOsuGame.HUD
         private EzScoreRaceTimelineScoreProcessor? ghostProcessor2;
         private EzScoreRaceState? boundState1;
         private EzScoreRaceState? boundState2;
+        private ScoreInfo? boundStaticScore1;
+        private ScoreInfo? boundStaticScore2;
 
         private bool refreshScheduled;
         private long lastNowBarScore = long.MinValue;
         private double lastProcessorUpdateTime;
+        private bool passiveMode;
+
+        private IBindableDictionary<string, EzScoreRaceState>? stateLookup;
+        private bool interestRegistered;
 
         [Resolved]
         private OsuColour colours { get; set; } = null!;
@@ -124,13 +129,6 @@ namespace osu.Game.EzOsuGame.HUD
         [Resolved]
         private IRenderer renderer { get; set; } = null!;
 
-        private IBindableDictionary<string, EzScoreRaceState>? stateLookup;
-
-        [Resolved(canBeNull: true)]
-        private EzScoreRaceService? scoreRaceService { get; set; }
-
-        private bool interestRegistered;
-
         public EzHUDScoreCompareBars()
         {
             Width = 3 * BarWidth.Value + 2 * bar_spacing + container_padding * 2;
@@ -140,6 +138,7 @@ namespace osu.Game.EzOsuGame.HUD
             InternalChild = backgroundLayer = new Container
             {
                 RelativeSizeAxes = Axes.Both,
+                Alpha = 0,
                 Children = new Drawable[]
                 {
                     acrylicBackdrop = new AcrylicBackdropDrawable
@@ -165,6 +164,7 @@ namespace osu.Game.EzOsuGame.HUD
             {
                 RelativeSizeAxes = Axes.Both,
                 Padding = new MarginPadding(container_padding),
+                Alpha = 0,
             };
 
             for (int i = 0; i < bars.Length; i++)
@@ -175,33 +175,17 @@ namespace osu.Game.EzOsuGame.HUD
 
             AddInternal(barsContainer);
 
-            ghostProcessor1 = new EzScoreRaceTimelineScoreProcessor();
-            ghostProcessor2 = new EzScoreRaceTimelineScoreProcessor();
-
-            if (GameplayClockContainer != null)
-            {
-                ghostProcessor1.ReferenceClock = GameplayClockContainer;
-                ghostProcessor2.ReferenceClock = GameplayClockContainer;
-            }
-
-            AddInternal(ghostProcessor1);
-            AddInternal(ghostProcessor2);
-
             base.LoadComplete();
-
-            ghostProcessor1.TotalScore.BindValueChanged(_ => updateGhostCompareBar(1));
-            ghostProcessor2.TotalScore.BindValueChanged(_ => updateGhostCompareBar(2));
 
             BackgroundVisible.BindValueChanged(_ => updateBackgroundVisibility(), true);
             BackdropBlurEnabled.BindValueChanged(_ => SyncAcrylicCaptureState(), true);
 
-            CompareCondition1Setting.BindValueChanged(_ => refreshPickedGhosts(), true);
-            CompareCondition2Setting.BindValueChanged(_ => refreshPickedGhosts(), true);
+            CompareCondition1Setting.BindValueChanged(_ => refreshGhostBars(), true);
+            CompareCondition2Setting.BindValueChanged(_ => refreshGhostBars(), true);
             BarDirection.BindValueChanged(_ => layoutBars(), true);
             BarHeight.BindValueChanged(_ => layoutBars(), true);
             BarWidth.BindValueChanged(_ => layoutBars(), true);
 
-            SyncAcrylicCaptureState();
             layoutBars();
         }
 
@@ -211,12 +195,11 @@ namespace osu.Game.EzOsuGame.HUD
         {
             base.Update();
 
-            // 服务关闭：完全跳过每帧处理，保证 0 影响。
-            if (!ServiceEnabledValue)
-                return;
-
             updateCurrentAndTheoreticalBars();
             base.CornerRadius = CornerRadius.Value * Math.Min(DrawWidth, DrawHeight);
+
+            if (passiveMode)
+                return;
 
             if (Time.Current - lastProcessorUpdateTime >= 50)
             {
@@ -238,38 +221,52 @@ namespace osu.Game.EzOsuGame.HUD
 
         private void bindStateLookupWhenAvailable()
         {
-            if (scoreRaceService == null)
-            {
-                Schedule(bindStateLookupWhenAvailable);
+            if (IsScoreRaceServiceAvailable)
+                activateLive();
+            else
+                activatePassive();
+        }
+
+        private void ensureGhostProcessors()
+        {
+            if (ghostProcessor1 != null)
                 return;
+
+            ghostProcessor1 = new EzScoreRaceTimelineScoreProcessor();
+            ghostProcessor2 = new EzScoreRaceTimelineScoreProcessor();
+
+            if (GameplayClockContainer != null)
+            {
+                ghostProcessor1.ReferenceClock = GameplayClockContainer;
+                ghostProcessor2.ReferenceClock = GameplayClockContainer;
             }
 
-            // 建立服务开关联动：启用时 activate，关闭时 deactivate（0 影响）。
-            BindServiceEnabled(scoreRaceService);
+            AddInternal(ghostProcessor1);
+            AddInternal(ghostProcessor2);
+
+            ghostProcessor1.TotalScore.BindValueChanged(_ => updateGhostCompareBar(1));
+            ghostProcessor2.TotalScore.BindValueChanged(_ => updateGhostCompareBar(2));
         }
 
-        protected override void OnServiceEnabledChanged(bool enabled)
+        private void activateLive()
         {
-            if (enabled)
-                activate();
-            else
-                deactivate();
-        }
+            passiveMode = false;
+            boundStaticScore1 = null;
+            boundStaticScore2 = null;
 
-        private void activate()
-        {
-            if (scoreRaceService == null)
-                return;
+            var service = ScoreRaceService!;
+
+            ensureGhostProcessors();
 
             if (!interestRegistered)
             {
-                scoreRaceService.RegisterInterest();
+                service.RegisterInterest();
                 interestRegistered = true;
             }
 
             if (stateLookup == null)
             {
-                stateLookup = scoreRaceService.States;
+                stateLookup = service.States;
                 stateLookup.BindCollectionChanged(onStatesChanged, true);
             }
 
@@ -278,28 +275,27 @@ namespace osu.Game.EzOsuGame.HUD
             refreshPickedGhosts();
         }
 
-        private void deactivate()
+        private void activatePassive()
         {
-            if (interestRegistered && scoreRaceService != null)
+            passiveMode = true;
+
+            if (interestRegistered && ScoreRaceService != null)
             {
-                scoreRaceService.UnregisterInterest();
+                ScoreRaceService.UnregisterInterest();
                 interestRegistered = false;
             }
 
+            stateLookup = null;
             bindProcessorToState(ghostProcessor1, ref boundState1, null);
             bindProcessorToState(ghostProcessor2, ref boundState2, null);
 
-            if (barsContainer != null)
-                barsContainer.Alpha = 0;
-
-            backgroundLayer.Alpha = 0;
-            SyncAcrylicCaptureState();
+            barsContainer.Alpha = 1;
+            updateBackgroundVisibility();
+            refreshStaticGhosts();
         }
 
         private void onStatesChanged(object? sender, NotifyDictionaryChangedEventArgs<string, EzScoreRaceState> e)
         {
-            // 使用 AddOnce + 标志位合并同一帧内的多次字典变化事件，
-            // 避免 publishStates 的 Clear + N 次 Add 触发 N 次 refreshPickedGhosts。
             if (!refreshScheduled)
             {
                 refreshScheduled = true;
@@ -322,9 +318,9 @@ namespace osu.Game.EzOsuGame.HUD
         {
             if (isDisposing)
             {
-                if (interestRegistered && scoreRaceService != null)
+                if (interestRegistered && ScoreRaceService != null)
                 {
-                    scoreRaceService.UnregisterInterest();
+                    ScoreRaceService.UnregisterInterest();
                     interestRegistered = false;
                 }
 
@@ -336,8 +332,12 @@ namespace osu.Game.EzOsuGame.HUD
             base.Dispose(isDisposing);
         }
 
-        protected override void OnEntriesChangedScheduled()
+        private void refreshGhostBars()
         {
+            if (passiveMode)
+                refreshStaticGhosts();
+            else
+                refreshPickedGhosts();
         }
 
         private void updateCurrentAndTheoreticalBars()
@@ -366,7 +366,6 @@ namespace osu.Game.EzOsuGame.HUD
                 return;
 
             var processor = conditionIndex == 1 ? ghostProcessor1 : ghostProcessor2;
-            var state = conditionIndex == 1 ? boundState1 : boundState2;
             long barScoreScale = getBarScoreScale();
 
             if (processor == null || !SupportsGhostRace)
@@ -385,6 +384,32 @@ namespace osu.Game.EzOsuGame.HUD
                 getBarColour(metric));
         }
 
+        private void updateStaticCompareBar(int conditionIndex)
+        {
+            var metric = conditionIndex == 1 ? CompareCondition1Setting.Value : CompareCondition2Setting.Value;
+
+            if (metric == EzScoreRaceMetric.TheoreticalMaxScore)
+                return;
+
+            var scoreInfo = conditionIndex == 1 ? boundStaticScore1 : boundStaticScore2;
+            long barScoreScale = getBarScoreScale();
+
+            if (scoreInfo == null || !SupportsGhostRace)
+            {
+                bars[conditionIndex].UpdateValues(metric.GetLocalisableDescription(), string.Empty, 0, barScoreScale, getBarColour(metric));
+                return;
+            }
+
+            long barScore = scoreInfo.TotalScore;
+            string label = barScore > 0 ? formatScore(barScore) : string.Empty;
+            bars[conditionIndex].UpdateValues(
+                metric.GetLocalisableDescription(),
+                label,
+                barScore,
+                barScoreScale,
+                getBarColour(metric));
+        }
+
         private void updateTheoreticalCompareBar(CompareBar bar, EzScoreRaceMetric metric, long barScoreScale)
         {
             long theoreticalScore = getTheoreticalScoreAtTime();
@@ -394,6 +419,17 @@ namespace osu.Game.EzOsuGame.HUD
                 theoreticalScore,
                 barScoreScale,
                 getBarColour(metric));
+        }
+
+        private void refreshStaticGhosts()
+        {
+            var scores = QueryStaticGhostScores(EzScoreModFilter.Any, static_ghost_query_limit);
+
+            boundStaticScore1 = pickBestScoreInfo(scores, CompareCondition1Setting.Value);
+            boundStaticScore2 = pickBestScoreInfo(scores, CompareCondition2Setting.Value);
+
+            updateStaticCompareBar(1);
+            updateStaticCompareBar(2);
         }
 
         /// <summary>
@@ -443,6 +479,27 @@ namespace osu.Game.EzOsuGame.HUD
             ).FirstOrDefault();
         }
 
+        private static ScoreInfo? pickBestScoreInfo(List<ScoreInfo> scores, EzScoreRaceMetric metric)
+        {
+            if (metric == EzScoreRaceMetric.TheoreticalMaxScore)
+                return null;
+
+            if (scores.Count == 0)
+                return null;
+
+            if (metric == EzScoreRaceMetric.TotalScore)
+                return scores.OrderByDescending(s => s.TotalScore).ThenByDescending(s => s.Date).FirstOrDefault();
+
+            return EzScoreRaceMetricOrdering.ApplyMetricOrdering(
+                scores,
+                metric,
+                s => s.TotalScore,
+                s => s.Accuracy,
+                s => s.MaxCombo,
+                EzLocalScoreQueries.GetMissCount
+            ).FirstOrDefault();
+        }
+
         private void bindProcessorToState(EzScoreRaceTimelineScoreProcessor? processor, ref EzScoreRaceState? currentBound, EzScoreRaceState? newState)
         {
             if (currentBound == newState)
@@ -463,7 +520,7 @@ namespace osu.Game.EzOsuGame.HUD
 
         private void updateBackgroundVisibility()
         {
-            backgroundLayer.Alpha = ServiceEnabledValue && BackgroundVisible.Value ? 1 : 0;
+            backgroundLayer.Alpha = BackgroundVisible.Value ? 1 : 0;
             SyncAcrylicCaptureState();
         }
 
