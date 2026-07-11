@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using System.Threading.Tasks;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Extensions;
@@ -55,22 +54,7 @@ namespace osu.Game.EzOsuGame.Overlays
         private const float dynamic_preview_duration = 10000;
         private const float dynamic_preview_repeat_delay = 500;
         private const int change_debounce = 50;
-
-        // private static bool rememberedExpanded;
-
-        private static readonly EzBeatmapPreviewMode[] shared_preview_modes =
-        {
-            EzBeatmapPreviewMode.Dynamic,
-            EzBeatmapPreviewMode.Static,
-        };
-
-        private static readonly EzBeatmapPreviewMode[] mania_preview_modes =
-        {
-            EzBeatmapPreviewMode.Dynamic,
-            EzBeatmapPreviewMode.Static,
-            EzBeatmapPreviewMode.StaticFullMap,
-            EzBeatmapPreviewMode.StaticScroll,
-        };
+        private const int panel_transition_duration = 160;
 
         private readonly StopwatchClock previewClock = new StopwatchClock();
         private readonly FramedClock framedPreviewClock;
@@ -138,12 +122,13 @@ namespace osu.Game.EzOsuGame.Overlays
         private int currentRulesetOnlineId = -1;
         private string currentBeatmapHash = string.Empty;
 
-        // 指示在隐藏时是否应立即释放所有引用（默认 true：隐藏即释放）。
-        private bool releaseOnHide { get; } = true;
+        private IReadOnlyList<EzBeatmapPreviewMode>? lastPreviewModeList;
+
+        private bool panelTransitionActive;
 
         private bool dynamicMode => previewMode.Value == EzBeatmapPreviewMode.Dynamic;
 
-        private bool customManiaStaticMode => isManiaRuleset(currentRuleset)
+        private bool customManiaStaticMode => EzBeatmapPreviewModes.IsManiaRuleset(currentRuleset)
                                               && (previewMode.Value == EzBeatmapPreviewMode.StaticFullMap || previewMode.Value == EzBeatmapPreviewMode.StaticScroll);
 
         private bool fullMapMode => previewMode.Value == EzBeatmapPreviewMode.StaticFullMap;
@@ -163,7 +148,6 @@ namespace osu.Game.EzOsuGame.Overlays
         public EzBeatmapPreviewOverlay()
         {
             RelativeSizeAxes = Axes.Both;
-            AlwaysPresent = true;
 
             framedPreviewClock = new FramedClock(previewClock);
 
@@ -176,7 +160,6 @@ namespace osu.Game.EzOsuGame.Overlays
                     Masking = true,
                     CornerRadius = 10,
                     Alpha = 0,
-                    AlwaysPresent = true,
                     RelativeSizeAxes = Axes.None,
                     Child = new Container
                     {
@@ -311,7 +294,7 @@ namespace osu.Game.EzOsuGame.Overlays
             };
 
             timeline.OnSeek = onTimelineSeek;
-            timeline.OnCommit = onTimelineCommit;
+            timeline.OnCommit = onTimelineSeek;
 
             createPreviewModeButtons();
             // 初始化对外可观察的状态
@@ -358,9 +341,10 @@ namespace osu.Game.EzOsuGame.Overlays
                 selectionDirty = true;
 
             panelContainer.ClearTransforms();
+            beginPanelTransition();
             panelContainer.MoveTo(new Vector2(panel_left_margin, 14));
-            panelContainer.FadeIn(160, Easing.OutQuint);
-            panelContainer.MoveToY(0, 160, Easing.OutQuint);
+            panelContainer.FadeIn(panel_transition_duration, Easing.OutQuint).Finally(_ => finishPanelTransition());
+            panelContainer.MoveToY(0, panel_transition_duration, Easing.OutQuint);
 
             updatePreviewControlsLayout();
 
@@ -386,25 +370,30 @@ namespace osu.Game.EzOsuGame.Overlays
             cancelPendingLoad();
             disposePreviewResources();
 
-            if (releaseOnHide)
-            {
-                // 立即释放对谱面/规则集等的大对象引用，降低内存占用。
-                playableBeatmap = null;
-                currentRuleset = null;
-                currentRulesetOnlineId = -1;
-                currentBeatmapHash = string.Empty;
-                selectionDirty = false;
-            }
-            else
-            {
-                selectionDirty = playableBeatmap != null && currentRuleset != null;
-            }
+            playableBeatmap = null;
+            currentRuleset = null;
+            currentRulesetOnlineId = -1;
+            currentBeatmapHash = string.Empty;
+            selectionDirty = false;
 
             setStateText("No Load");
 
             panelContainer.ClearTransforms();
-            panelContainer.FadeOut(160, Easing.OutQuint);
-            panelContainer.MoveToY(14, 160, Easing.OutQuint);
+            beginPanelTransition();
+            panelContainer.FadeOut(panel_transition_duration, Easing.OutQuint).Finally(_ => finishPanelTransition());
+            panelContainer.MoveToY(14, panel_transition_duration, Easing.OutQuint);
+        }
+
+        private void beginPanelTransition()
+        {
+            panelTransitionActive = true;
+            panelContainer.AlwaysPresent = true;
+        }
+
+        private void finishPanelTransition()
+        {
+            panelTransitionActive = false;
+            panelContainer.AlwaysPresent = false;
         }
 
         /// <summary>
@@ -415,7 +404,7 @@ namespace osu.Game.EzOsuGame.Overlays
         /// <param name="forceReload">强制刷新，附注mod设置变化时的判断</param>
         public void UpdateSelection(IBeatmap? playableBeatmap, RulesetInfo ruleset, bool forceReload = false)
         {
-            if (playableBeatmap == null)
+            if (playableBeatmap == null || !expanded)
                 return;
 
             this.playableBeatmap = playableBeatmap;
@@ -450,9 +439,6 @@ namespace osu.Game.EzOsuGame.Overlays
             selectionEventVersion++;
 
             selectionDirty = true;
-
-            if (!expanded)
-                return;
 
             // 切歌 / mod 变化统一走去抖。快速切歌时中间歌曲的 scheduledSelectionLoad 被取消，
             // 避免为每首过渡歌曲都启动昂贵的 DrawableRuleset 创建 + replay 模拟。
@@ -499,12 +485,19 @@ namespace osu.Game.EzOsuGame.Overlays
         {
             SetSongSelectBackgroundRevealed(false);
 
+            if (expanded)
+            {
+                expanded = false;
+                ExpandedState.Value = false;
+                panelBackground.AcrylicCaptureVisible = false;
+                panelBackground.SyncAcrylicCaptureState();
+            }
+
             selectionLoadInProgress = false;
             cancelScheduledSelectionLoad();
             cancelPendingLoad();
 
             disposePreviewResources();
-            // 立即释放所有引用，避免切换屏幕时占用内存。
             playableBeatmap = null;
             currentRuleset = null;
             selectionDirty = false;
@@ -512,18 +505,13 @@ namespace osu.Game.EzOsuGame.Overlays
             currentBeatmapHash = string.Empty;
             updatePreviewModeButtons();
 
-            // rememberedExpanded = expanded;
+            panelContainer.ClearTransforms();
+            panelContainer.AlwaysPresent = false;
+            panelTransitionActive = false;
+            panelContainer.Alpha = 0;
+            panelContainer.Y = 14;
+            lastAppliedPanelY = 14;
         }
-
-        // public void RestoreRememberedState()
-        // {
-        //     if (rememberedExpanded)
-        //         expand();
-        //     else
-        //         collapse();
-        //
-        //     updatePreviewModeButtons();
-        // }
 
         private void beginLoadPendingSelectionIfRequired()
         {
@@ -569,7 +557,6 @@ namespace osu.Game.EzOsuGame.Overlays
             selectionDirty = false;
             lastLoadTimeMs = 0;
 
-            // 立即释放旧的预览资源，防止在切换谱面时短暂显示旧画面或跳转。
             disposePreviewResources();
             previewClock.Stop();
             updateProgressDisplay(0);
@@ -578,81 +565,30 @@ namespace osu.Game.EzOsuGame.Overlays
             previewLoadCancellation = new CancellationTokenSource();
             var token = previewLoadCancellation.Token;
 
-            var ruleset = currentRuleset;
-
-            // local copy to avoid capturing mutable/large fields in the task closure
-            var localPlayable = playableBeatmap;
-
             double loadStartTime = lastSelectionEventTime > 0 ? lastSelectionEventTime : Time.Current;
 
-            Task.Run<LoadedPreviewData?>(() =>
+            beatmapMinTime = 0;
+            beatmapMaxTime = Math.Max(playableBeatmap.BeatmapInfo.Length, beatmapMinTime + 1);
+            playbackStartTime = computeDefaultStartTime(playableBeatmap, currentRuleset, 0);
+
+            lastLoadTimeMs = Time.Current - loadStartTime;
+            lastDisplayedLoadTimeMs = -1;
+
+            setupDrawableRulesetAsync(eventVersion, playableBeatmap, currentRuleset, token);
+
+            previewClock.Stop();
+            previewClock.Seek(playbackStartTime);
+
+            if (dynamicMode)
             {
-                token.ThrowIfCancellationRequested();
+                nextDynamicLoopStartTime = Time.Current;
+                previewClock.Start();
+            }
 
-                if (localPlayable == null)
-                    return null;
+            updateProgressDisplay(previewClock.CurrentTime);
+            setStateText(string.Empty);
 
-                double maxTime = localPlayable.BeatmapInfo.Length;
-                double startTime = computeDefaultStartTime(localPlayable, ruleset!, 0);
-
-                return new LoadedPreviewData(eventVersion, localPlayable, ruleset!, startTime, 0, maxTime);
-            }, token).ContinueWith(task =>
-            {
-                Schedule(() =>
-                {
-                    if (token.IsCancellationRequested || task.IsCanceled)
-                    {
-                        onSelectionLoadFinished();
-                        return;
-                    }
-
-                    if (task.IsFaulted)
-                    {
-                        if (eventVersion == selectionEventVersion)
-                            setStateText("load fail");
-
-                        onSelectionLoadFinished();
-                        return;
-                    }
-
-                    var result = task.GetResultSafely();
-
-                    if (result == null)
-                    {
-                        onSelectionLoadFinished();
-                        return;
-                    }
-
-                    if (result.Value.Version != selectionEventVersion)
-                    {
-                        onSelectionLoadFinished();
-                        return;
-                    }
-
-                    lastLoadTimeMs = Time.Current - loadStartTime;
-                    lastDisplayedLoadTimeMs = -1;
-
-                    beatmapMinTime = result.Value.MinTime;
-                    beatmapMaxTime = Math.Max(result.Value.MaxTime, beatmapMinTime + 1);
-                    playbackStartTime = result.Value.StartTime;
-
-                    setupDrawableRulesetAsync(result.Value.Version, result.Value.PlayableBeatmap, result.Value.RulesetInfo, token);
-
-                    previewClock.Stop();
-                    previewClock.Seek(playbackStartTime);
-
-                    if (dynamicMode)
-                    {
-                        nextDynamicLoopStartTime = Time.Current;
-                        previewClock.Start();
-                    }
-
-                    updateProgressDisplay(previewClock.CurrentTime);
-                    setStateText(string.Empty);
-
-                    onSelectionLoadFinished();
-                });
-            }, CancellationToken.None);
+            onSelectionLoadFinished();
         }
 
         private void onSelectionLoadFinished()
@@ -666,6 +602,9 @@ namespace osu.Game.EzOsuGame.Overlays
         protected override void Update()
         {
             base.Update();
+
+            if (!expanded && !panelTransitionActive)
+                return;
 
             if (lastLoadTimeMs > 0)
             {
@@ -969,7 +908,7 @@ namespace osu.Game.EzOsuGame.Overlays
             if (cancellationToken.IsCancellationRequested || eventVersion != selectionEventVersion || !expanded)
                 return;
 
-            if (isManiaRuleset(rulesetInfo)
+            if (EzBeatmapPreviewModes.IsManiaRuleset(rulesetInfo)
                 && (previewMode.Value == EzBeatmapPreviewMode.StaticFullMap || previewMode.Value == EzBeatmapPreviewMode.StaticScroll))
             {
                 setupManiaStaticPreview(playableBeatmap);
@@ -1090,8 +1029,6 @@ namespace osu.Game.EzOsuGame.Overlays
 
             seekTo(time, dynamicMode);
         }
-
-        private void onTimelineCommit(double time) => onTimelineSeek(time);
 
         private void syncScrollRendererFromTime(double time)
         {
@@ -1268,7 +1205,7 @@ namespace osu.Game.EzOsuGame.Overlays
 
         private void createPreviewModeButtons()
         {
-            foreach (EzBeatmapPreviewMode mode in mania_preview_modes)
+            foreach (EzBeatmapPreviewMode mode in EzBeatmapPreviewModes.AllUiModes)
             {
                 previewModeButtons[mode] = new PreviewModeButton
                 {
@@ -1282,7 +1219,7 @@ namespace osu.Game.EzOsuGame.Overlays
 
         private void setPreviewMode(EzBeatmapPreviewMode mode)
         {
-            EzBeatmapPreviewMode validated = getValidatedPreviewMode(mode, currentRuleset);
+            EzBeatmapPreviewMode validated = EzBeatmapPreviewModes.ValidateMode(mode, currentRuleset);
 
             if (previewMode.Value == validated)
                 return;
@@ -1293,7 +1230,7 @@ namespace osu.Game.EzOsuGame.Overlays
 
         private void applyPreviewModeForCurrentRuleset()
         {
-            EzBeatmapPreviewMode target = getValidatedPreviewMode(getStoredPreviewMode(), currentRuleset);
+            EzBeatmapPreviewMode target = EzBeatmapPreviewModes.ValidateMode(getStoredPreviewMode(), currentRuleset);
 
             if (previewMode.Value == target)
                 return;
@@ -1305,11 +1242,11 @@ namespace osu.Game.EzOsuGame.Overlays
         {
             try
             {
-                return isManiaRuleset(currentRuleset) ? maniaPreviewModeConfig.Value : sharedPreviewModeConfig.Value;
+                return EzBeatmapPreviewModes.IsManiaRuleset(currentRuleset) ? maniaPreviewModeConfig.Value : sharedPreviewModeConfig.Value;
             }
             catch
             {
-                return getDefaultPreviewMode(currentRuleset);
+                return EzBeatmapPreviewModes.GetDefaultMode(currentRuleset);
             }
         }
 
@@ -1317,7 +1254,7 @@ namespace osu.Game.EzOsuGame.Overlays
         {
             try
             {
-                if (isManiaRuleset(currentRuleset))
+                if (EzBeatmapPreviewModes.IsManiaRuleset(currentRuleset))
                     maniaPreviewModeConfig.Value = mode;
                 else
                     sharedPreviewModeConfig.Value = mode;
@@ -1326,22 +1263,6 @@ namespace osu.Game.EzOsuGame.Overlays
             {
                 // Keep the in-session choice even if persistence fails.
             }
-        }
-
-        private static EzBeatmapPreviewMode getDefaultPreviewMode(RulesetInfo? ruleset) =>
-            isManiaRuleset(ruleset) ? EzBeatmapPreviewMode.StaticFullMap : EzBeatmapPreviewMode.Static;
-
-        private static EzBeatmapPreviewMode getValidatedPreviewMode(EzBeatmapPreviewMode mode, RulesetInfo? ruleset)
-        {
-            if (!Enum.IsDefined(mode))
-                return getDefaultPreviewMode(ruleset);
-
-            IReadOnlyList<EzBeatmapPreviewMode> availableModes = isManiaRuleset(ruleset) ? mania_preview_modes : shared_preview_modes;
-
-            if (availableModes.Contains(mode))
-                return mode;
-
-            return getDefaultPreviewMode(ruleset);
         }
 
         private void onPreviewModeChanged()
@@ -1380,23 +1301,21 @@ namespace osu.Game.EzOsuGame.Overlays
 
         private void updatePreviewModeButtons()
         {
-            previewModeButtonList.Clear(false);
+            var modes = EzBeatmapPreviewModes.GetAvailableModes(currentRuleset);
+            EzBeatmapPreviewMode highlightedMode = EzBeatmapPreviewModes.ValidateMode(previewMode.Value, currentRuleset);
 
-            foreach (EzBeatmapPreviewMode mode in getAvailablePreviewModes())
-                previewModeButtonList.Add(previewModeButtons[mode]);
+            if (lastPreviewModeList == null || !modes.SequenceEqual(lastPreviewModeList))
+            {
+                lastPreviewModeList = modes;
+                previewModeButtonList.Clear(false);
 
-            EzBeatmapPreviewMode highlightedMode = getHighlightedPreviewMode();
+                foreach (EzBeatmapPreviewMode mode in modes)
+                    previewModeButtonList.Add(previewModeButtons[mode]);
+            }
 
             foreach (var pair in previewModeButtons)
                 pair.Value.Selected = pair.Key == highlightedMode;
         }
-
-        private IReadOnlyList<EzBeatmapPreviewMode> getAvailablePreviewModes() => isManiaRuleset(currentRuleset) ? mania_preview_modes : shared_preview_modes;
-
-        private EzBeatmapPreviewMode getHighlightedPreviewMode() =>
-            getValidatedPreviewMode(previewMode.Value, currentRuleset);
-
-        private static bool isManiaRuleset(RulesetInfo? ruleset) => ruleset?.OnlineID == 3;
 
         private void setupManiaStaticPreview(IBeatmap beatmap)
         {
@@ -1465,13 +1384,5 @@ namespace osu.Game.EzOsuGame.Overlays
             if (maniaStaticRenderer is StaticFullMapPreviewRenderer fullMapRenderer)
                 fullMapRenderer.SetZoom(focused);
         }
-
-        private readonly record struct LoadedPreviewData(
-            long Version,
-            IBeatmap PlayableBeatmap,
-            RulesetInfo RulesetInfo,
-            double StartTime,
-            double MinTime,
-            double MaxTime);
     }
 }

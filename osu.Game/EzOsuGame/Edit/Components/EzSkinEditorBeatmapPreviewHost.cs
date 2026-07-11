@@ -89,14 +89,14 @@ namespace osu.Game.EzOsuGame.Edit.Components
                 return;
             }
 
-            if (!EzSkinEditorPreviewModes.SupportsBeatmapPreview(context.PreviewRuleset))
+            if (!EzBeatmapPreviewModes.SupportsBeatmapPreview(context.PreviewRuleset))
             {
                 stageScaleContainer.Child = createPlaceholder(EzEditorStrings.PLACEHOLDER_RULESET_PREVIEW_NOT_SUPPORTED);
                 return;
             }
 
             rulesetInfo = context.PreviewRuleset;
-            previewMode = EzSkinEditorPreviewModes.ValidateMode(context.PreviewMode, context.PreviewRuleset);
+            previewMode = EzBeatmapPreviewModes.ValidateMode(context.PreviewMode, context.PreviewRuleset);
             beginLoad();
         }
 
@@ -142,7 +142,7 @@ namespace osu.Game.EzOsuGame.Edit.Components
             if (playableBeatmap == null || rulesetInfo == null)
                 return;
 
-            if (EzSkinEditorPreviewModes.IsManiaRuleset(rulesetInfo)
+            if (EzBeatmapPreviewModes.IsManiaRuleset(rulesetInfo)
                 && previewMode is EzBeatmapPreviewMode.StaticFullMap or EzBeatmapPreviewMode.StaticScroll)
             {
                 setupManiaStaticPreview(playableBeatmap);

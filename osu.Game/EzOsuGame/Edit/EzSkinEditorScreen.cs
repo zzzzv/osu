@@ -20,6 +20,7 @@ using osu.Game.Beatmaps;
 using osu.Game.Database;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Edit.Components;
+using osu.Game.EzOsuGame.Overlays.Preview;
 using osu.Game.EzOsuGame.Edit.Note;
 using osu.Game.EzOsuGame.Localization;
 using osu.Game.EzOsuGame.ScriptedSkin;
@@ -440,7 +441,7 @@ namespace osu.Game.EzOsuGame.Edit
             if (gameBeatmap.Value.BeatmapInfo.Ruleset is not RulesetInfo ruleset)
                 return;
 
-            PreviewState.SetBeatmap(gameBeatmap.Value, ruleset, EzSkinEditorPreviewModes.GetAppearanceLoadMode(ruleset));
+            PreviewState.SetBeatmap(gameBeatmap.Value, ruleset, EzBeatmapPreviewModes.GetAppearanceLoadMode(ruleset));
         }
 
         private void toggleBeatmapPlayback()
@@ -468,7 +469,7 @@ namespace osu.Game.EzOsuGame.Edit
             embeddedPlayer?.StopAudio();
             stopPreviewBeatmapTrack(PreviewState.PreviewBeatmap);
             musicController.Stop();
-            PreviewState.SetBeatmap(workingBeatmap!, ruleset, EzSkinEditorPreviewModes.GetAppearanceLoadMode(ruleset));
+            PreviewState.SetBeatmap(workingBeatmap!, ruleset, EzBeatmapPreviewModes.GetAppearanceLoadMode(ruleset));
             refreshScene();
         }
 

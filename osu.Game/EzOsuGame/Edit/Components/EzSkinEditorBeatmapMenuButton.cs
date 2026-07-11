@@ -12,6 +12,7 @@ using osu.Framework.Graphics.Cursor;
 using osu.Framework.Localisation;
 using osu.Framework.Graphics.UserInterface;
 using osu.Game.EzOsuGame.Localization;
+using osu.Game.EzOsuGame.Overlays.Preview;
 using osu.Game.Graphics;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Graphics.UserInterfaceV2;
@@ -98,7 +99,7 @@ namespace osu.Game.EzOsuGame.Edit.Components
         {
             foreach (var ruleset in rulesets.AvailableRulesets.OfType<RulesetInfo>())
             {
-                if (!EzSkinEditorPreviewModes.SupportsBeatmapPreview(ruleset))
+                if (!EzBeatmapPreviewModes.SupportsBeatmapPreview(ruleset))
                     continue;
 
                 var capturedRuleset = ruleset;

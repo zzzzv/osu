@@ -5,6 +5,7 @@ using NUnit.Framework;
 using osu.Game.Beatmaps;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Edit;
+using osu.Game.EzOsuGame.Overlays.Preview;
 using osu.Game.Rulesets.Mania;
 
 namespace osu.Game.Tests.NonVisual
@@ -63,9 +64,9 @@ namespace osu.Game.Tests.NonVisual
         {
             var mania = new ManiaRuleset().RulesetInfo;
 
-            Assert.That(EzSkinEditorPreviewModes.GetAvailableModes(mania), Has.Count.EqualTo(4));
-            Assert.That(EzSkinEditorPreviewModes.ValidateMode(EzBeatmapPreviewMode.StaticScroll, mania), Is.EqualTo(EzBeatmapPreviewMode.StaticScroll));
-            Assert.That(EzSkinEditorPreviewModes.ValidateMode(EzBeatmapPreviewMode.StaticFullMap, mania), Is.EqualTo(EzBeatmapPreviewMode.StaticFullMap));
+            Assert.That(EzBeatmapPreviewModes.GetAvailableModes(mania), Has.Count.EqualTo(4));
+            Assert.That(EzBeatmapPreviewModes.ValidateMode(EzBeatmapPreviewMode.StaticScroll, mania), Is.EqualTo(EzBeatmapPreviewMode.StaticScroll));
+            Assert.That(EzBeatmapPreviewModes.ValidateMode(EzBeatmapPreviewMode.StaticFullMap, mania), Is.EqualTo(EzBeatmapPreviewMode.StaticFullMap));
         }
     }
 }

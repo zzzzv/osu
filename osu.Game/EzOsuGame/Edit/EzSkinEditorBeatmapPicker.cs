@@ -6,6 +6,7 @@ using System.Linq;
 using osu.Framework.Utils;
 using osu.Game.Beatmaps;
 using osu.Game.Database;
+using osu.Game.EzOsuGame.Overlays.Preview;
 using osu.Game.Rulesets;
 using Realms;
 
@@ -35,7 +36,7 @@ namespace osu.Game.EzOsuGame.Edit
             if (working.BeatmapInfo.Ruleset is not RulesetInfo ruleset)
                 return false;
 
-            if (!EzSkinEditorPreviewModes.SupportsBeatmapPreview(ruleset))
+            if (!EzBeatmapPreviewModes.SupportsBeatmapPreview(ruleset))
                 return false;
 
             return working.BeatmapInfo.TotalObjectCount != 0;
