@@ -42,16 +42,23 @@ namespace osu.Game.EzOsuGame.Scoring
             if (!isServiceActive)
                 return;
 
-            bindModsFromScreen(newScreen as OsuScreen);
-
             if (newScreen is PlayerLoader)
-                requestTimelineBuild(priority: true);
+            {
+                bindModsFromScreen(newScreen as OsuScreen);
+                beginLoaderPreparation();
+                return;
+            }
+
+            bindModsFromScreen(newScreen as OsuScreen);
         }
 
         private void onScreenExited(IScreen lastScreen, IScreen newScreen)
         {
             if (!isServiceActive)
                 return;
+
+            if (lastScreen is PlayerLoader)
+                endLoaderPreparation(advancingToPlayer: newScreen is Player);
 
             bindModsFromScreen(newScreen as OsuScreen);
         }

@@ -24,10 +24,10 @@ namespace osu.Game.EzOsuGame.Scoring
     /// 全局 ghost 角逐服务。
     ///
     /// - 默认仅在有角逐 HUD 消费者（interest &gt; 0）时查询元数据 / 构建 timeline
-    /// - 进局（osu.Game.Screens.Play.PlayerLoader）或 HUD 首次注册时后台构建 timeline
+    /// - 进局前在 <see cref="Screens.Play.PlayerLoader"/> 全速构建 timeline，就绪后才开始游戏
     /// - 可通过实验性开关 <see cref="Ez2Setting.EzScoreRaceServiceEnabled"/> 整服务 no-op
     /// </summary>
-    public partial class EzScoreRaceService : Component, IEzScoreRaceStateLookup
+    public partial class EzScoreRaceService : Component, IEzScoreRaceStateLookup, IEzScoreRacePlayerStartGate
     {
         [Resolved]
         private RealmAccess realm { get; set; } = null!;
@@ -84,7 +84,6 @@ namespace osu.Game.EzOsuGame.Scoring
         private int timelineBuildVersion;
 
         private Bindable<bool> serviceEnabled = new Bindable<bool>(true);
-        private bool awaitingPlayerLoaderBuild;
 
         [BackgroundDependencyLoader]
         private void load(Ez2ConfigManager config)
@@ -128,7 +127,7 @@ namespace osu.Game.EzOsuGame.Scoring
             if (currentBeatmap.Value?.BeatmapInfo != null)
                 refreshMetadata(currentBeatmap.Value);
 
-            if (awaitingPlayerLoaderBuild || game.ScreenStack.CurrentScreen is PlayerLoader)
+            if (!areAllGhostTimelinesReady())
                 requestTimelineBuild(priority: true);
         }
 
@@ -150,10 +149,14 @@ namespace osu.Game.EzOsuGame.Scoring
 
         private bool hasConsumers => ConsumerInterestCount > 0;
 
+        // loaderPreparationActive / shouldPerformScoreRaceWork — see EzScoreRaceService.LoaderPrep.cs
+
         private void onServiceEnabledChanged(ValueChangedEvent<bool> e)
         {
             if (!e.NewValue)
             {
+                loaderPreparationActive = false;
+                loaderPreparationPending = false;
                 enterQuiescentState();
                 // 关闭时同时断开屏幕 mod 绑定，确保切屏零残留处理。
                 unbindScreenMods();
@@ -163,13 +166,13 @@ namespace osu.Game.EzOsuGame.Scoring
             // 重新启用：补绑当前屏幕的 mod（关闭期间屏幕钩子不做绑定）。
             bindModsFromScreen(game.ScreenStack.CurrentScreen as OsuScreen);
 
-            if (!hasConsumers)
+            if (!shouldPerformScoreRaceWork)
                 return;
 
             if (currentBeatmap.Value?.BeatmapInfo != null)
                 refreshMetadata(currentBeatmap.Value);
 
-            if (awaitingPlayerLoaderBuild || game.ScreenStack.CurrentScreen is PlayerLoader)
+            if (!areAllGhostTimelinesReady())
                 requestTimelineBuild(priority: true);
         }
 
@@ -187,24 +190,29 @@ namespace osu.Game.EzOsuGame.Scoring
             {
                 activeBeatmapId = beatmapInfo.ID;
                 cancelTimelineBuild();
-                awaitingPlayerLoaderBuild = false;
             }
 
-            if (!hasConsumers)
+            if (!shouldPerformScoreRaceWork)
                 return;
 
             refreshMetadata(e.NewValue);
+
+            if (!areAllGhostTimelinesReady())
+                requestTimelineBuild(priority: true);
         }
 
         private void onQueryContextChanged()
         {
-            if (!isServiceActive || !hasConsumers)
+            if (!isServiceActive || !shouldPerformScoreRaceWork)
                 return;
 
             cancelTimelineBuild();
 
             if (currentBeatmap.Value?.BeatmapInfo != null)
                 refreshMetadata(currentBeatmap.Value);
+
+            if (!areAllGhostTimelinesReady())
+                requestTimelineBuild(priority: true);
         }
 
         /// <summary>
@@ -220,7 +228,7 @@ namespace osu.Game.EzOsuGame.Scoring
 
         private void refreshMetadata(WorkingBeatmap workingBeatmap)
         {
-            if (!isServiceActive || !hasConsumers)
+            if (!isServiceActive || !shouldPerformScoreRaceWork)
                 return;
 
             var beatmapInfo = workingBeatmap.BeatmapInfo;
@@ -262,17 +270,8 @@ namespace osu.Game.EzOsuGame.Scoring
 
         private void requestTimelineBuild(bool priority)
         {
-            if (!isServiceActive)
+            if (!isServiceActive || !shouldPerformScoreRaceWork)
                 return;
-
-            // PlayerLoader 时常早于 HUD LoadComplete；记录等待态，待首次 RegisterInterest 补 build。
-            if (!hasConsumers)
-            {
-                awaitingPlayerLoaderBuild = true;
-                return;
-            }
-
-            awaitingPlayerLoaderBuild = false;
 
             var workingBeatmap = currentBeatmap.Value;
             var beatmapInfo = workingBeatmap?.BeatmapInfo;
@@ -429,7 +428,6 @@ namespace osu.Game.EzOsuGame.Scoring
         private void enterQuiescentState()
         {
             cancelTimelineBuild();
-            awaitingPlayerLoaderBuild = false;
             activeQueryKey = null;
             metadataCache.Clear();
             metadataCacheLru.Clear();

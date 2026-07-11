@@ -1279,7 +1279,11 @@ namespace osu.Game
 
             // 角逐服务：仅实验开关开启时注册 DI 并挂载；关闭时 DI 解析为 null，进程内零实例零开销。
             if (Ez2ConfigManager.Get<bool>(Ez2Setting.EzScoreRaceServiceEnabled))
-                loadComponentSingleFile(new EzScoreRaceService(), Add, true);
+            {
+                var scoreRaceService = new EzScoreRaceService();
+                loadComponentSingleFile(scoreRaceService, Add, true);
+                dependencies.CacheAs<IEzScoreRacePlayerStartGate>(scoreRaceService);
+            }
 
             loadComponentSingleFile(new PixivAutoDownloadProcessor(), Add, true);
 
