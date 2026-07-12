@@ -54,8 +54,8 @@
 | ✎ \| **观看回放后**同一 `ScoreInfo` 引用会被 `PopulateScore` **覆写**为 Drawable 统计。                                                                                               |
 | ⛔ \| 在ScoreInfo中，HitMode/HealthMode 双Lazer 等于双为空。举例场景：重算成绩时，如果ScoreInfo中HitMode/HealthMode为空，则视为双Lazer，且重写realm时依然保持HM/HM为空。并且，重算成绩如果发现ScoreInfo HM/HM是双lazer，也要改成双空 |
 | ❓ \| 重算后直接进入：**list ≈ Now**（你已测，offset=0）。                                                                                                                           |
-| ❓ \| 观看回放后：**list = Drawable**，**Now 不变**；EZ2AC/Malody_E/O2Jam 下 **list ≠ Now**。                                                                                     |
-| ❓ \| 上述分叉根因 = **Drawable ≠ Session**，**不是** Now 误读 Realm。                                                                                                            |
+| ✎ \| 观看回放后：**list（M）优于 Now/list（N）**；列路由修复后仍残留 Perfect 计数差。                                                                                                      |
+| ✎ \| 上述残留分叉根因仍为 **Drawable（M）≠ Session（N）**；**不是** Now 误读 Realm。                                                                                                        |
 
 ---
 
@@ -128,18 +128,61 @@
 | ✎ \| 拓展分析 Now （未观看回放） | ✎ \| **b** | ✎ \| —                                   | ✎ \| score frame + Session ForLive | ❓ \| **a≈b**（重算后直接进入，你已测）                     |
 | ✎ \| 观看回放后进 list      | ✎ \| **c** | ⛔ \| ReplayPlayer Drawable PopulateScore | ✎ \| —                             | ✎ \| **c = gameplay 回放**                      |
 | ✎ \| 拓展分析 Now （观看回放后） | ✎ \| **d** | ✎ \| —                                   | ✎ \| score frame + Session（**不变**） | ❓ \| 重算后 **b≈d**                              |
-| ❓ \| 回放后分叉            | ✎ \| （补充行） | ✎ \| —                                   | ✎ \| —                             | ❓ \| 回放后 **c≠d**；EZ2AC/Malody_E −1P；O2Jam −3P |
+| ❓ \| 回放后分叉            | ✎ \| （补充行） | ✎ \| —                                   | ✎ \| —                             | ✎ \| **M 优于 N**；EZ2AC/Malody_E **−1 Perfect**；O2Jam **−4 Perfect**（列路由修复后复测） |
 
 ### 6.1 分叉结论（每格独立）
 
 | 结论                                                                  |
 |---------------------------------------------------------------------|
-| ❓ \| 回放后分叉 **不是** Now 误读 Realm。                                     |
-| ❓ \| 回放后分叉 = **Drawable 回放统计 ≠ Session ForLive**（同 replay、同全局 env）。 |
-| ❓ \| Lazer / Malody_B 回放后仍对齐 → parity **按 HitMode 选择性** 失败。         |
-| ⛔ \| 修复方向：**Session ↔ Drawable parity**。                            |
+| ✎ \| 回放后分叉 **不是** Now 误读 Realm。                                     |
+| ✎ \| 残留分叉 = **M（Drawable）统计优于 N（Session）**；同 replay、同全局 env 下 N 侧多 Miss、少 Perfect。 |
+| ✎ \| Lazer / Malody_B 回放后仍对齐 → parity **按 HitMode 选择性** 失败。         |
+| ⛔ \| 修复方向：**Session ↔ Drawable parity**（M ≡ N）。                       |
 | ⛔ \| **不是**改 Now 数据源。                                               |
 | ⛔ \| **不是** UI 过滤掩盖。                                                |
+
+### 6.2 M / N 场景定义
+
+> ✎ \| **2026-07-12 晚** 标定用语；与旧 abcd 并存。abcd 描述「入口顺序」，M/N 描述「判定引擎族」。
+
+| 代号 | 含义 | 包含入口 | 判定引擎 | 代码锚点 |
+|------|------|----------|----------|----------|
+| **M** | Drawable 终局统计 | ① 本地打完谱面结束时的游戏内计数；② 观看回放后的结算 **list 卡片**（内存 `ScoreInfo`，未写 Realm） | `ScoreProcessor` + Drawable 列路由 | `Player` / `ReplayPlayer` → `PopulateScore` |
+| **N** | Session 终局统计 | ① 手动重算写 Realm 后的 **list**；② 重算后直接进入的 **list** 与 **Now**；③ 观看回放后 **Now 不变**（仍 Session） | `ManiaReplaySession.Run`（ForLive / 重算） | `EzScoreRecalculationService` · `EzScoreGraphMania.RefreshFromService` |
+
+**关系（设计）**：同 score + 同 environment 下 **M ≡ N**。当前未达标。
+
+**偏差方向（2026-07-12 晚复测）**：**M 更好、N 更差**——N 侧某 HitResult 记为 **Miss**，M 侧同 note 为 **Perfect**（非反向）。
+
+### 6.3 当前标定记录
+
+> ✎ \| 列路由修复（`ColumnRoutesInput` 回放启用）后手工复测；offset=0；ForLive 重算后为主流程。
+
+| HitMode | M vs N（Perfect 差） | 典型表现 | 备注 |
+|---------|---------------------|----------|------|
+| ✎ \| EZ2AC | ✎ \| **−1**（N 少 1P） | ✎ \| N：重算 list / 直入 Now / 看回放后 Now 均偏差；M：打完计数与看回放 list 一致且更好 | ✎ \| 自动化 parity 用例仍绿，真谱/manual 仍有缝 |
+| ✎ \| Malody_E | ✎ \| **−1**（N 少 1P） | ✎ \| 同 EZ2AC | ✎ \| — |
+| ✎ \| O2Jam | ✎ \| **−4**（N 少 4P） | ✎ \| 同 EZ2AC；差值更大 | ✎ \| — |
+| ✎ \| Lazer | ✎ \| **0**（对齐） | ✎ \| — | ✎ \| — |
+| ✎ \| Malody_B | ✎ \| **0**（对齐） | ✎ \| — | ✎ \| — |
+
+### 6.4 BMS 标定记录（待分析）
+
+> ✎ \| **2026-07-12 晚** 新发现；环境：**Lazer HealthMode** + **Earliest** 判定优先级 + `BmsPoorHitResultEnable=false`（**不应**有 KPoor 机制）。
+
+| HitMode | M（Drawable） | N（Session） | 备注 |
+|---------|---------------|--------------|------|
+| ❓ \| IIDX_HD | ❓ \| ~十几 Miss(Poor) 正常 | ❓ \| **超大量** Miss(Poor) | ❓ \| 待代码对照 |
+| ❓ \| LR2_HD | ❓ \| 同左 | ❓ \| 同左 | ❓ \| 无 parity 自动化覆盖 |
+| ❓ \| Raja_NM | ❓ \| 同左 | ❓ \| 同左 | ❓ \| 无 parity 自动化覆盖 |
+
+**符号**：表中 **Miss(Poor)** = BMS 展示层的 Poor 行（`HitResult.Miss`）；非 `HitResult.Poor`（KPoor）。
+
+**初步怀疑（✎，待验证）**：
+
+1. `ManiaReplaySessionSimulator` 在 `poorEnabled=false` 时仍调用 `TryRoutePostBadKPoor`（无 `PoorEnabled` 门控）。
+2. Session 侧 `ForceMissEarlier` / auto-miss 扫描与 Drawable `ManiaAutoMissGate` 边界不一致。
+3. IIDX/LR2/Raja 仅有 tap/hold 小谱 parity 测试，未覆盖真谱 + Lazer HM 组合。
 
 ---
 
@@ -186,10 +229,11 @@ flowchart TD
 
 | 测试                                   | 断言什么                                     | 覆盖你的 abcd？                       |
 |--------------------------------------|------------------------------------------|----------------------------------|
-| ✎ \| `TestSceneReplaySessionParity`  | ✎ \| Drawable replay HitEvents ≡ Session | ❓ \| 部分 HitMode；缺 tap 密集 EZ2AC 等 |
+| ✎ \| `TestSceneReplaySessionParity`  | ✎ \| Drawable replay HitEvents ≡ Session | ✎ \| 小谱多 HitMode；EZ2AC/Malody/O2 已扩；**BMS 仅 IIDX 小谱** |
 | ✎ \| `ManiaCrossSourceInvariantTest` | ✎ \| HitEvents 聚合 ≡ Statistics           | ✎ \| Session 内部                  |
 | ✎ \| `ManiaAnalysisParityTest`       | ✎ \| 重算写回 ≡ Now                          | ✎ \| **a≈b** 路径                  |
-| ❓ \| **缺失**                          | ❓ \| ForLive 重算 → 观看回放 → **c vs d**      | ⛔ \| **未覆盖**                     |
+| ❓ \| **缺失**                          | ❓ \| 真谱 **M vs N** 标定（§6.3 EZ2AC/O2 等）   | ⛔ \| 自动化绿、手工仍偏              |
+| ❓ \| **缺失**                          | ❓ \| BMS × Lazer HM 大量 Miss(Poor)（§6.4）   | ⛔ \| **未覆盖**                     |
 
 ---
 
@@ -213,3 +257,4 @@ flowchart TD
 | ✎ \| 2026-07-12 | ✎ \| 删除死代码 Catalog；list 改由 ManiaRuleset 按 score 嵌入 HitMode 展示 |
 | ✎ \| 2026-07-12 | ✎ \| ReplayPlayer 启用列路由；补 EZ2AC/Malody_E/O2 与重算后 c/d parity 测试 |
 | ✎ \| 2026-07-12 | ✎ \| 重算写回统一将双 Lazer HM/HM 归一为空；非 Lazer ForLive 环境仍持久化 |
+| ✎ \| 2026-07-12 | ✎ \| 引入 **M/N** 标定；记录 EZ2AC/Malody −1P、O2 −4P 残留与 BMS Lazer HM 异常 |
