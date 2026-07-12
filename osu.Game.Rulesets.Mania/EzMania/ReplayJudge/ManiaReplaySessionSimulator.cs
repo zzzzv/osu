@@ -38,8 +38,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             ManiaReplayTimelineRecorder? timelineRecorder,
             CancellationToken cancellationToken)
         {
-            bool poorEnabled = HealthModeHelper.IsBMSHealthMode(environment.ManiaHealthMode)
-                               && environment.BmsPoorHitResultEnable;
+            bool poorEnabled = HealthModeHelper.ComputeKPoorEnabled(environment.ManiaHealthMode, environment.BmsPoorHitResultEnable);
 
             bool pillModeEnabled = environment.ManiaHealthMode.ToString().Contains("O2Jam");
             var bms = noteStrategy as BmsHitModeJudgement;
@@ -72,7 +71,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
                 var candidates = collectCandidatesForInput(laneStates, beatmap, input.Time, hitWindowHelper, environment.ManiaHitMode).ToList();
 
-                if (input.IsPress && bms != null)
+                if (input.IsPress && bms != null && poorEnabled)
                 {
                     bms.TryRoutePostBadKPoor(
                         laneStates,
@@ -94,7 +93,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                     continue;
 
                 var selected = selectCandidate(
-                    candidates, laneStates, beatmap, input.Time, environment, noteStrategy, hitWindowHelper);
+                    candidates, laneStates, input.Time, environment);
 
                 if (selected == null || selected.Judged)
                     continue;
@@ -364,27 +363,22 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         private static LaneTargetState? selectCandidate(
             List<LaneTargetState> candidates,
             IReadOnlyList<LaneTargetState> laneStates,
-            IBeatmap beatmap,
             double inputTime,
-            IGameplayEnvironment environment,
-            IManiaNoteJudgementStrategy noteStrategy,
-            HitModeHelper hitWindowHelper)
+            IGameplayEnvironment environment)
         {
-            if (environment.JudgePrecedence == EzEnumJudgePrecedence.Earliest
-                && environment.ManiaHitMode is EzEnumHitMode.Lazer or EzEnumHitMode.Classic)
-            {
-                return selectEarliestCandidate(candidates, laneStates, inputTime, noteStrategy, environment);
-            }
+            if (environment.JudgePrecedence == EzEnumJudgePrecedence.Earliest)
+                return selectEarliestCandidate(candidates, laneStates, inputTime);
 
-            return selectCandidateByPrecedence(candidates, beatmap, inputTime, environment, hitWindowHelper, noteStrategy);
+            return selectCandidateByPrecedence(candidates, inputTime, environment);
         }
 
+        /// <summary>
+        /// Earliest note-lock：与 <see cref="ManiaLaneController.SelectPressEntry"/> 一致，仅检查游标可打性，不在此预判 EvaluatePress。
+        /// </summary>
         private static LaneTargetState? selectEarliestCandidate(
             List<LaneTargetState> candidates,
             IReadOnlyList<LaneTargetState> laneStates,
-            double time,
-            IManiaNoteJudgementStrategy noteStrategy,
-            IGameplayEnvironment environment)
+            double time)
         {
             candidates.Sort((a, b) => a.Target.StartTime.CompareTo(b.Target.StartTime));
 
@@ -394,14 +388,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 if (index < 0 || !IsHittableEarliest(laneStates, index, time))
                     continue;
 
-                if (candidate.IsTail)
-                    return candidate;
-
-                double judgedOffset = time - candidate.Target.GetEndTime() + environment.OffsetPlusMania;
-                var outcome = noteStrategy.EvaluatePress(judgedOffset, candidate.Target.HitWindows!);
-
-                if (outcome.Kind == ManiaNoteJudgementOutcomeKind.Apply)
-                    return candidate;
+                return candidate;
             }
 
             return null;
@@ -409,11 +396,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
         private static LaneTargetState? selectCandidateByPrecedence(
             List<LaneTargetState> candidates,
-            IBeatmap beatmap,
             double inputTime,
-            IGameplayEnvironment environment,
-            HitModeHelper hitWindowHelper,
-            IManiaNoteJudgementStrategy noteStrategy)
+            IGameplayEnvironment environment)
         {
             if (candidates.Count == 0)
                 return null;

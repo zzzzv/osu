@@ -172,17 +172,19 @@
 
 | HitMode | M（Drawable） | N（Session） | 备注 |
 |---------|---------------|--------------|------|
-| ❓ \| IIDX_HD | ❓ \| ~十几 Miss(Poor) 正常 | ❓ \| **超大量** Miss(Poor) | ❓ \| 待代码对照 |
-| ❓ \| LR2_HD | ❓ \| 同左 | ❓ \| 同左 | ❓ \| 无 parity 自动化覆盖 |
-| ❓ \| Raja_NM | ❓ \| 同左 | ❓ \| 同左 | ❓ \| 无 parity 自动化覆盖 |
+| ❓ \| IIDX_HD | ❓ \| ~十几 Miss(Poor) 正常 | ❓ \| **超大量** Miss(Poor) | ✎ \| Session Earliest note-lock 已修；真谱待复测 |
+| ❓ \| LR2_HD | ❓ \| 同左 | ❓ \| 同左 | ✎ \| 小谱 parity 已绿 |
+| ❓ \| Raja_NM | ❓ \| 同左 | ❓ \| 同左 | ✎ \| 小谱 parity 已绿 |
 
 **符号**：表中 **Miss(Poor)** = BMS 展示层的 Poor 行（`HitResult.Miss`）；非 `HitResult.Poor`（KPoor）。
 
-**初步怀疑（✎，待验证）**：
+**已修（✎，2026-07-12）**：
 
-1. `ManiaReplaySessionSimulator` 在 `poorEnabled=false` 时仍调用 `TryRoutePostBadKPoor`（无 `PoorEnabled` 门控）。
-2. Session 侧 `ForceMissEarlier` / auto-miss 扫描与 Drawable `ManiaAutoMissGate` 边界不一致。
-3. IIDX/LR2/Raja 仅有 tap/hold 小谱 parity 测试，未覆盖真谱 + Lazer HM 组合。
+1. `poorEnabled=false`（Lazer HM）时 **不再** 调用 `TryRoutePostBadKPoor`（`ComputeKPoorEnabled` 门控）。
+2. Session **Earliest** 路径与 Drawable 对齐：全 HitMode 走 `IsHittableEarliest` note-lock；不再仅 Lazer/Classic 专用，也不再在选目标时预判 `EvaluatePress`。
+3. 自动化：`CreateBmsManyNoteTap` × IIDX/LR2/Raja + Lazer HM 全分 parity；IIDX 叠键 × Lazer HM。
+
+**仍待验证（❓）**：真谱大量 Miss 是否完全消除；若残留则查 `applyForcedMisses` / 候选收集边界。
 
 ---
 
@@ -229,11 +231,11 @@ flowchart TD
 
 | 测试                                   | 断言什么                                     | 覆盖你的 abcd？                       |
 |--------------------------------------|------------------------------------------|----------------------------------|
-| ✎ \| `TestSceneReplaySessionParity`  | ✎ \| Drawable replay HitEvents ≡ Session | ✎ \| 小谱多 HitMode；EZ2AC/Malody/O2 已扩；**BMS 仅 IIDX 小谱** |
+| ✎ \| `TestSceneReplaySessionParity`  | ✎ \| Drawable replay HitEvents ≡ Session | ✎ \| 小谱多 HitMode；EZ2AC/Malody/O2 已扩；**BMS IIDX/LR2/Raja × Lazer HM** 全分 + 叠键 |
 | ✎ \| `ManiaCrossSourceInvariantTest` | ✎ \| HitEvents 聚合 ≡ Statistics           | ✎ \| Session 内部                  |
 | ✎ \| `ManiaAnalysisParityTest`       | ✎ \| 重算写回 ≡ Now                          | ✎ \| **a≈b** 路径                  |
 | ❓ \| **缺失**                          | ❓ \| 真谱 **M vs N** 标定（§6.3 EZ2AC/O2 等）   | ⛔ \| 自动化绿、手工仍偏              |
-| ❓ \| **缺失**                          | ❓ \| BMS × Lazer HM 大量 Miss(Poor)（§6.4）   | ⛔ \| **未覆盖**                     |
+| ❓ \| **缺失**                          | ❓ \| BMS × Lazer HM 大量 Miss(Poor)（§6.4）   | ✎ \| 小谱自动化已绿；**真谱待手工复测**     |
 
 ---
 
@@ -258,3 +260,4 @@ flowchart TD
 | ✎ \| 2026-07-12 | ✎ \| ReplayPlayer 启用列路由；补 EZ2AC/Malody_E/O2 与重算后 c/d parity 测试 |
 | ✎ \| 2026-07-12 | ✎ \| 重算写回统一将双 Lazer HM/HM 归一为空；非 Lazer ForLive 环境仍持久化 |
 | ✎ \| 2026-07-12 | ✎ \| 引入 **M/N** 标定；记录 EZ2AC/Malody −1P、O2 −4P 残留与 BMS Lazer HM 异常 |
+| ✎ \| 2026-07-12 | ✎ \| BMS Session：KPoor 门控 + Earliest note-lock parity；扩 Lazer HM 小谱/叠键测试 |

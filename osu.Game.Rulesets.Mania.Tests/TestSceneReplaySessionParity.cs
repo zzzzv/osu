@@ -262,6 +262,16 @@ namespace osu.Game.Rulesets.Mania.Tests
             runDrawableParityTestFromFixture(fixture);
         }
 
+        [TestCase(EzEnumJudgePrecedence.Earliest)]
+        [TestCase(EzEnumJudgePrecedence.Combo)]
+        [TestCase(EzEnumJudgePrecedence.Duration)]
+        public void TestIidxOverlappingJackDrawableMatchesSession_LazerHealth(EzEnumJudgePrecedence precedence)
+        {
+            var fixture = JudgePrecedenceReplayFixtures.CreateOverlappingJack(
+                EzEnumHitMode.IIDX_HD, EzEnumHealthMode.Lazer, precedence);
+            runDrawableParityTestFromFixture(fixture);
+        }
+
         // ==================== P2-B: Parity 扩到完整 Score ====================
 
         [Test]
@@ -329,6 +339,32 @@ namespace osu.Game.Rulesets.Mania.Tests
         public void TestReplayAfterRecalcO2VariableBpmMatchesNow()
         {
             runReplayAfterRecalcParityTest(HitModeReplayFixtures.CreateO2VariableBpmTap());
+        }
+
+        [Test]
+        public void TestIidxManyNoteTapDrawableMatchesSession_LazerHealth()
+        {
+            runFullScoreParityTestFromFixture(HitModeReplayFixtures.CreateBmsManyNoteTap(EzEnumHitMode.IIDX_HD));
+        }
+
+        [Test]
+        public void TestLr2ManyNoteTapDrawableMatchesSession_LazerHealth()
+        {
+            runFullScoreParityTestFromFixture(HitModeReplayFixtures.CreateBmsManyNoteTap(EzEnumHitMode.LR2_HD));
+        }
+
+        [Test]
+        public void TestRajaManyNoteTapDrawableMatchesSession_LazerHealth()
+        {
+            runFullScoreParityTestFromFixture(HitModeReplayFixtures.CreateBmsManyNoteTap(EzEnumHitMode.Raja_NM));
+        }
+
+        private void runFullScoreParityTestFromFixture((Score score, IBeatmap beatmap, GameplayEnvironment environment) fixture)
+        {
+            parityEnvironment = fixture.environment;
+            runFullScoreParityTest(
+                fixture.beatmap.HitObjects.Cast<ManiaHitObject>().ToList(),
+                fixture.score.Replay.Frames);
         }
 
         private void runDrawableParityTestFromFixture((Score score, IBeatmap beatmap, GameplayEnvironment environment) fixture)

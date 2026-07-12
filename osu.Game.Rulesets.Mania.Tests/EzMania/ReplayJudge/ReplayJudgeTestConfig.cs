@@ -49,5 +49,14 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
                 OffsetPlusMania = offsetPlusMania,
                 BmsPoorHitResultEnable = bmsPoorHitResultEnable,
             };
+
+        /// <summary>
+        /// BMS HitMode + Lazer HealthMode：无 KPoor 机制（§6.4 标定环境）。
+        /// </summary>
+        public static GameplayEnvironment CreateBmsLazerHealth(
+            EzEnumHitMode hitMode,
+            EzEnumJudgePrecedence judgePrecedence = EzEnumJudgePrecedence.Earliest,
+            bool bmsPoorHitResultEnable = false)
+            => Create(hitMode, EzEnumHealthMode.Lazer, judgePrecedence, bmsPoorHitResultEnable: bmsPoorHitResultEnable);
     }
 }
