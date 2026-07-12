@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using System.Linq;
+using Newtonsoft.Json;
 using osu.Game.EzOsuGame.Scoring;
 using osu.Game.Rulesets.Scoring;
 using osu.Game.Scoring.Legacy;
@@ -13,6 +14,7 @@ namespace osu.Game.Scoring
     {
         /// <summary>
         /// Ez2Lazer: 用户显式「成绩重算」— 将 Session 产出写回 Realm 与调用方快照。
+        /// Gameplay 入库不经此方法；StatisticsJson 须同步以便 list / hover 重载时读到重算结果。
         /// </summary>
         public void ApplyEzSessionRecalculation(ScoreInfo scoreInfo, ScoreInfo sessionInfo, ReplayRunPurpose purpose, GameplayEnvironment environment)
         {
@@ -79,13 +81,13 @@ namespace osu.Game.Scoring
 
         public static void ApplyEzSessionRecalculationToDetachedScoreInfo(ScoreInfo scoreInfo, ScoreInfo sessionInfo, ReplayRunPurpose purpose, GameplayEnvironment environment)
         {
-            scoreInfo.Statistics.Clear();
-            foreach (var kvp in sessionInfo.Statistics)
-                scoreInfo.Statistics[kvp.Key] = kvp.Value;
+            var statistics = sessionInfo.Statistics.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            scoreInfo.Statistics = statistics;
+            scoreInfo.StatisticsJson = JsonConvert.SerializeObject(statistics);
 
-            scoreInfo.MaximumStatistics.Clear();
-            foreach (var kvp in sessionInfo.MaximumStatistics)
-                scoreInfo.MaximumStatistics[kvp.Key] = kvp.Value;
+            var maximumStatistics = sessionInfo.MaximumStatistics.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            scoreInfo.MaximumStatistics = maximumStatistics;
+            scoreInfo.MaximumStatisticsJson = JsonConvert.SerializeObject(maximumStatistics);
 
             scoreInfo.HitEvents = sessionInfo.HitEvents.ToList();
             scoreInfo.Accuracy = sessionInfo.Accuracy;

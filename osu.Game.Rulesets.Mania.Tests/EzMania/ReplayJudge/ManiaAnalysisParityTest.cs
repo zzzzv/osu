@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using NUnit.Framework;
 using osu.Game.Beatmaps;
 using osu.Game.EzOsuGame.Configuration;
@@ -24,6 +25,33 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
         [TearDown]
         public void TearDown() => ReplayJudgeTestConfig.ResetGlobalConfig();
 
+        [Test]
+        public void TestRecalcWritebackPersistsStatisticsJson()
+        {
+            var sessionInfo = new ScoreInfo();
+            sessionInfo.Statistics[HitResult.Perfect] = 17;
+            sessionInfo.Statistics[HitResult.Good] = 3;
+            sessionInfo.MaximumStatistics[HitResult.Perfect] = 20;
+
+            var stored = new ScoreInfo
+            {
+                StatisticsJson = JsonConvert.SerializeObject(new Dictionary<HitResult, int> { [HitResult.Perfect] = 999 }),
+                MaximumStatisticsJson = JsonConvert.SerializeObject(new Dictionary<HitResult, int> { [HitResult.Perfect] = 999 }),
+            };
+
+            ScoreManager.ApplyEzSessionRecalculationToDetachedScoreInfo(
+                stored,
+                sessionInfo,
+                ReplayRunPurpose.ForStored,
+                ReplayJudgeTestConfig.Create(EzEnumHitMode.Lazer, EzEnumHealthMode.Lazer));
+
+            var reloaded = new ScoreInfo { StatisticsJson = stored.StatisticsJson, MaximumStatisticsJson = stored.MaximumStatisticsJson };
+
+            Assert.That(reloaded.Statistics.GetValueOrDefault(HitResult.Perfect), Is.EqualTo(17));
+            Assert.That(reloaded.Statistics.GetValueOrDefault(HitResult.Good), Is.EqualTo(3));
+            Assert.That(reloaded.MaximumStatistics.GetValueOrDefault(HitResult.Perfect), Is.EqualTo(20));
+        }
+
         [TestCaseSource(nameof(same_environment_cases))]
         public async Task TestSameEnvThreeEntryListEqualsNowFinal(AnalysisFixtureCase testCase)
         {
@@ -33,12 +61,28 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
 
             assertEquivalent(stored, now, $"{testCase.Name}: ForStored vs ForLive");
 
-            var (score, _, _) = testCase.CreateFixture();
+            var (score, beatmap, _) = testCase.CreateFixture();
             ReplayJudgeTestConfig.ApplyEmbeddedModes(score, testCase.Environment);
-            var gameplaySnapshot = score.ScoreInfo.DeepClone();
-            ScoreManager.ApplyEzSessionRecalculationToDetachedScoreInfo(gameplaySnapshot, nowScoreInfo, ReplayRunPurpose.ForLive, testCase.Environment);
 
-            assertEquivalent(snapshot(gameplaySnapshot), now, $"{testCase.Name}: gameplay/list snapshot vs Now");
+            var listAfterForLiveRecalc = score.ScoreInfo.DeepClone();
+            ScoreManager.ApplyEzSessionRecalculationToDetachedScoreInfo(
+                listAfterForLiveRecalc,
+                nowScoreInfo,
+                ReplayRunPurpose.ForLive,
+                testCase.Environment);
+
+            assertEquivalent(snapshot(listAfterForLiveRecalc), now, $"{testCase.Name}: a(list ForLive recalc) vs b(Now)");
+
+            var forStoredSession = await new ManiaReplaySessionService().RunAsync(score.DeepClone(), beatmap, ReplayRunPurpose.ForStored).ConfigureAwait(true);
+            var listAfterForStoredRecalc = score.ScoreInfo.DeepClone();
+            ScoreManager.ApplyEzSessionRecalculationToDetachedScoreInfo(
+                listAfterForStoredRecalc,
+                forStoredSession.ScoreInfo,
+                ReplayRunPurpose.ForStored,
+                testCase.Environment);
+
+            assertEquivalent(snapshot(listAfterForStoredRecalc), stored, $"{testCase.Name}: a(list ForStored recalc) vs ForStored Session");
+            assertEquivalent(snapshot(listAfterForStoredRecalc), now, $"{testCase.Name}: a(list ForStored recalc) vs b(Now) same env");
         }
 
         [TestCaseSource(nameof(recalculation_cases))]

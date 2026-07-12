@@ -12,6 +12,7 @@ using osu.Game.Rulesets.Judgements;
 using osu.Game.Rulesets.Mania.EzMania.Helper;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings;
 using osu.Game.Rulesets.Mania.Objects;
+using osu.Game.Rulesets.Mania.Objects.EzCurrentHitObject;
 using osu.Game.Rulesets.Mania.Scoring;
 using osu.Game.Rulesets.Objects;
 using osu.Game.Rulesets.Objects.Types;
@@ -47,7 +48,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             var hitWindowHelper = new HitModeHelper(environment.ManiaHitMode)
             {
                 OverallDifficulty = beatmap.Difficulty.OverallDifficulty,
-                BPM = getBpmAtTime(beatmap, 0),
+                BPM = resolveSimulationBpm(beatmap, 0, environment.ManiaHitMode),
             };
 
             var headWasHit = new Dictionary<HeadNote, bool>();
@@ -64,7 +65,10 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 if (!perColumnDict.TryGetValue(input.Column, out var laneStates))
                     continue;
 
-                hitWindowHelper.BPM = getBpmAtTime(beatmap, input.Time);
+                if (judgementRound.IsO2Jam)
+                    judgementRound.NotifyO2InputAt(input.Time);
+
+                hitWindowHelper.BPM = resolveSimulationBpm(beatmap, input.Time, environment.ManiaHitMode);
 
                 var candidates = collectCandidatesForInput(laneStates, beatmap, input.Time, hitWindowHelper, environment.ManiaHitMode).ToList();
 
@@ -116,6 +120,18 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                         continue;
                 }
 
+                bool o2PillPassed = true;
+                bool o2UpgradeToPerfect = false;
+
+                if (judgementRound.PillModeEnabled && judgementRound.IsO2Jam)
+                {
+                    syncO2GlobalFromState(judgementRound.MutableState);
+                    o2PillPassed = O2HitModeExtension.PillCheckWithBpm(
+                        timeOffsetForJudgement, judgementRound.O2PressBpm, out _, out o2UpgradeToPerfect);
+                }
+
+                double pressBpm = judgementRound.IsO2Jam ? judgementRound.O2PressBpm : hitWindowHelper.BPM;
+
                 HitResult result;
 
                 if (isTail)
@@ -134,10 +150,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                             WasHolding = wasHoldingBeforeEvent,
                             HasHoldBreak = holdBreak,
                             EventTime = input.Time,
-                            PressBpm = hitWindowHelper.BPM,
+                            PressBpm = pressBpm,
                             FrameStableId = (long)(input.Time * 1000),
                             BmsState = bms != null ? selected.BmsRoute : null,
-                            O2PillCheckPassed = true,
+                            O2PillCheckPassed = o2PillPassed,
+                            O2UpgradeToPerfect = o2UpgradeToPerfect,
                         });
 
                         if (!tryMapTailEvaluation(tailEval, out result))
@@ -197,10 +214,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                         UserTriggered = true,
                         IsLnHead = target is HeadNote,
                         EventTime = input.Time,
-                        PressBpm = hitWindowHelper.BPM,
+                        PressBpm = pressBpm,
                         FrameStableId = (long)(input.Time * 1000),
                         BmsState = bms != null ? selected.BmsRoute : null,
-                        O2PillCheckPassed = true,
+                        O2PillCheckPassed = o2PillPassed,
+                        O2UpgradeToPerfect = o2UpgradeToPerfect,
                     });
 
                     if (!tryMapNoteEvaluation(noteEval, out result))
@@ -420,7 +438,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             // 使用基准判定（非 tail lenience）计算时间窗口边界。
             // 对于 tail release，实际窗口更大，但二分查找只用于快速定位起始位置，
             // 后续线性扫描会逐条检查实际窗口（含 lenience）。
-            hitWindowHelper.BPM = getBpmAtTime(beatmap, eventTime);
+            hitWindowHelper.BPM = resolveSimulationBpm(beatmap, eventTime, hitMode);
 
             double baseEarlyWindow = hitWindowHelper.WindowFor(HitResult.Miss, true);
             double baseLateWindow = hitWindowHelper.WindowFor(HitResult.Miss, false);
@@ -482,6 +500,20 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
         private static bool usesTailReleaseLenience(EzEnumHitMode hitMode)
             => hitMode == EzEnumHitMode.Lazer || hitMode == EzEnumHitMode.Classic;
+
+        private static double resolveSimulationBpm(IBeatmap beatmap, double time, EzEnumHitMode hitMode)
+        {
+            if (hitMode == EzEnumHitMode.O2Jam)
+                return O2HitModeExtension.GetBPMAtTime(time);
+
+            return getBpmAtTime(beatmap, time);
+        }
+
+        private static void syncO2GlobalFromState(ManiaReplayJudgementState state)
+        {
+            O2HitModeExtension.PILL_COUNT.Value = state.O2PillCount;
+            O2HitModeExtension.CoolCombo = state.O2CoolCombo;
+        }
 
         private static double getBpmAtTime(IBeatmap beatmap, double time)
         {

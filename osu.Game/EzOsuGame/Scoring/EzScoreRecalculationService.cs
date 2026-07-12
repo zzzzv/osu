@@ -9,8 +9,12 @@ using osu.Game.Scoring;
 namespace osu.Game.EzOsuGame.Scoring
 {
     /// <summary>
-    /// Mania 成绩 Session 重算并写回 Realm；非 Mania 或无 replay 时回退 vanilla <see cref="ScoreManager.Recalculate"/>.
+    /// Mania 成绩 Session 重算并写回 Realm；非 Mania 或无 replay 时回退 vanilla <see cref="ScoreManager.Recalculate"/>。
     /// </summary>
+    /// <remarks>
+    /// <para>Gameplay 结束入库（Player.ImportScore）写入的是 ScoreProcessor 当场统计，<b>不</b>经 Session。</para>
+    /// <para>本服务是产品层 Session → Realm 的<b>唯一</b>入口（选歌「重算成绩」）。结算 list / hover 读 Realm <c>StatisticsJson</c>，重算后才与拓展分析 Now 对齐。</para>
+    /// </remarks>
     public static class EzScoreRecalculationService
     {
         public static async Task RecalculateAsync(
