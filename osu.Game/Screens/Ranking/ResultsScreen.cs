@@ -16,7 +16,6 @@ using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Cursor;
 using osu.Framework.Graphics.Shapes;
-using osu.Framework.Graphics.Sprites;
 using osu.Framework.Input.Bindings;
 using osu.Framework.Input.Events;
 using osu.Framework.Screens;
@@ -24,15 +23,12 @@ using osu.Framework.Utils;
 using osu.Game.Audio;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Containers;
-using osu.Game.Graphics.Sprites;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Input.Bindings;
-using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Statistics;
 using osu.Game.Localisation;
 using osu.Game.Online.Placeholders;
 using osu.Game.Overlays;
-using osu.Game.Overlays.Settings;
 using osu.Game.Overlays.Volume;
 using osu.Game.Scoring;
 using osu.Game.Screens.Play;
@@ -67,7 +63,7 @@ namespace osu.Game.Screens.Ranking
         [Resolved]
         private Player? player { get; set; }
 
-        private Bindable<EzEnumHitMode> hitModeBindable = null!;
+        private ResultsEnvironmentControls environmentControls = null!;
 
         private bool skipExitTransition;
 
@@ -247,50 +243,15 @@ namespace osu.Game.Screens.Ranking
             if (Score?.BeatmapInfo?.BeatmapSet != null && Score.BeatmapInfo.BeatmapSet.OnlineID > 0)
                 buttons.Add(new FavouriteButton(Score.BeatmapInfo.BeatmapSet));
 
-            // 底部增加按钮（GlobalConfigStore 保证 ScreenTestScene 等无完整 OsuGame DI 时仍可用）
-            var ezConfig = GlobalConfigStore.EzConfig;
-            hitModeBindable = ezConfig.GetBindable<EzEnumHitMode>(Ez2Setting.ManiaHitMode);
-            buttons.Add(new HitModeButton(hitModeBindable));
-
-            // Add settings button (placeholder)
-            buttons.Add(new IconButton
-            {
-                Icon = FontAwesome.Solid.Cog,
-                Action = () =>
-                {
-                    /* TODO: show settings menu */
-                }
-            });
-
-            buttons.Add(new FillFlowContainer
-            {
-                AutoSizeAxes = Axes.Both,
-                Children = new Drawable[]
-                {
-                    new OsuSpriteText
-                    {
-                        Text = "HitResult Offset",
-                        Font = OsuFont.Default.With(size: 14),
-                        Margin = new MarginPadding { Left = 5 },
-                    },
-                    new SettingsSlider<double>
-                    {
-                        // 只自动适应高度，避免与父容器的相对宽度冲突
-                        AutoSizeAxes = Axes.Y,
-                        // 不使用相对大小，使用固定宽度以避免与父容器 AutoSize 冲突
-                        RelativeSizeAxes = Axes.None,
-                        Width = 220,
-                        Current = ezConfig.GetBindable<double>(Ez2Setting.OffsetPlusMania),
-                    }
-                }
-            });
+            buttons.Add(environmentControls = new ResultsEnvironmentControls());
         }
 
         protected override void LoadComplete()
         {
             base.LoadComplete();
 
-            hitModeBindable.BindValueChanged(_ => invalidateDisplayedAnalysis());
+            environmentControls.HitModeBindable.BindValueChanged(_ => invalidateDisplayedAnalysis());
+            environmentControls.HealthModeBindable.BindValueChanged(_ => invalidateDisplayedAnalysis());
 
             StatisticsPanel.State.BindValueChanged(onStatisticsStateChanged, true);
 
