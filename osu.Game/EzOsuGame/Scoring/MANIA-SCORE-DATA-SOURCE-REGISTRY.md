@@ -105,9 +105,8 @@
 
 | 展示位置 / 代码锚点                                                           | Statistics / Acc / Score                         | HitEvents                      | 判定引擎                        | 环境                                           | 触发条件                                 | 持久化                           | 影响                               | 与黄金标准                   |
 |-----------------------------------------------------------------------|--------------------------------------------------|--------------------------------|-----------------------------|----------------------------------------------|--------------------------------------|-------------------------------|----------------------------------|-------------------------|
-| ✎ \| 结算 list Expanded/Contracted<br>✎ \| `ExpandedPanelMiddleContent` | ✎ \| Realm/内存 Statistics 等                       | ✎ \| 不直接显示                     | ⛔ \| **无重算**                | ✎ \| `GetStatisticsForDisplay()` Ruleset 默认行 | ✎ \| 非嵌入 HitMode 过滤                  | ✎ \| 进 ResultsScreen          | ✎ \| 回放后引用被覆写                    | ✎ \| 读 Realm 或内存        | ✎ \| 卡片 Perfect/Miss | ✎ \| 纯展示；计数来自上游 |
+| ✎ \| 结算 list Expanded/Contracted<br>✎ \| `ExpandedPanelMiddleContent` | ✎ \| Realm/内存 Statistics 等                       | ✎ \| 不直接显示                     | ⛔ \| **无重算**                | ✎ \| `GetStatisticsForDisplay(score)` 经 ManiaRuleset 覆写 | ✎ \| 嵌入 HitMode 过滤/命名；无嵌入按 Lazer | ✎ \| 进 ResultsScreen          | ✎ \| 回放后引用被覆写                    | ✎ \| 读 Realm 或内存        | ✎ \| 卡片 Perfect/Miss | ✎ \| 纯展示；不改 Statistics 计数 |
 | ✎ \| 选歌 hover Tooltip<br>✎ \| `BeatmapLeaderboardScore.Tooltip`       | ✎ \| Realm/内存 Statistics                         | ⛔ \| 无                         | ⛔ \| 无                      | ⛔ \| 同 list                                  | ⛔ \| hover                           | ⛔ \| 读                        | ✎ \| Tooltip 判定行                 | ✎ \| 同 list             |
-| ✎ \| `ManiaHitModeCatalog.GetStatisticsForDisplay`                    | ✎ \| 有实现                                         | ✎ \| —                         | ✎ \| —                      | ✎ \| 嵌入 HitMode 过滤行                          | ⛔ \| **当前 UI 未调用**                   | ✎ \| —                        | ⛔ \| 误接回可造成假一致                   | ⛔ \| 禁止作 parity 掩盖      |
 | ⛔ \| EzGraph Original 数字<br>✎ \| `EzScoreGraphMania` 构造               | ⛔ \| 构造时 ScoreInfo 快照 Acc/Score/Statistics       | ✎ \| `score.HitEvents` 或 不直接显示 | ⛔ \| 无（读快照）                 | ⛔ \| 进入面板时 ScoreInfo 状态                      | ⛔ \| 打开拓展分析                          | ✎ \| 无                        | ⛔ \| Graph 左列 Original           | ⛔ \| = 进面板时 ScoreInfo   |
 | ⛔ \| EzGraph Now 数字<br>✎ \| `RefreshFromService`                      | ⛔ \| `CommittedNowScore.ScoreInfo.*` Session Run | ⛔ \| Session HitEvents         | ⛔ \| **ManiaReplaySession** | ⛔ \| ForLive                                 | ⛔ \| `IncludeGlobalManiaOffset=true` | ⛔ \| 开面板/改 HM/offset debounce | ✎ \| 无                           | ⛔ \| Now Acc/Score/计数   | ⛔ \| **不读 Realm 统计** |
 | ✎ \| EzGraph Now 输入（这是什么东西？）<br>✎ \| `ResolveInputScore`              | ✎ \| —                                           | ✎ \| `GetScore` 取 **replay 帧** | ✎ \| —                      | ✎ \| —                                       | ✎ \| 每次 RefreshFromService           | ✎ \| —                        | ✎ \| 与 list 内存 Statistics **解耦** | ✎ \| —                  |
@@ -176,7 +175,7 @@ flowchart TD
 | 项                         | 旧文档/对话                                          | 当前代码                                                    |
 |---------------------------|-------------------------------------------------|---------------------------------------------------------|
 | ✎ \| 环境 API 名             | ❓ \| `ResolveForSession` / `ResolveForDrawable` | ✎ \| `ResolveEnvironment(purpose, score, ignoreOffset)` |
-| ✎ \| list 展示 HitMode      | ❓ \| 曾接 `ManiaHitModeCatalog`                   | ✎ \| **未接线**；`ScoreInfo.GetStatisticsForDisplay()`      |
+| ✎ \| list 展示 HitMode      | ❓ \| 曾接 `ManiaHitModeCatalog`                   | ✎ \| Catalog 已删除；`ScoreInfo.GetStatisticsForDisplay()` 将 score 传给 `ManiaRuleset` 覆写 |
 | ✎ \| Generator 默认 Purpose | ❓ \| 文档写 ForStored                              | ❓ \| 默认 **ForLive**；Panel 显式 ForStored                  |
 | ❓ \| O2 回放 BPM            | ✎ \| 未文档化                                       | ❓ \| `NotifyO2InputAt` 仅 ColumnRoutesInput 时；回放可能缺 BPM  |
 | ❓ \| 重算 vs Graph offset   | ✎ \| REGISTRY 写 offset=0                        | ❓ \| Graph 有 `IncludeGlobalManiaOffset`；重算默认 false      |
@@ -211,3 +210,4 @@ flowchart TD
 |-----------------|--------------------------------|
 | ✎ \| 2026-07-12 | ✎ \| 初稿；纠正「Now 读 Realm」误述      |
 | ✎ \| 2026-07-12 | ✎ \| 改为 **每单元格独立标记**，删除整行「标记」列 |
+| ✎ \| 2026-07-12 | ✎ \| 删除死代码 Catalog；list 改由 ManiaRuleset 按 score 嵌入 HitMode 展示 |

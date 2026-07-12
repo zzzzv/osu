@@ -366,9 +366,9 @@ namespace osu.Game.Rulesets
         /// <returns>
         /// All relevant <see cref="HitResult"/>s along with a display-friendly name.
         /// </returns>
-        public IEnumerable<(HitResult result, LocalisableString displayName)> GetHitResultsForDisplay()
+        public IEnumerable<(HitResult result, LocalisableString displayName)> GetHitResultsForDisplay(ScoreInfo? score = null)
         {
-            var validResults = GetValidHitResults();
+            var validResults = GetValidHitResults(score);
 
             // enumerate over ordered list to guarantee return order is stable.
             foreach (var result in EnumExtensions.GetValuesInOrder<HitResult>())
@@ -387,7 +387,7 @@ namespace osu.Game.Rulesets
                 }
 
                 if (result == HitResult.Miss || validResults.Contains(result))
-                    yield return (result, GetDisplayNameForHitResult(result));
+                    yield return (result, GetDisplayNameForHitResult(result, score));
             }
         }
 
@@ -399,11 +399,24 @@ namespace osu.Game.Rulesets
         public virtual IEnumerable<HitResult> GetValidHitResults() => EnumExtensions.GetValuesInOrder<HitResult>();
 
         /// <summary>
+        /// Get all valid <see cref="HitResult"/>s for displaying the specified score.
+        /// </summary>
+        /// <remarks>
+        /// Rulesets with score-specific judgement environments may override this to use metadata embedded in the score.
+        /// </remarks>
+        public virtual IEnumerable<HitResult> GetValidHitResults(ScoreInfo? score) => GetValidHitResults();
+
+        /// <summary>
         /// Get a display friendly name for the specified result type.
         /// </summary>
         /// <param name="result">The result type to get the name for.</param>
         /// <returns>The display name.</returns>
         public virtual LocalisableString GetDisplayNameForHitResult(HitResult result) => result.GetLocalisableDescription();
+
+        /// <summary>
+        /// Get a display friendly name for the specified result type and score.
+        /// </summary>
+        public virtual LocalisableString GetDisplayNameForHitResult(HitResult result, ScoreInfo? score) => GetDisplayNameForHitResult(result);
 
         /// <summary>
         /// Applies changes to difficulty attributes for presenting to a user a rough estimate of how mods affect difficulty.
