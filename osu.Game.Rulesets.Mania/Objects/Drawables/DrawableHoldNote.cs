@@ -394,11 +394,22 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
             if (isHolding.Value)
             {
                 Tail.UpdateResult();
-                Body.TriggerResult(Tail.IsHit);
+                EzTriggerBodyAfterTailRelease();
 
                 Result.ReportHoldState(Time.Current, false);
             }
         }
+
+        internal void EzTriggerBodyAfterTailRelease()
+        {
+            if (Tail.AllJudged)
+                Body.TriggerResult(Tail.IsHit);
+            else if (isEarlyHoldRelease())
+                Body.TriggerResult(false);
+        }
+
+        private bool isEarlyHoldRelease()
+            => Time.Current < Tail.HitObject.StartTime;
 
         protected override void LoadSamples()
         {

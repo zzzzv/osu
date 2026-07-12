@@ -7,6 +7,7 @@ using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Input.Events;
 using osu.Game.EzOsuGame.Configuration;
+using osu.Game.Rulesets.Mania.EzMania.Helper;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
 using osu.Game.Rulesets.Scoring;
 
@@ -85,9 +86,21 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
 
         public new bool CanRouteToKPoor => ManiaEzDrawableJudgement.CanRouteToKPoor(this);
 
-        public override bool DisplayResult => !ManiaEzDrawableJudgement.ShouldHideTailDisplayResult() && base.DisplayResult;
+        public override bool DisplayResult => !ManiaEzDrawableJudgement.ShouldHideTailDisplayResult(ManiaEzDrawableJudgement.GetJudgementRound(this)) && base.DisplayResult;
 
-        internal override void EzApplyFinalResult(HitResult result, EzEnumHitMode hitMode) => ApplyResult(result);
+        internal override void EzApplyFinalResult(HitResult result, EzEnumHitMode hitMode)
+        {
+            ApplyResult(static (r, data) =>
+            {
+                r.Type = data.result;
+
+                if (data.result == HitResult.Miss
+                    || (data.result == HitResult.Meh && HitModeHelper.MehBreaksCombo(data.hitMode)))
+                {
+                    r.IsComboHit = false;
+                }
+            }, (result, hitMode));
+        }
 
         internal new void EzDispatchExtraResult(HitResult result) => DispatchNewResult(result);
 

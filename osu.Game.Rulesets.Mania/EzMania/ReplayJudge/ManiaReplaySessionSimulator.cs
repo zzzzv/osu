@@ -141,12 +141,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                         });
 
                         if (!tryMapTailEvaluation(tailEval, out result))
-                        {
-                            if (environment.ManiaHitMode == EzEnumHitMode.Lazer)
-                                continue;
-
-                            result = HitResult.None;
-                        }
+                            continue;
                     }
                     else
                     {

@@ -185,6 +185,16 @@ namespace osu.Game.Rulesets.Objects
         public virtual Judgement CreateJudgement() => new Judgement();
 
         /// <summary>
+        /// Replaces the cached <see cref="Judgement"/> (e.g. when binding environment-specific judgement ranges on apply).
+        /// </summary>
+        public void SetJudgement(Judgement judgement) => this.judgement = judgement;
+
+        /// <summary>
+        /// Clears the cached <see cref="Judgement"/> so the next access re-invokes <see cref="CreateJudgement"/>.
+        /// </summary>
+        public void ResetJudgement() => judgement = null;
+
+        /// <summary>
         /// Creates the <see cref="HitWindows"/> for this <see cref="HitObject"/>.
         /// This can be null to indicate that the <see cref="HitObject"/> has no <see cref="HitWindows"/> and timing errors should not be displayed to the user.
         /// <para>

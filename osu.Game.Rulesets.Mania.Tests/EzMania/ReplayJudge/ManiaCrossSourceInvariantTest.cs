@@ -125,7 +125,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             var session = snapshotRun(score, beatmap, environment);
             var service = new ManiaReplaySessionService();
             var generatorEvents = await service.RunHitEventsAsync(score, beatmap).ConfigureAwait(true);
-            var generatorRun = await service.RunAsync(score, beatmap, ReplayRunPurpose.ForStored).ConfigureAwait(true);
+            var generatorRun = await service.RunAsync(score, beatmap, ReplayRunPurpose.ForLive).ConfigureAwait(true);
             var generatorStats = generatorRun.ScoreInfo.Statistics.ToDictionary();
 
             Assert.That(ManiaReplayParityHelper.AreHitEventsEquivalent(generatorEvents, session.hitEvents), Is.True);
@@ -173,21 +173,21 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             ManiaReplaySessionService service, Score score, IBeatmap beatmap)
         {
             var hitEvents = await service.RunHitEventsAsync(score, beatmap).ConfigureAwait(true);
-            var run = await service.RunAsync(score, beatmap, ReplayRunPurpose.ForStored).ConfigureAwait(true);
+            var run = await service.RunAsync(score, beatmap, ReplayRunPurpose.ForLive).ConfigureAwait(true);
             return (hitEvents, run.ScoreInfo.Statistics.ToDictionary(), run.ScoreInfo.Accuracy, run.ScoreInfo.TotalScore);
         }
 
         private static async Task<(List<HitEvent> hitEvents, Dictionary<HitResult, int> statistics, double accuracy, long totalScore)> snapshotFromRunAsync(
             ManiaReplaySessionService service, Score score, IBeatmap beatmap)
         {
-            var result = await service.RunAsync(score, beatmap, ReplayRunPurpose.ForStored).ConfigureAwait(true);
+            var result = await service.RunAsync(score, beatmap, ReplayRunPurpose.ForLive).ConfigureAwait(true);
             return (result.ScoreInfo.HitEvents.ToList(), result.ScoreInfo.Statistics.ToDictionary(), result.ScoreInfo.Accuracy, result.ScoreInfo.TotalScore);
         }
 
         private static async Task<(List<HitEvent> hitEvents, Dictionary<HitResult, int> statistics, double accuracy, long totalScore)> snapshotFromRunRequestAsync(
             ManiaReplaySessionService service, Score score, IBeatmap beatmap)
         {
-            var combined = await service.RunRequestAsync(new ReplayRunRequest(score, beatmap, ReplayRunPurpose.ForStored)).ConfigureAwait(true);
+            var combined = await service.RunRequestAsync(new ReplayRunRequest(score, beatmap, ReplayRunPurpose.ForLive)).ConfigureAwait(true);
             var info = combined.Score.ScoreInfo;
             return (info.HitEvents.ToList(), info.Statistics.ToDictionary(), info.Accuracy, info.TotalScore);
         }

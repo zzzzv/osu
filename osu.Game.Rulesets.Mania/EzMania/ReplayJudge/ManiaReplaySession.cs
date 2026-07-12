@@ -99,8 +99,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             double gameplayRate = ModUtils.CalculateRateWithMods(score.ScoreInfo.Mods);
             recorder?.RecordInitial(scoreProcessor, gameplayRate);
 
-            var targets = buildTargets(beatmap);
             ManiaWindowBaker.Align(beatmap, environment);
+            ManiaEnvironmentJudgements.ApplyToBeatmap(beatmap, environment.ManiaHitMode);
+            var targets = buildTargets(beatmap);
 
             var holdByHead = new Dictionary<HeadNote, HoldNote>();
             var headByTail = new Dictionary<TailNote, HeadNote>();

@@ -23,7 +23,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             var service = new ManiaReplaySessionService();
 
             var fromHitEvents = await service.RunHitEventsAsync(score, beatmap).ConfigureAwait(true);
-            var fromRunAsync = (await service.RunAsync(score, beatmap, ReplayRunPurpose.ForStored).ConfigureAwait(true)).ScoreInfo.HitEvents;
+            var fromRunAsync = (await service.RunAsync(score, beatmap, ReplayRunPurpose.ForLive).ConfigureAwait(true)).ScoreInfo.HitEvents;
 
             Assert.That(ManiaReplayParityHelper.AreHitEventsEquivalent(fromHitEvents, fromRunAsync.ToList()), Is.True);
         }
@@ -35,7 +35,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             var service = new ManiaReplaySessionService();
 
             var fromHitEvents = await service.RunHitEventsAsync(score, beatmap).ConfigureAwait(true);
-            var fromRequest = await service.RunRequestAsync(new ReplayRunRequest(score, beatmap, ReplayRunPurpose.ForStored)).ConfigureAwait(true);
+            var fromRequest = await service.RunRequestAsync(new ReplayRunRequest(score, beatmap, ReplayRunPurpose.ForLive)).ConfigureAwait(true);
 
             Assert.That(ManiaReplayParityHelper.AreHitEventsEquivalent(fromHitEvents, fromRequest.Score!.ScoreInfo.HitEvents.ToList()), Is.True);
         }
@@ -49,7 +49,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             var service = new ManiaReplaySessionService();
 
             var fromHitEvents = await service.RunHitEventsAsync(score, beatmap).ConfigureAwait(true);
-            var fromRunAsync = (await service.RunAsync(score, beatmap, ReplayRunPurpose.ForStored).ConfigureAwait(true)).ScoreInfo.HitEvents;
+            var fromRunAsync = (await service.RunAsync(score, beatmap, ReplayRunPurpose.ForLive).ConfigureAwait(true)).ScoreInfo.HitEvents;
 
             Assert.That(ManiaReplayParityHelper.AreHitEventsEquivalent(fromHitEvents, fromRunAsync.ToList()), Is.True);
         }
@@ -63,7 +63,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             var service = new ManiaReplaySessionService();
 
             var fromHitEvents = await service.RunHitEventsAsync(score, beatmap).ConfigureAwait(true);
-            var fromRunAsync = (await service.RunAsync(score, beatmap, ReplayRunPurpose.ForStored).ConfigureAwait(true)).ScoreInfo.HitEvents;
+            var fromRunAsync = (await service.RunAsync(score, beatmap, ReplayRunPurpose.ForLive).ConfigureAwait(true)).ScoreInfo.HitEvents;
 
             Assert.That(ManiaReplayParityHelper.AreHitEventsEquivalent(fromHitEvents, fromRunAsync.ToList()), Is.True);
         }
@@ -76,7 +76,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             ReplayJudgeTestConfig.ApplyEmbeddedModes(score, environment);
 
             var generatorEvents = ManiaScoreHitEventGenerator.Instance.Generate(score, beatmap);
-            var serviceEvents = (await new ManiaReplaySessionService().RunAsync(score, beatmap, ReplayRunPurpose.ForStored).ConfigureAwait(true)).ScoreInfo.HitEvents;
+            var serviceEvents = (await new ManiaReplaySessionService().RunAsync(score, beatmap, ReplayRunPurpose.ForLive).ConfigureAwait(true)).ScoreInfo.HitEvents;
 
             Assert.That(ManiaReplayParityHelper.AreHitEventsEquivalent(generatorEvents, serviceEvents.ToList()), Is.True);
         }

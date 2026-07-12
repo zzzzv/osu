@@ -70,7 +70,7 @@ namespace osu.Game.EzOsuGame.Scoring
 
         public async Task<List<HitEvent>> RunHitEventsAsync(Score score, IBeatmap beatmap, CancellationToken cancellationToken = default)
         {
-            var (resultScore, _, _) = await getOrRunSession(score, beatmap, ReplayRunPurpose.ForStored, cancellationToken).ConfigureAwait(false);
+            var (resultScore, _, _) = await getOrRunSession(score, beatmap, ReplayRunPurpose.ForLive, cancellationToken).ConfigureAwait(false);
             return resultScore.ScoreInfo.HitEvents.ToList();
         }
 

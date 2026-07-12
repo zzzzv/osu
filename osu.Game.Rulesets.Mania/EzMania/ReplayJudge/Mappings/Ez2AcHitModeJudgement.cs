@@ -104,11 +104,12 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
 
         public HitResult RejudgeHitEvent(HitEvent hitEvent, HitWindows hitWindows)
         {
-            // TailNote 保留原始结果（尾判依赖 headHit/holdBreak/holdBroken 上下文的 SoftenLnJudge + cap）
             if (hitEvent.HitObject is TailNote)
-                return hitEvent.Result;
+            {
+                var tailOutcome = EvaluatePress(hitEvent.TimeOffset, hitWindows);
+                return tailOutcome.Kind == ManiaNoteJudgementOutcomeKind.Apply ? tailOutcome.Result : HitResult.Miss;
+            }
 
-            // HeadNote 应用 LN 头软化
             var outcome = EvaluatePress(hitEvent.TimeOffset, hitWindows, hitEvent.HitObject is HeadNote);
             return outcome.Kind == ManiaNoteJudgementOutcomeKind.Apply ? outcome.Result : HitResult.Miss;
         }

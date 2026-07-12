@@ -35,8 +35,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
         public static bool CanRouteToKPoor(DrawableHoldNoteTail tail) => GetBmsState(tail).CanRouteToKPoor;
 
-        public static bool ShouldHideTailDisplayResult()
-            => GlobalConfigStore.EzConfig.ResolveEnvironment(ReplayRunPurpose.ForLive).ManiaHitMode == EzEnumHitMode.O2Jam;
+        public static bool ShouldHideTailDisplayResult(ManiaJudgementRound? round)
+            => round?.Environment.ManiaHitMode == EzEnumHitMode.O2Jam;
 
         internal static BmsHitModeJudgement.BmsRouteState GetBmsState(DrawableNote note)
         {
@@ -48,6 +48,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
         internal static BmsHitModeJudgement.BmsRouteState GetBmsState(DrawableHoldNoteTail tail)
             => tail_bms_states.GetValue(tail, _ => new BmsHitModeJudgement.BmsRouteState());
+
+        internal static ManiaJudgementRound GetJudgementRound(DrawableHitObject? drawable = null)
+            => getJudgementRound(drawable);
 
         private static ManiaJudgementRound getJudgementRound(DrawableHitObject? drawable = null)
         {
@@ -61,8 +64,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 return round;
 
             var ruleset = drawable?.FindClosestParent<DrawableRuleset>();
-            var purpose = ruleset?.ReplayScore != null ? ReplayRunPurpose.ForStored : ReplayRunPurpose.ForLive;
-            var env = GlobalConfigStore.EzConfig.ResolveEnvironment(purpose, ruleset?.ReplayScore?.ScoreInfo);
+            var env = GlobalConfigStore.EzConfig.ResolveEnvironment(ReplayRunPurpose.ForLive, ruleset?.ReplayScore?.ScoreInfo, ignoreOffset: ruleset?.ReplayScore != null);
             return ManiaJudgementRound.Create(env);
         }
 
@@ -192,7 +194,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 return true;
 
             hold.Tail.UpdateResult();
-            hold.Body.TriggerResult(hold.Tail.IsHit);
+            hold.EzTriggerBodyAfterTailRelease();
             hold.Result.ReportHoldState(currentTime, false);
             return true;
         }

@@ -16,7 +16,6 @@ using osu.Game.EzOsuGame.Extensions;
 using osu.Game.EzOsuGame.Statistics;
 using osu.Game.Rulesets.Mania.EzMania.Helper;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
-using osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Replicas;
 using osu.Game.Rulesets.Mania.Objects;
 using osu.Game.Rulesets.Mania.Objects.EzCurrentHitObject;
 using osu.Game.Rulesets.Mania.Scoring;
@@ -115,14 +114,10 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
 
         protected override IReadOnlyList<HitEvent> FilterHitEvents()
         {
-            // Session 产出时使用 Session HitEvents
             if (CommittedNowScore?.ScoreInfo.HitEvents is { } sessionEvents)
                 return filterForCurrentHitMode(sessionEvents);
 
-            // 无 Session 时使用全部 OriginalHitEvents，不做结果有效性过滤。
-            // GetDisplayResult 会通过 hitWindowsNow 对每个事件重新判定，
-            // 确保散点颜色和血量线反映当前 HitMode 的判定结果。
-            return applyFakeOffsetToEvents(getEffectiveOriginalHitEvents());
+            return Array.Empty<HitEvent>();
         }
 
         private IReadOnlyList<HitEvent> filterForCurrentHitMode(IEnumerable<HitEvent> events)
@@ -341,21 +336,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
         }
 
         /// <summary>
-        /// 展示层判定结果。滑条 offset 与已提交 Session offset 不一致时 Rejudge 预览；否则读 Session。
+        /// 展示层判定结果：仅读 Session 重跑产出的事件，不再对存储 HitEvents 做 Rejudge 拼贴。
         /// </summary>
-        protected override HitResult GetDisplayResult(HitEvent hitEvent)
-        {
-            if (offsetPlusMania.Value != CommittedSessionOffset || CommittedNowScore == null)
-            {
-                var strategy = ManiaJudgementRegistry.GetHitModeJudgement(currentHitMode)
-                               ?? (IManiaNoteJudgementStrategy)LazerNoteJudgementReplica.Instance;
-
-                var result = strategy.RejudgeHitEvent(hitEvent, hitWindowsNow);
-                return result == HitResult.None ? HitResult.Miss : result;
-            }
-
-            return hitEvent.Result;
-        }
+        protected override HitResult GetDisplayResult(HitEvent hitEvent) => hitEvent.Result;
 
         protected override Score? ResolveInputScore() => scoreManager.GetScore(Score);
 

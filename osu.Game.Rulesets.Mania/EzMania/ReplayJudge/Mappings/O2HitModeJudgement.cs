@@ -241,9 +241,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
 
         public HitResult RejudgeHitEvent(HitEvent hitEvent, HitWindows hitWindows)
         {
-            // TailNote 保留原始结果（尾判依赖 Pill 状态和 headHit/holdBreak 等上下文）
             if (hitEvent.HitObject is TailNote)
-                return hitEvent.Result;
+            {
+                var tailOutcome = EvaluatePress(hitEvent.TimeOffset, hitWindows);
+                return tailOutcome.Kind == ManiaNoteJudgementOutcomeKind.Apply ? tailOutcome.Result : HitResult.Miss;
+            }
 
             var outcome = EvaluatePress(hitEvent.TimeOffset, hitWindows);
             return outcome.Kind == ManiaNoteJudgementOutcomeKind.Apply ? outcome.Result : HitResult.Miss;

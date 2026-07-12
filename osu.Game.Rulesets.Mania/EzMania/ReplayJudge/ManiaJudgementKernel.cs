@@ -209,10 +209,13 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
             if (strategy is MalodyHitModeJudgement)
             {
+                if (!request.UserTriggered && request.TimeOffset < 0)
+                    return HoldTailEvaluationResult.HandledNoOp;
+
                 if (!request.UserTriggered && request.TimeOffset >= 0)
                     return HoldTailEvaluationResult.FromResult(HitResult.IgnoreHit);
 
-                return HoldTailEvaluationResult.HandledNoOp;
+                return HoldTailEvaluationResult.FromResult(HitResult.IgnoreHit);
             }
 
             if (strategy is BmsHitModeJudgement bms)

@@ -350,11 +350,8 @@ namespace osu.Game.Screens.Ranking
             if (displayedScore == null)
                 return;
 
-            // 不再清空 HitEvents。HitEvents 是原始判定输入（TimeOffset 来自现场游玩，精度是浮点毫秒级），
-            // 不随 HitMode 改变。Graph 的 rejudgeOriginalHitEvents() 会通过当前 HitMode 的
-            // judgment strategy 重新判定每个事件，无需从 Replay 帧重新生成后重判。
-            // 清空 HitEvents 会导致 StatisticsPanel.populateStatistics() 走回放重生成路径，
-            // 帧量子化 (~16.67ms) 引入的偏差会反映在重判结果中。
+            // 回放重跑以 Replay.Frames + 当前 ForLive HitMode 为准；StatisticsPanel / EzGraph 经 Session 产出展示，
+            // 不 patch 存储 HitEvents，也不 rejudge 嵌入判定。
             StatisticsPanel.Score.TriggerChange();
         }
 
