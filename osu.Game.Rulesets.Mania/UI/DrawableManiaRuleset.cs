@@ -104,9 +104,9 @@ namespace osu.Game.Rulesets.Mania.UI
 
         /// <summary>
         /// 列级按键输入由 <see cref="UI.Column"/> 路由到单一 press 目标（C2 COLUMN-INPUT）。
-        /// 回放仍走 drawable 按键链，与 Session 输入模型一致。
+        /// 本地游玩与回放均使用同一路由，以保持 Drawable 与 Session 输入模型一致。
         /// </summary>
-        public bool ColumnRoutesInput => JudgementRound != null && ReplayScore == null;
+        public bool ColumnRoutesInput => JudgementRound != null;
 
         /// <summary>
         /// 本局冻结的判定上下文；热路径读取此实例，禁止再解析全局配置。

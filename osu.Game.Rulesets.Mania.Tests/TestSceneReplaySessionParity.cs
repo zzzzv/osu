@@ -34,6 +34,7 @@ namespace osu.Game.Rulesets.Mania.Tests
         private IReadOnlyList<HitEvent> drawableHitEvents = null!;
         private IBeatmap playableBeatmap = null!;
         private Score replayScore = null!;
+        private ScoreInfo recalculatedScoreInfo = null!;
         private GameplayEnvironment parityEnvironment = null!;
 
         [TearDown]
@@ -148,6 +149,24 @@ namespace osu.Game.Rulesets.Mania.Tests
                     new ManiaReplayFrame(2000, ManiaAction.Key1),
                     new ManiaReplayFrame(2100),
                 });
+        }
+
+        [Test]
+        public void TestEz2AcManyNoteTapDrawableMatchesSession()
+        {
+            runDrawableParityTestFromFixture(HitModeReplayFixtures.CreateEz2AcManyNoteTap());
+        }
+
+        [Test]
+        public void TestMalodyETapDrawableMatchesSession()
+        {
+            runDrawableParityTestFromFixture(HitModeReplayFixtures.CreateMalodyManyNoteTap());
+        }
+
+        [Test]
+        public void TestO2VariableBpmTapDrawableMatchesSession()
+        {
+            runDrawableParityTestFromFixture(HitModeReplayFixtures.CreateO2VariableBpmTap());
         }
 
         [Test]
@@ -294,6 +313,24 @@ namespace osu.Game.Rulesets.Mania.Tests
                 });
         }
 
+        [Test]
+        public void TestReplayAfterRecalcEz2AcMatchesNow()
+        {
+            runReplayAfterRecalcParityTest(HitModeReplayFixtures.CreateEz2AcManyNoteTap());
+        }
+
+        [Test]
+        public void TestReplayAfterRecalcMalodyEMatchesNow()
+        {
+            runReplayAfterRecalcParityTest(HitModeReplayFixtures.CreateMalodyManyNoteTap());
+        }
+
+        [Test]
+        public void TestReplayAfterRecalcO2VariableBpmMatchesNow()
+        {
+            runReplayAfterRecalcParityTest(HitModeReplayFixtures.CreateO2VariableBpmTap());
+        }
+
         private void runDrawableParityTestFromFixture((Score score, IBeatmap beatmap, GameplayEnvironment environment) fixture)
         {
             parityEnvironment = fixture.environment;
@@ -428,6 +465,56 @@ namespace osu.Game.Rulesets.Mania.Tests
                         throw new AssertionException(
                             $"session has extra statistic {kvp.Key}={kvp.Value} not in drawable");
                     }
+                }
+
+                return true;
+            });
+        }
+
+        private void runReplayAfterRecalcParityTest((Score score, IBeatmap beatmap, GameplayEnvironment environment) fixture)
+        {
+            parityEnvironment = fixture.environment;
+
+            AddStep("configure environment", () => ReplayJudgeTestConfig.ApplyToGlobalConfig(parityEnvironment));
+
+            AddStep("recalculate then load replay", () =>
+            {
+                Beatmap.Value = CreateWorkingBeatmap(fixture.beatmap);
+                playableBeatmap = Beatmap.Value.GetPlayableBeatmap(new ManiaRuleset().RulesetInfo);
+
+                replayScore = fixture.score.DeepClone();
+                ReplayJudgeTestConfig.ApplyEmbeddedModes(replayScore, parityEnvironment);
+
+                var nowScore = ManiaReplaySession.Run(replayScore.DeepClone(), playableBeatmap, parityEnvironment);
+                ScoreManager.ApplyEzSessionRecalculationToDetachedScoreInfo(
+                    replayScore.ScoreInfo,
+                    nowScore.ScoreInfo,
+                    ReplayRunPurpose.ForLive,
+                    parityEnvironment);
+                recalculatedScoreInfo = replayScore.ScoreInfo.DeepClone();
+
+                LoadScreen(currentPlayer = new ScoreAccessibleReplayPlayer(replayScore));
+            });
+
+            AddUntilStep("wait for completion", () => currentPlayer?.ScoreProcessor?.HasCompleted.Value == true);
+
+            AddAssert("replay result matches recalculated Now", () =>
+            {
+                const double tolerance = 1e-6;
+
+                if (Math.Abs(currentPlayer.ScoreProcessor.Accuracy.Value - recalculatedScoreInfo.Accuracy) >= tolerance)
+                    return false;
+
+                if (currentPlayer.ScoreProcessor.TotalScore.Value != recalculatedScoreInfo.TotalScore)
+                    return false;
+
+                foreach (var result in Enum.GetValues<HitResult>())
+                {
+                    if (result is HitResult.IgnoreHit or HitResult.IgnoreMiss)
+                        continue;
+
+                    if (currentPlayer.ScoreProcessor.Statistics.GetValueOrDefault(result) != recalculatedScoreInfo.Statistics.GetValueOrDefault(result))
+                        return false;
                 }
 
                 return true;
