@@ -22,6 +22,7 @@ namespace osu.Game.Scoring
             long? totalScore = null;
             Dictionary<HitResult, int>? statistics = null;
             Dictionary<HitResult, int>? maximumStatistics = null;
+            List<HitEvent>? hitEvents = null;
             int? maniaHitMode = null;
             int? maniaHealthMode = null;
 
@@ -31,32 +32,7 @@ namespace osu.Game.Scoring
                 if (managed == null)
                     return;
 
-                managed.Statistics.Clear();
-                foreach (var kvp in sessionInfo.Statistics)
-                    managed.Statistics[kvp.Key] = kvp.Value;
-
-                managed.MaximumStatistics.Clear();
-                foreach (var kvp in sessionInfo.MaximumStatistics)
-                    managed.MaximumStatistics[kvp.Key] = kvp.Value;
-
-                managed.Accuracy = sessionInfo.Accuracy;
-                managed.Rank = sessionInfo.Rank;
-                managed.MaxCombo = sessionInfo.MaxCombo;
-                managed.TotalScore = sessionInfo.TotalScore;
-                managed.TotalScoreWithoutMods = sessionInfo.TotalScoreWithoutMods;
-                managed.TotalScoreVersion = LegacyScoreEncoder.LATEST_VERSION;
-
-                if (purpose == ReplayRunPurpose.ForLive)
-                {
-                    managed.ManiaHitMode = (int)environment.ManiaHitMode;
-                    managed.ManiaHealthMode = (int)environment.ManiaHealthMode;
-                }
-
-                if (managed.OnlineID > 0 || managed.LegacyOnlineID > 0)
-                {
-                    managed.OnlineID = -1;
-                    managed.LegacyOnlineID = -1;
-                }
+                ApplyEzSessionRecalculationToDetachedScoreInfo(managed, sessionInfo, purpose, environment);
 
                 accuracy = managed.Accuracy;
                 rank = managed.Rank;
@@ -64,6 +40,7 @@ namespace osu.Game.Scoring
                 totalScore = managed.TotalScore;
                 statistics = managed.Statistics.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
                 maximumStatistics = managed.MaximumStatistics.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                hitEvents = managed.HitEvents.ToList();
                 maniaHitMode = managed.ManiaHitMode;
                 maniaHealthMode = managed.ManiaHealthMode;
             });
@@ -77,6 +54,7 @@ namespace osu.Game.Scoring
             scoreInfo.TotalScore = totalScore!.Value;
             scoreInfo.TotalScoreWithoutMods = sessionInfo.TotalScoreWithoutMods;
             scoreInfo.TotalScoreVersion = LegacyScoreEncoder.LATEST_VERSION;
+            scoreInfo.HitEvents = hitEvents!;
 
             scoreInfo.Statistics.Clear();
             foreach (var kvp in statistics!)
@@ -90,6 +68,37 @@ namespace osu.Game.Scoring
             {
                 scoreInfo.ManiaHitMode = maniaHitMode!.Value;
                 scoreInfo.ManiaHealthMode = maniaHealthMode!.Value;
+            }
+
+            if (scoreInfo.OnlineID > 0 || scoreInfo.LegacyOnlineID > 0)
+            {
+                scoreInfo.OnlineID = -1;
+                scoreInfo.LegacyOnlineID = -1;
+            }
+        }
+
+        public static void ApplyEzSessionRecalculationToDetachedScoreInfo(ScoreInfo scoreInfo, ScoreInfo sessionInfo, ReplayRunPurpose purpose, GameplayEnvironment environment)
+        {
+            scoreInfo.Statistics.Clear();
+            foreach (var kvp in sessionInfo.Statistics)
+                scoreInfo.Statistics[kvp.Key] = kvp.Value;
+
+            scoreInfo.MaximumStatistics.Clear();
+            foreach (var kvp in sessionInfo.MaximumStatistics)
+                scoreInfo.MaximumStatistics[kvp.Key] = kvp.Value;
+
+            scoreInfo.HitEvents = sessionInfo.HitEvents.ToList();
+            scoreInfo.Accuracy = sessionInfo.Accuracy;
+            scoreInfo.Rank = sessionInfo.Rank;
+            scoreInfo.MaxCombo = sessionInfo.MaxCombo;
+            scoreInfo.TotalScore = sessionInfo.TotalScore;
+            scoreInfo.TotalScoreWithoutMods = sessionInfo.TotalScoreWithoutMods;
+            scoreInfo.TotalScoreVersion = LegacyScoreEncoder.LATEST_VERSION;
+
+            if (purpose == ReplayRunPurpose.ForLive)
+            {
+                scoreInfo.ManiaHitMode = (int)environment.ManiaHitMode;
+                scoreInfo.ManiaHealthMode = (int)environment.ManiaHealthMode;
             }
 
             if (scoreInfo.OnlineID > 0 || scoreInfo.LegacyOnlineID > 0)

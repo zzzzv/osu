@@ -36,7 +36,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
 
         public List<HitEvent> Generate(Score score, IBeatmap playableBeatmap, CancellationToken cancellationToken = default)
         {
-            return session_service.RunHitEventsAsync(score, playableBeatmap, cancellationToken).GetAwaiter().GetResult()
+            return session_service.RunHitEventsAsync(score, playableBeatmap, cancellationToken: cancellationToken).GetAwaiter().GetResult()
                    ?? new List<HitEvent>();
         }
     }

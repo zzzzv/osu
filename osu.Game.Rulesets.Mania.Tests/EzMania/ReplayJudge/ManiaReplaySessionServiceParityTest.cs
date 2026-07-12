@@ -4,7 +4,6 @@
 using System;
 using System.Threading.Tasks;
 using NUnit.Framework;
-using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Scoring;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
 
@@ -26,10 +25,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
         }
 
         [TearDown]
-        public void TearDown()
-        {
-            GlobalConfigStore.EzConfig.SetValue(Ez2Setting.BmsPoorHitResultEnable, false);
-        }
+        public void TearDown() => ReplayJudgeTestConfig.ResetGlobalConfig();
 
         /// <summary>
         /// Service.RunAsync 与 Session.RunHitEvents HitEvent 序列完全等价。

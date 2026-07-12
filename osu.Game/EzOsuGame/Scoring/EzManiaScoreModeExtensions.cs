@@ -47,12 +47,10 @@ namespace osu.Game.EzOsuGame.Scoring
 
         public static void ApplyManiaGameplayModes(this ScoreInfo score, DrawableRuleset? drawableRuleset)
         {
-            if (drawableRuleset?.ReplayScore != null)
-                return;
-
             if (drawableRuleset is not IManiaGameplayModeSnapshot snapshot)
                 return;
 
+            // 游玩与 Replay 结束进结算均写入当场 Drawable 环境，供 ForStored 解析与左栏 Statistics 对齐。
             score.ManiaHitMode = snapshot.HitMode;
             score.ManiaHealthMode = snapshot.HealthMode;
         }

@@ -20,6 +20,9 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
         [SetUp]
         public void SetUp() => ReplayJudgeTestConfig.ApplyToGlobalConfig(LazerTapReplayFixtures.CreateTwoNoteColumnTap().environment);
 
+        [TearDown]
+        public void TearDown() => ReplayJudgeTestConfig.ResetGlobalConfig();
+
         [Test]
         public void TestRunHitEventsAggregateMatchesStatistics()
         {

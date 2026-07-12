@@ -15,6 +15,9 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
     [TestFixture]
     public class ManiaKPoorHealthGateTest
     {
+        [TearDown]
+        public void TearDown() => ReplayJudgeTestConfig.ResetGlobalConfig();
+
         [Test]
         public void TestBmsHitModeLazerHealthProducesNoExtraPoorFromKPoorRouting()
         {

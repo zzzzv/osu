@@ -40,7 +40,7 @@ namespace osu.Game.Rulesets.Osu.EzOsu.Statistics
         // TODO(EZ-SR-OSL-010): Generate 不独立算判；精度 = OsuReplayShadowEngine（S2 Slider / S3 Spinner 待补齐）。
         public List<HitEvent> Generate(Score score, IBeatmap playableBeatmap, CancellationToken cancellationToken = default)
         {
-            return session_service.RunHitEventsAsync(score, playableBeatmap, cancellationToken).GetAwaiter().GetResult();
+            return session_service.RunHitEventsAsync(score, playableBeatmap, cancellationToken: cancellationToken).GetAwaiter().GetResult();
         }
     }
 }

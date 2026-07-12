@@ -83,10 +83,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             var ruleset = score.ScoreInfo.Ruleset.CreateInstance();
             var scoreProcessor = ruleset.CreateScoreProcessor();
             scoreProcessor.Mods.Value = score.ScoreInfo.Mods;
-            scoreProcessor.ApplyBeatmap(beatmap);
 
             if (scoreProcessor is ManiaScoreProcessor maniaScoreProcessor)
                 maniaScoreProcessor.TimelineHitModeOverride = environment.ManiaHitMode;
+
+            scoreProcessor.ApplyBeatmap(beatmap);
 
             if (score.ScoreInfo.IsLegacyScore)
                 scoreProcessor.IsLegacyScore = true;
@@ -99,8 +100,10 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             double gameplayRate = ModUtils.CalculateRateWithMods(score.ScoreInfo.Mods);
             recorder?.RecordInitial(scoreProcessor, gameplayRate);
 
-            ManiaWindowBaker.Align(beatmap, environment);
-            ManiaEnvironmentJudgements.ApplyToBeatmap(beatmap, environment.ManiaHitMode);
+            var simulationEnvironment = createSimulationEnvironment(environment);
+
+            ManiaWindowBaker.Align(beatmap, simulationEnvironment);
+            ManiaEnvironmentJudgements.ApplyToBeatmap(beatmap, simulationEnvironment.ManiaHitMode);
             var targets = buildTargets(beatmap);
 
             var holdByHead = new Dictionary<HeadNote, HoldNote>();
@@ -120,23 +123,23 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 // Zero frames: still need to generate all-miss HitEvents
                 // so that extended statistics can display.
                 var emptyPressTimes = new Dictionary<int, List<double>>();
-                applyForcedMisses(scoreProcessor, targets, emptyPressTimes, holdByHead, headByTail, environment.ManiaHitMode, gameplayRate, CancellationToken.None, recorder);
+                applyForcedMisses(scoreProcessor, targets, emptyPressTimes, holdByHead, headByTail, simulationEnvironment.ManiaHitMode, gameplayRate, CancellationToken.None, recorder);
                 scoreProcessor.PopulateScore(score.ScoreInfo);
 
                 return (scoreProcessor, recordTimeline ? new EzScoreTimeline(Array.Empty<EzScoreTimelineSnapshot>()) : null);
             }
 
-            var noteStrategy = ManiaJudgementRegistry.GetNoteStrategy(environment);
+            var noteStrategy = ManiaJudgementRegistry.GetNoteStrategy(simulationEnvironment);
 
-            var holdStrategy = ManiaJudgementRegistry.GetHoldStrategy(environment);
+            var holdStrategy = ManiaJudgementRegistry.GetHoldStrategy(simulationEnvironment);
 
             buildColumnMaps(targets, out var pressColumns, out var releaseColumns);
 
-            var inputData = parseReplay(score.Replay);
+            var inputData = parseReplay(score.Replay, environment);
 
             ManiaReplaySessionSimulator.Simulate(
                 beatmap,
-                environment,
+                simulationEnvironment,
                 pressColumns,
                 releaseColumns,
                 holdByHead,
@@ -149,20 +152,36 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 recorder,
                 cancellationToken);
 
-            applyForcedMisses(scoreProcessor, targets, inputData.PressTimesByColumn, holdByHead, headByTail, environment.ManiaHitMode, gameplayRate, cancellationToken, recorder);
+            applyForcedMisses(scoreProcessor, targets, inputData.PressTimesByColumn, holdByHead, headByTail, simulationEnvironment.ManiaHitMode, gameplayRate, cancellationToken, recorder);
 
             return (scoreProcessor, recorder?.Build());
+        }
+
+        private static IGameplayEnvironment createSimulationEnvironment(IGameplayEnvironment environment)
+        {
+            if (!environment.ApplyInputOffsetViaReplayFrameShift || environment.OffsetPlusMania == 0)
+                return environment;
+
+            return new GameplayEnvironment
+            {
+                ManiaHitMode = environment.ManiaHitMode,
+                ManiaHealthMode = environment.ManiaHealthMode,
+                JudgePrecedence = environment.JudgePrecedence,
+                OffsetPlusMania = 0,
+                BmsPoorHitResultEnable = environment.BmsPoorHitResultEnable,
+            };
         }
 
         /// <summary>
         /// 单次解析 replay 帧序列，同时产出有序输入事件流与每列 press 时间索引。
         /// 替代原来 <c>ManiaReplayInputParser.Parse</c> + <c>BuildPressTimesByColumn</c> 的两次独立解析。
         /// </summary>
-        private static ManiaReplayInputData parseReplay(Replay replay)
+        private static ManiaReplayInputData parseReplay(Replay replay, IGameplayEnvironment environment)
         {
             var frames = replay.Frames.OfType<ManiaReplayFrame>().OrderBy(f => f.Time).ToList();
             var inputEvents = new List<ManiaReplayInputEvent>(frames.Count * 2);
             var pressTimes = new Dictionary<int, List<double>>();
+            double frameTimeOffset = environment.ApplyInputOffsetViaReplayFrameShift ? environment.OffsetPlusMania : 0;
 
             var lastActions = new List<ManiaAction>();
 
@@ -180,7 +199,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
                     if (column >= 0)
                     {
-                        inputEvents.Add(new ManiaReplayInputEvent(frame.Time, column, true));
+                        double inputTime = frame.Time + frameTimeOffset;
+                        inputEvents.Add(new ManiaReplayInputEvent(inputTime, column, true));
 
                         if (!pressTimes.TryGetValue(column, out var list))
                         {
@@ -188,7 +208,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                             pressTimes[column] = list;
                         }
 
-                        list.Add(frame.Time);
+                        list.Add(inputTime);
                     }
                 }
 
@@ -200,7 +220,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
                     int column = (int)action;
                     if (column >= 0)
-                        inputEvents.Add(new ManiaReplayInputEvent(frame.Time, column, false));
+                        inputEvents.Add(new ManiaReplayInputEvent(frame.Time + frameTimeOffset, column, false));
                 }
 
                 lastActions = current;

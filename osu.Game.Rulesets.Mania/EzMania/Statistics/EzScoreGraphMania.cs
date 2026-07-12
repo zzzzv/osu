@@ -13,9 +13,11 @@ using osu.Framework.Logging;
 using osu.Game.Beatmaps;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Extensions;
+using osu.Game.EzOsuGame.Scoring;
 using osu.Game.EzOsuGame.Statistics;
 using osu.Game.Rulesets.Mania.EzMania.Helper;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
+using osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Replicas;
 using osu.Game.Rulesets.Mania.Objects;
 using osu.Game.Rulesets.Mania.Objects.EzCurrentHitObject;
 using osu.Game.Rulesets.Mania.Scoring;
@@ -29,8 +31,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
 {
     /// <summary>
     /// Mania 判定偏移分布图。Original 用 Realm 静态 <see cref="ScoreInfo"/>；
-    /// Now 经 <see cref="ManiaReplaySession"/>（ForLive，Session 强制 zero offset）；
-    /// offset 滑条仅控制展示层 fake 平移，不注入 Session。
+    /// Now 经 <see cref="ManiaReplaySession"/>（ForLive）；拖动中使用展示层 fake 平移，
+    /// debounce 后的 Session 通过 replay frame 时间偏移得到最终值。
     /// </summary>
     public partial class EzScoreGraphMania : EzScoreGraphBase
     {
@@ -162,7 +164,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
         {
             var info = CommittedNowScore?.ScoreInfo;
 
-            if (info == null)
+            // Debounce 前的拖动预览仍走 HitEvent 偏移重判；Session 提交后直接使用其完整重算结果。
+            if (info == null || offsetPlusMania.Value != CommittedSessionOffset)
             {
                 RecalculateNowFromDisplayEvents();
                 return;
@@ -292,6 +295,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
             healthModeBindable.BindValueChanged(__ =>
             {
                 currentHealthMode = healthModeBindable.Value;
+                onReplayConfigChanged();
             });
 
             ezConfig.GetBindable<EzEnumJudgePrecedence>(Ez2Setting.JudgePrecedence)
@@ -319,7 +323,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
             return result == HitResult.None ? HitResult.Miss : result;
         }
 
-        /// <summary>Session 成功时 Now 判定已由 Session 产出。</summary>
+        /// <summary>Session 基准判定已产出；fake offset 重判由 <see cref="GetDisplayResult"/> 负责。</summary>
         protected override HitResult RecalculateNowResult(HitEvent hitEvent) => hitEvent.Result;
 
         /// <summary>
@@ -348,9 +352,28 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
         }
 
         /// <summary>
-        /// 展示层判定结果：仅读 Session 重跑产出的事件，不再对存储 HitEvents 做 Rejudge 拼贴。
+        /// 展示层判定结果：zero offset 直接使用 Session 结果；fake offset 时只对 Session HitEvents 重判。
+        /// 不读取或拼贴原始 Score 的 Statistics / HitEvents。
         /// </summary>
-        protected override HitResult GetDisplayResult(HitEvent hitEvent) => hitEvent.Result;
+        protected override HitResult GetDisplayResult(HitEvent hitEvent)
+        {
+            if (offsetPlusMania.Value == CommittedSessionOffset)
+                return hitEvent.Result;
+
+            if (currentHitMode == EzEnumHitMode.O2Jam)
+                hitWindowsNow.UpdateO2JamBpmFromTime(hitEvent.HitObject.StartTime);
+
+            var strategy = ManiaJudgementRegistry.GetHitModeJudgement(currentHitMode)
+                           ?? (IManiaNoteJudgementStrategy)LazerNoteJudgementReplica.Instance;
+
+            return strategy.RejudgeHitEvent(hitEvent, hitWindowsNow);
+        }
+
+        protected override ReplayRunRequest CreateReplayRunRequest(Score score)
+            => new ReplayRunRequest(score, Beatmap, ReplayRunPurpose.ForLive)
+            {
+                IncludeGlobalManiaOffset = true
+            };
 
         protected override Score? ResolveInputScore() => scoreManager.GetScore(Score);
 

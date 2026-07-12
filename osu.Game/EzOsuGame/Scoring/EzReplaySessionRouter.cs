@@ -53,14 +53,14 @@ namespace osu.Game.EzOsuGame.Scoring
             return session.RunRequestAsync(request, cancellationToken);
         }
 
-        public Task<List<HitEvent>> RunHitEventsAsync(Score score, IBeatmap beatmap, CancellationToken cancellationToken = default)
+        public Task<List<HitEvent>> RunHitEventsAsync(Score score, IBeatmap beatmap, ReplayRunPurpose purpose = ReplayRunPurpose.ForLive, CancellationToken cancellationToken = default)
         {
             var session = tryResolve(score);
 
             if (session == null)
                 return Task.FromResult(new List<HitEvent>());
 
-            return session.RunHitEventsAsync(score, beatmap, cancellationToken);
+            return session.RunHitEventsAsync(score, beatmap, purpose, cancellationToken);
         }
 
         private IEzReplaySession requireSession(Score score)

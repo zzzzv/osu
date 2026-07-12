@@ -14,6 +14,7 @@ namespace osu.Game.EzOsuGame.Scoring
         public Score Score { get; }
         public IBeatmap Beatmap { get; }
         public ReplayRunPurpose Purpose { get; }
+        public bool IncludeGlobalManiaOffset { get; init; }
 
         public ReplayRunRequest(Score score, IBeatmap beatmap, ReplayRunPurpose purpose)
         {

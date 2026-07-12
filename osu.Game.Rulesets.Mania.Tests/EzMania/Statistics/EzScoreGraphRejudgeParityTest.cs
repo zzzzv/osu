@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.ControlPoints;
@@ -37,6 +38,9 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.Statistics
     {
         private const double base_time = 1000;
         private const double note_spacing = 500;
+
+        [TearDown]
+        public void TearDown() => ReplayJudgeTestConfig.ResetGlobalConfig();
 
         /// <summary>
         /// Tap offset 覆盖各档窗口。
@@ -172,6 +176,58 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.Statistics
             }
         }
 
+        [TestCase(EzEnumHitMode.Lazer)]
+        [TestCase(EzEnumHitMode.IIDX_HD)]
+        [TestCase(EzEnumHitMode.EZ2AC)]
+        [TestCase(EzEnumHitMode.O2Jam)]
+        public async Task TestReplayRunRequestOffsetUsesFrameShift(EzEnumHitMode hitMode)
+        {
+            const double offset = 35;
+            double[] offsets = { -40, -5, 25, 70 };
+
+            var envWithOffset = createEnvironment(hitMode) with
+            {
+                OffsetPlusMania = offset
+            };
+
+            var (score, beatmap) = createTapOnlyFixture(offsets);
+            ReplayJudgeTestConfig.ApplyEmbeddedModes(score, envWithOffset);
+            ReplayJudgeTestConfig.ApplyToGlobalConfig(envWithOffset);
+            initO2Jam(hitMode, beatmap);
+
+            var requested = await new ManiaReplaySessionService().RunRequestAsync(new ReplayRunRequest(score.DeepClone(), beatmap, ReplayRunPurpose.ForLive)
+            {
+                IncludeGlobalManiaOffset = true
+            }).ConfigureAwait(true);
+
+            var (manualScore, manualBeatmap) = createTapOnlyFixture(offsets);
+            ReplayJudgeTestConfig.ApplyEmbeddedModes(manualScore, envWithOffset);
+            initO2Jam(hitMode, manualBeatmap);
+            var manuallyShifted = ManiaReplaySession.Run(
+                shiftReplayFrames(manualScore, offset),
+                manualBeatmap,
+                envWithOffset with { OffsetPlusMania = 0 });
+
+            assertSessionScoreEquivalent(manuallyShifted.ScoreInfo, requested.Score.ScoreInfo, hitMode, "request frame shift");
+
+            var (zeroScore, zeroBeatmap) = createTapOnlyFixture(offsets);
+            ReplayJudgeTestConfig.ApplyEmbeddedModes(zeroScore, envWithOffset);
+            ReplayJudgeTestConfig.ApplyToGlobalConfig(envWithOffset with { OffsetPlusMania = 0 });
+            initO2Jam(hitMode, zeroBeatmap);
+
+            var zeroRequested = await new ManiaReplaySessionService().RunRequestAsync(new ReplayRunRequest(zeroScore.DeepClone(), zeroBeatmap, ReplayRunPurpose.ForLive)
+            {
+                IncludeGlobalManiaOffset = true
+            }).ConfigureAwait(true);
+
+            var (zeroExpectedScore, zeroExpectedBeatmap) = createTapOnlyFixture(offsets);
+            ReplayJudgeTestConfig.ApplyEmbeddedModes(zeroExpectedScore, envWithOffset);
+            initO2Jam(hitMode, zeroExpectedBeatmap);
+            var zeroExpected = ManiaReplaySession.Run(zeroExpectedScore.DeepClone(), zeroExpectedBeatmap, envWithOffset with { OffsetPlusMania = 0 });
+
+            assertSessionScoreEquivalent(zeroExpected.ScoreInfo, zeroRequested.Score.ScoreInfo, hitMode, "zero offset request");
+        }
+
         /// <summary>
         /// 纯 Tap Note fixture，所有 note 同列，间距足够大不冲突。
         /// </summary>
@@ -221,6 +277,33 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.Statistics
             ScoreInfo = new ScoreInfo { Ruleset = ruleset.RulesetInfo, Mods = Array.Empty<Mod>() },
             Replay = replay,
         };
+
+        private static Score shiftReplayFrames(Score score, double offset)
+        {
+            var shifted = score.DeepClone();
+            shifted.Replay = new Replay
+            {
+                Frames = score.Replay!.Frames.Select(frame =>
+                {
+                    if (frame is ManiaReplayFrame maniaFrame)
+                        return (ReplayFrame)new ManiaReplayFrame(maniaFrame.Time + offset, maniaFrame.Actions.ToArray());
+
+                    return frame;
+                }).ToList()
+            };
+
+            return shifted;
+        }
+
+        private static void assertSessionScoreEquivalent(ScoreInfo expected, ScoreInfo actual, EzEnumHitMode hitMode, string context)
+        {
+            Assert.That(actual.Accuracy, Is.EqualTo(expected.Accuracy), $"{context} {hitMode}: accuracy");
+            Assert.That(actual.TotalScore, Is.EqualTo(expected.TotalScore), $"{context} {hitMode}: total score");
+            Assert.That(ManiaReplayParityHelper.AreStatisticsEquivalent(expected.Statistics, actual.Statistics), Is.True,
+                () => $"{context} {hitMode}: statistics expected=[{ManiaReplayParityHelper.DescribeStatistics(expected.Statistics)}] actual=[{ManiaReplayParityHelper.DescribeStatistics(actual.Statistics)}]");
+            Assert.That(ManiaReplayParityHelper.AreHitEventsEquivalent(expected.HitEvents, actual.HitEvents), Is.True,
+                () => $"{context} {hitMode}: hit events expected=[{ManiaReplayParityHelper.DescribeHitEvents(expected.HitEvents)}] actual=[{ManiaReplayParityHelper.DescribeHitEvents(actual.HitEvents)}]");
+        }
 
         private static GameplayEnvironment createEnvironment(EzEnumHitMode hitMode)
         {

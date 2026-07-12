@@ -20,5 +20,7 @@ namespace osu.Game.EzOsuGame.Scoring
         public double OffsetPlusMania { get; init; }
 
         public bool BmsPoorHitResultEnable { get; init; }
+
+        public bool ApplyInputOffsetViaReplayFrameShift { get; init; }
     }
 }

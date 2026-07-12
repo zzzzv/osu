@@ -44,9 +44,10 @@ namespace osu.Game.EzOsuGame.Scoring
         Task<ReplayRunResult> RunRequestAsync(ReplayRunRequest request, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// 从 replay 生成 HitEvents（不含 Statistics），供「补空 HitEvents」场景使用。
-        /// 规则集没有 Session 时（如 OsuReplaySession 尚未实现）返回 null。
+        /// 从 replay 生成 HitEvents（与对应 Purpose 的 <see cref="RunAsync"/> 共 cache）。
+        /// StatisticsPanel 补空 HitEvents 使用 <see cref="ReplayRunPurpose.ForStored"/>；Graph Now 使用 ForLive。
+        /// 规则集没有 Session 时返回空列表。
         /// </summary>
-        Task<List<HitEvent>> RunHitEventsAsync(Score score, IBeatmap beatmap, CancellationToken cancellationToken = default);
+        Task<List<HitEvent>> RunHitEventsAsync(Score score, IBeatmap beatmap, ReplayRunPurpose purpose = ReplayRunPurpose.ForLive, CancellationToken cancellationToken = default);
     }
 }

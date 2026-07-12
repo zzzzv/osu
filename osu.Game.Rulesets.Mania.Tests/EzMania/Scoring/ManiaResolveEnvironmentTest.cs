@@ -26,6 +26,9 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.Scoring
             ReplayJudgeTestConfig.ApplyToGlobalConfig(liveBaseline);
         }
 
+        [TearDown]
+        public void TearDown() => ReplayJudgeTestConfig.ResetGlobalConfig();
+
         [Test]
         public void TestForLiveAnalysisReadsAllLiveFields()
         {

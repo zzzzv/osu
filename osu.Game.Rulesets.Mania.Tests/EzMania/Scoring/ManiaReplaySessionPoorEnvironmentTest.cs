@@ -12,6 +12,9 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.Scoring
     [TestFixture]
     public class ManiaReplaySessionPoorEnvironmentTest
     {
+        [TearDown]
+        public void TearDown() => ReplayJudgeTestConfig.ResetGlobalConfig();
+
         [Test]
         public void TestSessionPoorEnabledFromEnvironmentWithoutGlobalConfig()
         {

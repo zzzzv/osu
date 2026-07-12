@@ -30,6 +30,9 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.Statistics
     [TestFixture]
     public class EzScoreGraphManiaTests
     {
+        [TearDown]
+        public void TearDown() => ReplayJudgeTestConfig.ResetGlobalConfig();
+
         /// <summary>
         /// 测试 A：ExtractDisplayCounts 在 info==null 路径下行为。
         /// 由于 ExtractDisplayCounts 是 static 且只读 statistics，这里验证

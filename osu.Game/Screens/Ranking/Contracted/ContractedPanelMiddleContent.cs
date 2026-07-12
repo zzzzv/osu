@@ -91,7 +91,7 @@ namespace osu.Game.Screens.Ranking.Contracted
                                     Padding = new MarginPadding(10),
                                     Direction = FillDirection.Vertical,
                                     Spacing = new Vector2(0, 10),
-                                    Children = new[]
+                                    Children = new Drawable[]
                                     {
                                         new UpdateableAvatar(score.User)
                                         {
@@ -217,7 +217,8 @@ namespace osu.Game.Screens.Ranking.Contracted
             };
         }
 
-        private Drawable createStatistic(HitResultDisplayStatistic result) => createStatistic(result.DisplayName, result.MaxCount == null ? $"{result.Count}" : $"{result.Count}/{result.MaxCount}");
+        private Drawable createStatistic(HitResultDisplayStatistic result)
+            => createStatistic(result.DisplayName, result.MaxCount == null ? $"{result.Count}" : $"{result.Count}/{result.MaxCount}");
 
         private Drawable createStatistic(LocalisableString key, string value) => new Container
         {
