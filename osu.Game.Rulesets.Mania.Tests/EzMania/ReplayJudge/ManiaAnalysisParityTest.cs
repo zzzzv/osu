@@ -52,6 +52,42 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             Assert.That(reloaded.MaximumStatistics.GetValueOrDefault(HitResult.Perfect), Is.EqualTo(20));
         }
 
+        [TestCase(ReplayRunPurpose.ForStored)]
+        [TestCase(ReplayRunPurpose.ForLive)]
+        public void TestRecalcNormalizesDoubleLazerModesToUnset(ReplayRunPurpose purpose)
+        {
+            var scoreInfo = new ScoreInfo
+            {
+                ManiaHitMode = (int)EzEnumHitMode.Lazer,
+                ManiaHealthMode = (int)EzEnumHealthMode.Lazer,
+            };
+
+            ScoreManager.ApplyEzSessionRecalculationToDetachedScoreInfo(
+                scoreInfo,
+                new ScoreInfo(),
+                purpose,
+                ReplayJudgeTestConfig.Create(EzEnumHitMode.Lazer, EzEnumHealthMode.Lazer));
+
+            Assert.That(scoreInfo.ManiaHitMode, Is.EqualTo(EzManiaScoreModeExtensions.UNSET_MODE));
+            Assert.That(scoreInfo.ManiaHealthMode, Is.EqualTo(EzManiaScoreModeExtensions.UNSET_MODE));
+        }
+
+        [Test]
+        public void TestForLiveRecalcPersistsNonLazerModes()
+        {
+            var scoreInfo = new ScoreInfo();
+            var environment = ReplayJudgeTestConfig.Create(EzEnumHitMode.EZ2AC, EzEnumHealthMode.Ez2Ac);
+
+            ScoreManager.ApplyEzSessionRecalculationToDetachedScoreInfo(
+                scoreInfo,
+                new ScoreInfo(),
+                ReplayRunPurpose.ForLive,
+                environment);
+
+            Assert.That(scoreInfo.ManiaHitMode, Is.EqualTo((int)EzEnumHitMode.EZ2AC));
+            Assert.That(scoreInfo.ManiaHealthMode, Is.EqualTo((int)EzEnumHealthMode.Ez2Ac));
+        }
+
         [TestCaseSource(nameof(same_environment_cases))]
         public async Task TestSameEnvThreeEntryListEqualsNowFinal(AnalysisFixtureCase testCase)
         {
@@ -110,8 +146,8 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             var listAfterRecalc = snapshot(recalculatedScoreInfo);
             assertEquivalent(listAfterRecalc, now, $"{testCase.Name}: a(list after recalc) vs b(Now)");
 
-            Assert.That(recalculatedScoreInfo.ManiaHitMode, Is.EqualTo((int)testCase.TargetEnvironment.ManiaHitMode), $"{testCase.Name}: recalculated hit mode");
-            Assert.That(recalculatedScoreInfo.ManiaHealthMode, Is.EqualTo((int)testCase.TargetEnvironment.ManiaHealthMode), $"{testCase.Name}: recalculated health mode");
+            Assert.That(recalculatedScoreInfo.ManiaHitMode, Is.EqualTo(expectedPersistedHitMode(testCase.TargetEnvironment)), $"{testCase.Name}: recalculated hit mode");
+            Assert.That(recalculatedScoreInfo.ManiaHealthMode, Is.EqualTo(expectedPersistedHealthMode(testCase.TargetEnvironment)), $"{testCase.Name}: recalculated health mode");
 
             var (storedScore, storedBeatmap, _) = testCase.CreateFixture();
             var forStoredAfterRecalc = await snapshotFromRunAsync(
@@ -234,6 +270,16 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
 
         private static string describeSnapshot(ScoreSnapshot snapshot)
             => $"acc={snapshot.Accuracy:F8} score={snapshot.TotalScore} hitMode={snapshot.ManiaHitMode} health={snapshot.ManiaHealthMode} stats=[{ManiaReplayParityHelper.DescribeStatistics(snapshot.Statistics)}]";
+
+        private static int expectedPersistedHitMode(GameplayEnvironment environment)
+            => environment.ManiaHitMode == EzEnumHitMode.Lazer && environment.ManiaHealthMode == EzEnumHealthMode.Lazer
+                ? EzManiaScoreModeExtensions.UNSET_MODE
+                : (int)environment.ManiaHitMode;
+
+        private static int expectedPersistedHealthMode(GameplayEnvironment environment)
+            => environment.ManiaHitMode == EzEnumHitMode.Lazer && environment.ManiaHealthMode == EzEnumHealthMode.Lazer
+                ? EzManiaScoreModeExtensions.UNSET_MODE
+                : (int)environment.ManiaHealthMode;
 
         public sealed record AnalysisFixtureCase(
             string Name,

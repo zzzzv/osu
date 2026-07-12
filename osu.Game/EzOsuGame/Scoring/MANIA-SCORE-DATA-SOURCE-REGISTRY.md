@@ -212,3 +212,4 @@ flowchart TD
 | ✎ \| 2026-07-12 | ✎ \| 改为 **每单元格独立标记**，删除整行「标记」列 |
 | ✎ \| 2026-07-12 | ✎ \| 删除死代码 Catalog；list 改由 ManiaRuleset 按 score 嵌入 HitMode 展示 |
 | ✎ \| 2026-07-12 | ✎ \| ReplayPlayer 启用列路由；补 EZ2AC/Malody_E/O2 与重算后 c/d parity 测试 |
+| ✎ \| 2026-07-12 | ✎ \| 重算写回统一将双 Lazer HM/HM 归一为空；非 Lazer ForLive 环境仍持久化 |
