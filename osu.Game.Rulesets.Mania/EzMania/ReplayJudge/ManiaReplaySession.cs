@@ -275,10 +275,12 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 if (state.Target is TailNote tailNote && headByTail.TryGetValue(tailNote, out var linkedHead)
                                                       && holdByHead.TryGetValue(linkedHead, out var hold))
                 {
-                    if (hold.Body != null)
-                        ManiaReplaySessionSimulator.ApplyAuxiliaryResult(scoreProcessor, hold.Body, HitResult.ComboBreak, missEventTime, gameplayRate, recorder);
+                    double storedOffset = ManiaReplaySessionSimulator.ResolveMissStoredOffset(state.Target, pressTimesByColumn);
 
-                    ManiaReplaySessionSimulator.ApplyAuxiliaryResult(scoreProcessor, hold, HitResult.IgnoreMiss, missEventTime, gameplayRate, recorder);
+                    if (hold.Body != null)
+                        ManiaReplaySessionSimulator.ApplyAuxiliaryResult(scoreProcessor, hold.Body, HitResult.ComboBreak, storedOffset, missEventTime, gameplayRate, recorder);
+
+                    ManiaReplaySessionSimulator.ApplyAuxiliaryResult(scoreProcessor, hold, HitResult.IgnoreMiss, storedOffset, missEventTime, gameplayRate, recorder);
                 }
             }
         }

@@ -84,6 +84,40 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             return (createScore(ruleset, replay), beatmap, createEnvironment());
         }
 
+        public static (Score score, IBeatmap beatmap, GameplayEnvironment environment) CreateSingleHoldLateTailRelease(int lateMs = 30)
+        {
+            const double head = 1500;
+            const double tail = 4000;
+
+            var ruleset = new ManiaRuleset();
+            var hold = new HoldNote
+            {
+                StartTime = head,
+                Duration = tail - head,
+                Column = 0,
+            };
+
+            var beatmap = new TestBeatmap(ruleset.RulesetInfo)
+            {
+                HitObjects = new List<HitObject> { hold },
+                ControlPointInfo = new ControlPointInfo(),
+            };
+
+            foreach (var obj in beatmap.HitObjects)
+                obj.ApplyDefaults(beatmap.ControlPointInfo, beatmap.Difficulty);
+
+            var replay = new Replay
+            {
+                Frames = new List<ReplayFrame>
+                {
+                    new ManiaReplayFrame(head, ManiaAction.Key1),
+                    new ManiaReplayFrame(tail + lateMs),
+                },
+            };
+
+            return (createScore(ruleset, replay), beatmap, createEnvironment());
+        }
+
         public static (Score score, IBeatmap beatmap, GameplayEnvironment environment) CreateSingleHoldLateRelease()
         {
             const double head = 1500;

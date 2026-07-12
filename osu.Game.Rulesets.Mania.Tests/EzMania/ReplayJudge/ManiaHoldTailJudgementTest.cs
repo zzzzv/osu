@@ -47,6 +47,30 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
         }
 
         [Test]
+        public void TestTailLateReleaseStoresNonZeroOffset()
+        {
+            var (score, beatmap, environment) = LazerTapReplayFixtures.CreateSingleHoldLateTailRelease(lateMs: 30);
+            var result = ManiaReplaySession.Run(score, beatmap, environment);
+
+            var tailEvent = result.ScoreInfo.HitEvents.Single(e => e.HitObject is TailNote);
+            Assert.That(tailEvent.TimeOffset, Is.EqualTo(30).Within(0.01));
+            Assert.That(tailEvent.Result, Is.EqualTo(HitResult.Great));
+        }
+
+        [Test]
+        public void TestClassicTailLateReleaseUsesClassicWindows()
+        {
+            var (score, beatmap, _) = LazerTapReplayFixtures.CreateSingleHoldLateTailRelease(lateMs: 30);
+            var classicEnvironment = ReplayJudgeTestConfig.Create(EzEnumHitMode.Classic, EzEnumHealthMode.Lazer);
+
+            var classicTail = ManiaReplaySession.RunHitEvents(score, beatmap, classicEnvironment).Single(e => e.HitObject is TailNote);
+
+            // 与 Lazer 共用同一套 tail 时序/offset 规则；仅窗口区间不同，故 30ms late 在 Classic 下仍判 Great。
+            Assert.That(classicTail.TimeOffset, Is.EqualTo(30).Within(0.01));
+            Assert.That(classicTail.Result, Is.EqualTo(HitResult.Great));
+        }
+
+        [Test]
         public void TestMalodyTailJudgementAfterEnvironmentApply()
         {
             var (_, beatmap, environment) = HitModeReplayFixtures.CreateMalodyHoldPerfect();

@@ -257,16 +257,18 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 {
                     // HoldNoteBody: IgnoreHit on hit, ComboBreak on miss
                     // (matches DrawableHoldNoteBody.TriggerResult → ApplyMaxResult/ApplyMinResult)
+                    double tailStoredOffset = ComputeStoredTimeOffset(input.Time, judgedTail);
+
                     if (tailHold.Body != null)
                     {
                         HitResult bodyResult = result.IsHit() ? HitResult.IgnoreHit : HitResult.ComboBreak;
-                        ApplyAuxiliaryResult(scoreProcessor, tailHold.Body, bodyResult, input.Time, gameplayRate, timelineRecorder);
+                        ApplyAuxiliaryResult(scoreProcessor, tailHold.Body, bodyResult, tailStoredOffset, input.Time, gameplayRate, timelineRecorder);
                     }
 
                     // HoldNote parent: IgnoreHit on hit, IgnoreMiss on miss
                     // (matches DrawableHoldNote.CheckForResult → ApplyMaxResult/MissForcefully)
                     HitResult holdAuxResult = result.IsHit() ? HitResult.IgnoreHit : HitResult.IgnoreMiss;
-                    ApplyAuxiliaryResult(scoreProcessor, tailHold, holdAuxResult, input.Time, gameplayRate, timelineRecorder);
+                    ApplyAuxiliaryResult(scoreProcessor, tailHold, holdAuxResult, tailStoredOffset, input.Time, gameplayRate, timelineRecorder);
                 }
 
                 if (target is HeadNote head)
@@ -551,6 +553,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             ScoreProcessor scoreProcessor,
             HitObject target,
             HitResult result,
+            double storedTimeOffset,
             double eventTime,
             double gameplayRate,
             ManiaReplayTimelineRecorder? timelineRecorder)
@@ -559,7 +562,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             {
                 Type = result,
             };
-            JudgementResultTimingHelper.ApplyTiming(judgementResult, 0, gameplayRate);
+            JudgementResultTimingHelper.ApplyTiming(judgementResult, storedTimeOffset, gameplayRate);
             scoreProcessor.ApplyResult(judgementResult);
             timelineRecorder?.Record(scoreProcessor, eventTime, gameplayRate);
         }

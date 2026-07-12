@@ -123,9 +123,21 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
         private IReadOnlyList<HitEvent> filterForCurrentHitMode(IEnumerable<HitEvent> events)
         {
             var validResults = HitModeHelper.GetHitModeValidHitResults(currentHitMode).ToHashSet();
-            var filtered = events.Where(e => validResults.Contains(e.Result) || e.Result is HitResult.Miss or HitResult.Poor);
+            var filtered = events.Where(e => isTimingScatterEvent(e)
+                                             && (validResults.Contains(e.Result) || e.Result is HitResult.Miss or HitResult.Poor));
 
             return applyFakeOffsetToEvents(filtered);
+        }
+
+        /// <summary>
+        /// 散点图只展示有真实按键时序的物件（Note/Head/Tail）；排除 LN auxiliary（Body/HoldNote）与 Ignore 类结果。
+        /// </summary>
+        private static bool isTimingScatterEvent(HitEvent hitEvent)
+        {
+            if (hitEvent.HitObject is HoldNoteBody or HoldNote)
+                return false;
+
+            return hitEvent.Result.AffectsAccuracy();
         }
 
         /// <summary>展示层预览：相对已提交 Session offset 的 delta。</summary>

@@ -335,7 +335,7 @@ namespace osu.Game.Rulesets.Mania.Scoring
 
         public HitResult ResultFor(double timeOffset, bool? useHelper = null)
         {
-            bool shouldUseHelper = useHelper ?? (ActiveHitMode != EzEnumHitMode.Lazer);
+            bool shouldUseHelper = useHelper ?? ActiveHitMode != EzEnumHitMode.Lazer;
             return shouldUseHelper ? helper.ResultFor(timeOffset) : base.ResultFor(timeOffset);
         }
 
