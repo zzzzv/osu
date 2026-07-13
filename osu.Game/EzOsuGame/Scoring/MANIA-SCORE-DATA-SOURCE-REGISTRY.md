@@ -16,9 +16,10 @@
 | ✎ \| Osu Session              | ✎ \| [`Osu REPLAY_JUDGE_MERGE.md`](../../osu.Game.Rulesets.Osu/EzOsu/ReplayJudge/REPLAY_JUDGE_MERGE.md) | ✎ \| **是**（本对话） |
 | ✎ \| Session/Timeline 注册表     | ✎ \| [`EZ-SR-TL-REGISTRY.md`](./EZ-SR-TL-REGISTRY.md)                                                   | ✎ \| **是**（本对话） |
 | ✎ \| [`MANIA-JUDGEMENT-RUNTIME.md`](./MANIA-JUDGEMENT-RUNTIME.md)                                       | ✎ \| **是**（2026-07-13 Arch-A） |
+| ✎ \| [`MANIA-JUDGEMENT-TOPOLOGY.md`](./MANIA-JUDGEMENT-TOPOLOGY.md)                                     | ✎ \| **是**（2026-07-13 总拓扑活文档） |
 
 **说明**：✎ \| 上述参考 MD 若与本 MD 有偏差，以 **本 MD + 代码** 为准，并应回头修改参考 MD 对齐。  
-**运行时分层**（局内谁算什么、pressTimes 等状态归属）以 **MANIA-JUDGEMENT-RUNTIME** 为准；本表管 **数据面**。
+**运行时分层**（局内谁算什么、pressTimes 等状态归属）以 **MANIA-JUDGEMENT-RUNTIME** 为准；**全场景拓扑与实施批次** 以 **MANIA-JUDGEMENT-TOPOLOGY** 为准；本表管 **数据面**。
 
 ---
 
