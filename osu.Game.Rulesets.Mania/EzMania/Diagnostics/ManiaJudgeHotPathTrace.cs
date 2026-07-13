@@ -17,6 +17,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
         private static long drawableOnPressedCalls;
         private static long columnOnPressedCalls;
         private static long autoMissSkipped;
+        private static long missStoredOffsetResolves;
+        private static long pressTimesSnapshotAllocations;
+        private static long maxObservedPressTimesCount;
 
         public static bool Enabled => EzJudgmentDiagnostics.Enabled;
 
@@ -31,6 +34,12 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
         public static long ColumnOnPressedCalls => Interlocked.Read(ref columnOnPressedCalls);
 
         public static long AutoMissSkipped => Interlocked.Read(ref autoMissSkipped);
+
+        public static long MissStoredOffsetResolves => Interlocked.Read(ref missStoredOffsetResolves);
+
+        public static long PressTimesSnapshotAllocations => Interlocked.Read(ref pressTimesSnapshotAllocations);
+
+        public static long MaxObservedPressTimesCount => Interlocked.Read(ref maxObservedPressTimesCount);
 
         public static void RecordIsHittable()
         {
@@ -68,6 +77,38 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
                 Interlocked.Increment(ref autoMissSkipped);
         }
 
+        public static void RecordMissStoredOffsetResolve()
+        {
+            if (Enabled)
+                Interlocked.Increment(ref missStoredOffsetResolves);
+        }
+
+        public static void RecordPressTimesSnapshotAllocation(int count)
+        {
+            if (!Enabled)
+                return;
+
+            Interlocked.Increment(ref pressTimesSnapshotAllocations);
+            updateMaxObservedPressTimesCount(count);
+        }
+
+        public static void RecordPressTimesCount(int count) => updateMaxObservedPressTimesCount(count);
+
+        private static void updateMaxObservedPressTimesCount(int count)
+        {
+            if (!Enabled)
+                return;
+
+            long current;
+            do
+            {
+                current = Interlocked.Read(ref maxObservedPressTimesCount);
+                if (count <= current)
+                    return;
+            }
+            while (Interlocked.CompareExchange(ref maxObservedPressTimesCount, count, current) != current);
+        }
+
         public static void Clear()
         {
             Interlocked.Exchange(ref isHittableCalls, 0);
@@ -76,10 +117,14 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
             Interlocked.Exchange(ref drawableOnPressedCalls, 0);
             Interlocked.Exchange(ref columnOnPressedCalls, 0);
             Interlocked.Exchange(ref autoMissSkipped, 0);
+            Interlocked.Exchange(ref missStoredOffsetResolves, 0);
+            Interlocked.Exchange(ref pressTimesSnapshotAllocations, 0);
+            Interlocked.Exchange(ref maxObservedPressTimesCount, 0);
         }
 
         public static string FormatSummary()
             => $"IsHittable={IsHittableCalls} CheckForResult={CheckForResultCalls} O2Bpm={O2BpmLookups} "
-               + $"ColPress={ColumnOnPressedCalls} DPress={DrawableOnPressedCalls} AutoMissSkip={AutoMissSkipped}";
+               + $"ColPress={ColumnOnPressedCalls} DPress={DrawableOnPressedCalls} AutoMissSkip={AutoMissSkipped} "
+               + $"MissOffset={MissStoredOffsetResolves} PressSnapAlloc={PressTimesSnapshotAllocations} PressTimesMax={MaxObservedPressTimesCount}";
     }
 }
