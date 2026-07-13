@@ -586,15 +586,29 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         internal static double ComputeStoredTimeOffset(double eventTime, HitObject target)
             => eventTime - target.GetEndTime();
 
-        /// <summary>
-        /// Miss 存储偏移：优先该列 replay 最近邻 press；无输入则 0（Graph 侧 projectOffsetToY 压边）。
-        /// </summary>
         internal static double ResolveMissStoredOffset(
             HitObject target,
             IReadOnlyDictionary<int, List<double>> pressTimesByColumn,
             double? beforeTimeInclusive = null)
         {
-            double eventTime = ResolveMissEventTime(target, pressTimesByColumn, beforeTimeInclusive);
+            if (target is not IHasColumn hasColumn)
+                return ComputeStoredTimeOffset(ResolveMissEventTime(target, pressTimesByColumn, beforeTimeInclusive), target);
+
+            if (!pressTimesByColumn.TryGetValue(hasColumn.Column, out var times) || times.Count == 0)
+                return ComputeStoredTimeOffset(target.GetEndTime(), target);
+
+            return ResolveMissStoredOffset(target, times, beforeTimeInclusive);
+        }
+
+        /// <summary>
+        /// Drawable 列 press 列表专用；避免 Dictionary/List 快照分配。
+        /// </summary>
+        internal static double ResolveMissStoredOffset(
+            HitObject target,
+            IReadOnlyList<double> columnPressTimes,
+            double? beforeTimeInclusive = null)
+        {
+            double eventTime = ResolveMissEventTime(target, columnPressTimes, beforeTimeInclusive);
             return ComputeStoredTimeOffset(eventTime, target);
         }
 
@@ -609,18 +623,39 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             if (!pressTimesByColumn.TryGetValue(hasColumn.Column, out var times) || times.Count == 0)
                 return target.GetEndTime();
 
-            IEnumerable<double> candidates = times;
+            return ResolveMissEventTime(target, times, beforeTimeInclusive);
+        }
 
-            if (beforeTimeInclusive.HasValue)
-                candidates = times.Where(t => t <= beforeTimeInclusive.Value);
-
-            var candidateList = candidates.ToList();
-
-            if (candidateList.Count == 0)
-                return beforeTimeInclusive ?? target.GetEndTime();
+        internal static double ResolveMissEventTime(
+            HitObject target,
+            IReadOnlyList<double> columnPressTimes,
+            double? beforeTimeInclusive = null)
+        {
+            if (columnPressTimes.Count == 0)
+                return target.GetEndTime();
 
             double reference = target.GetEndTime();
-            return candidateList.MinBy(t => Math.Abs(t - reference));
+            double bestTime = double.NaN;
+            double bestDistance = double.PositiveInfinity;
+
+            foreach (double pressTime in columnPressTimes)
+            {
+                if (beforeTimeInclusive.HasValue && pressTime > beforeTimeInclusive.Value)
+                    continue;
+
+                double distance = Math.Abs(pressTime - reference);
+
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    bestTime = pressTime;
+                }
+            }
+
+            if (double.IsNaN(bestTime))
+                return beforeTimeInclusive ?? target.GetEndTime();
+
+            return bestTime;
         }
 
         private static int indexOf(IReadOnlyList<LaneTargetState> laneStates, LaneTargetState candidate)

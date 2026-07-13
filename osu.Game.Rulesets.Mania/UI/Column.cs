@@ -29,6 +29,7 @@ using osu.Game.Rulesets.Mania.Skinning;
 using osu.Game.Rulesets.Mania.UI.Components;
 using osu.Game.Rulesets.Objects;
 using osu.Game.Rulesets.Objects.Drawables;
+using osu.Game.Rulesets.Scoring;
 using osu.Game.Rulesets.UI;
 using osu.Game.Rulesets.UI.Scrolling;
 using osu.Game.Skinning;
@@ -115,9 +116,38 @@ namespace osu.Game.Rulesets.Mania.UI
 
         private readonly List<double> pressTimes = new List<double>();
 
-        internal void RecordPressTime(double time) => pressTimes.Add(time);
+        private double pressHistoryRetentionMs = 120_000;
 
-        internal List<double> GetPressTimesSnapshot() => new List<double>(pressTimes);
+        internal IReadOnlyList<double> PressTimes => pressTimes;
+
+        internal void RecordPressTime(double time)
+        {
+            pressTimes.Add(time);
+            trimPressHistory(time);
+            ManiaJudgeHotPathTrace.RecordPressTimesCount(pressTimes.Count);
+        }
+
+        private void trimPressHistory(double time)
+        {
+            if (pressHistoryRetentionMs <= 0)
+                return;
+
+            double cutoff = time - pressHistoryRetentionMs;
+            int removeCount = 0;
+
+            while (removeCount < pressTimes.Count && pressTimes[removeCount] < cutoff)
+                removeCount++;
+
+            if (removeCount > 0)
+                pressTimes.RemoveRange(0, removeCount);
+        }
+
+        [Obsolete("Use PressTimes with zero-alloc ResolveMissStoredOffset overload.")]
+        internal List<double> GetPressTimesSnapshot()
+        {
+            ManiaJudgeHotPathTrace.RecordPressTimesSnapshotAllocation(pressTimes.Count);
+            return new List<double>(pressTimes);
+        }
 
         internal bool TryGetBmsRoute(DrawableNote note, out BmsHitModeJudgement.BmsRouteState route)
         {
@@ -420,6 +450,20 @@ namespace osu.Game.Rulesets.Mania.UI
             configuredMissCollectionHitMode = hitMode;
             double overallDifficulty = drawableRuleset?.Beatmap.Difficulty.OverallDifficulty ?? 5;
             LaneController.ConfigureMissCollection(hitMode, overallDifficulty);
+            pressHistoryRetentionMs = computePressHistoryRetentionMs(hitMode, overallDifficulty);
+        }
+
+        private static double computePressHistoryRetentionMs(EzEnumHitMode hitMode, double overallDifficulty)
+        {
+            var helper = new HitModeHelper(hitMode) { OverallDifficulty = overallDifficulty };
+            double early = helper.WindowFor(HitResult.Miss, true);
+            double late = helper.WindowFor(HitResult.Miss, false);
+
+            if (HitModeHelper.IsBMSHitMode(hitMode))
+                BmsHitModeJudgement.ExpandMissCollectionWindows(helper, 1, ref early, ref late);
+
+            // Keep enough history for nearest-press miss offset; floor avoids over-trimming on short maps.
+            return Math.Max(120_000, (early + late) * 4 + 10_000);
         }
 
         public override bool ReceivePositionalInputAt(Vector2 screenSpacePos)

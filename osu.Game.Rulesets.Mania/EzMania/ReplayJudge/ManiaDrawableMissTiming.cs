@@ -1,8 +1,8 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
-using System.Collections.Generic;
 using osu.Framework.Graphics;
+using osu.Game.Rulesets.Mania.EzMania.Diagnostics;
 using osu.Game.Rulesets.Mania.UI;
 using osu.Game.Rulesets.Objects;
 using osu.Game.Rulesets.Objects.Drawables;
@@ -17,7 +17,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
     {
         internal static double ResolveStoredOffset(DrawableHitObject drawable)
         {
-            if (drawable.HitObject is not IHasColumn hasColumn)
+            ManiaJudgeHotPathTrace.RecordMissStoredOffsetResolve();
+
+            if (drawable.HitObject is not IHasColumn)
                 return drawable.Time.Current - drawable.HitObject.GetEndTime();
 
             var column = drawable.FindClosestParent<Column>();
@@ -25,12 +27,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             if (column == null)
                 return drawable.Time.Current - drawable.HitObject.GetEndTime();
 
-            var pressTimes = new Dictionary<int, List<double>>
-            {
-                [hasColumn.Column] = column.GetPressTimesSnapshot(),
-            };
-
-            return ManiaReplaySessionSimulator.ResolveMissStoredOffset(drawable.HitObject, pressTimes);
+            return ManiaReplaySessionSimulator.ResolveMissStoredOffset(drawable.HitObject, column.PressTimes);
         }
     }
 }

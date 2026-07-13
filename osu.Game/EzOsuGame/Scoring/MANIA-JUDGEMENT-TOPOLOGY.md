@@ -11,9 +11,9 @@
 
 | 批次 | 内容 | 状态 |
 |------|------|------|
-| **1** | 本文件落地 + 链到 RUNTIME / REGISTRY | 进行中 |
-| **2** | Drawable 验证：`ManiaJudgeHotPathTrace` 或 micro-bench（`pressTimes.Count`、CheckForResult/秒 vs 列数） | 待做 |
-| **3** | **Fix-1**：`Column.pressTimes` 有界裁剪；`ManiaDrawableMissTiming` 零分配最近邻（公式仍用 `ResolveMissStoredOffset`） | 待做 |
+| **1** | 本文件落地 + 链到 RUNTIME / REGISTRY | 完成 `f161089` |
+| **2** | Drawable 验证：`ManiaJudgeHotPathTrace`（`pressTimes` max、MissOffset、PressSnapAlloc） | 完成 |
+| **3** | **Fix-1**：`Column.pressTimes` 有界裁剪；`ManiaDrawableMissTiming` 零分配 | 完成 |
 | **4** | **Fix-2**：automiss 更早 gate，减少未进 miss 窗的 `UpdateResult` 入口 | 待做 |
 | **5** | **MLPS 扩充**（Earliest/Combo/Duration/BMS post-Bad）+ MLC 同位置直调；**列候选局部化**（替代 `CollectOverlappingEntries` 整列 max 窗扫描） | 待做 |
 | **6** | `ManiaScoreHitEventGenerator` 收口到 `RunHitEventsAsync`；补 HitEvents 路径 p50/p95 bench（目标参考 &lt;10ms） | 待做 |
@@ -197,4 +197,4 @@ flowchart TB
 
 | 日期 | 说明 |
 |------|------|
-| 2026-07-13 | 初版：自 Cursor 总拓扑计划收敛；含批次优先级与 MLPS/ReplayFrame/Race/Generator 决策 |
+| 2026-07-13 | 批次 2–3：`ManiaJudgeHotPathTrace` 扩展；Fix-1 有界 pressTimes + 零分配 MissTiming |
