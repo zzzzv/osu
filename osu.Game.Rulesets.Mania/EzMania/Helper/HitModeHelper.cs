@@ -5,7 +5,9 @@ using System;
 using System.Collections.Generic;
 using osu.Game.Beatmaps;
 using osu.Game.EzOsuGame.Configuration;
+using osu.Game.EzOsuGame.Scoring;
 using osu.Game.Rulesets.Scoring;
+using osu.Game.Scoring;
 
 // ReSharper disable InconsistentNaming
 
@@ -640,6 +642,12 @@ namespace osu.Game.Rulesets.Mania.EzMania.Helper
             var mode = GlobalConfigStore.EzConfig.Get<EzEnumHitMode>(Ez2Setting.ManiaHitMode);
             return GetHitModeValidHitResults(mode);
         }
+
+        /// <summary>
+        /// 按 <see cref="EzManiaScoreModeExtensions.ResolveDisplayHitMode"/> 解析展示用 HitMode 后返回有效判定集合。
+        /// </summary>
+        public static IEnumerable<HitResult> GetHitModeValidHitResultsForDisplay(ScoreInfo? score)
+            => GetHitModeValidHitResults(EzManiaScoreModeExtensions.ResolveDisplayHitMode(score));
 
 #endregion
     }
