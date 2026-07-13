@@ -365,37 +365,14 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             IReadOnlyList<LaneTargetState> laneStates,
             double inputTime,
             IGameplayEnvironment environment)
-        {
-            if (environment.JudgePrecedence == EzEnumJudgePrecedence.Earliest)
-                return selectEarliestCandidate(candidates, laneStates, inputTime);
-
-            return selectCandidateByPrecedence(candidates, inputTime, environment);
-        }
+            => selectCandidateByPrecedence(candidates, laneStates, inputTime, environment);
 
         /// <summary>
         /// Earliest note-lock：与 <see cref="ManiaLaneController.SelectPressEntry"/> 一致，仅检查游标可打性，不在此预判 EvaluatePress。
         /// </summary>
-        private static LaneTargetState? selectEarliestCandidate(
-            List<LaneTargetState> candidates,
-            IReadOnlyList<LaneTargetState> laneStates,
-            double time)
-        {
-            candidates.Sort((a, b) => a.Target.StartTime.CompareTo(b.Target.StartTime));
-
-            foreach (var candidate in candidates)
-            {
-                int index = indexOf(laneStates, candidate);
-                if (index < 0 || !IsHittableEarliest(laneStates, index, time))
-                    continue;
-
-                return candidate;
-            }
-
-            return null;
-        }
-
         private static LaneTargetState? selectCandidateByPrecedence(
             List<LaneTargetState> candidates,
+            IReadOnlyList<LaneTargetState> laneStates,
             double inputTime,
             IGameplayEnvironment environment)
         {
@@ -404,6 +381,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
             return ManiaLanePressSelector.SelectSessionTarget(
                 candidates,
+                laneStates,
                 inputTime,
                 environment.JudgePrecedence,
                 HitModeHelper.IsBMSHitMode(environment.ManiaHitMode));
@@ -640,7 +618,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
             foreach (double pressTime in columnPressTimes)
             {
-                if (beforeTimeInclusive.HasValue && pressTime > beforeTimeInclusive.Value)
+                if (pressTime > beforeTimeInclusive)
                     continue;
 
                 double distance = Math.Abs(pressTime - reference);

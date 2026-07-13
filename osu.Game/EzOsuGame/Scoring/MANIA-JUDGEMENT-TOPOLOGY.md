@@ -14,8 +14,8 @@
 | **1** | 本文件落地 + 链到 RUNTIME / REGISTRY | 完成 `f161089` |
 | **2** | Drawable 验证：`ManiaJudgeHotPathTrace`（`pressTimes` max、MissOffset、PressSnapAlloc） | 完成 |
 | **3** | **Fix-1**：`Column.pressTimes` 有界裁剪；`ManiaDrawableMissTiming` 零分配 | 完成 |
-| **4** | **Fix-2**：automiss 更早 gate，减少未进 miss 窗的 `UpdateResult` 入口 | 待做 |
-| **5** | **MLPS 扩充**（Earliest/Combo/Duration/BMS post-Bad）+ MLC 同位置直调；**列候选局部化**（替代 `CollectOverlappingEntries` 整列 max 窗扫描） | 待做 |
+| **4** | **Fix-2**：automiss 更早 gate，减少未进 miss 窗的 `UpdateResult` 入口 | 完成 |
+| **5** | **MLPS 扩充**（Earliest/Combo/Duration/BMS post-Bad）+ MLC 同位置直调；**overlap 边界缓存**（register 时算 max 窗，按不再整列扫） | 完成 |
 | **6** | `ManiaScoreHitEventGenerator` 收口到 `RunHitEventsAsync`；补 HitEvents 路径 p50/p95 bench（目标参考 &lt;10ms） | 待做 |
 | **7+** | ReplayFrame 统一消费上提 `EzReplaySession`；Race `FeedMode`（预建 vs 按 clock 喂入）bench + 开关 — **TODO，本阶段不实现** |  backlog |
 
@@ -94,7 +94,8 @@ flowchart TB
         Graph[EzScoreGraphMania]
         Race[EzScoreRaceService]
     end
-    KB --> Col --> MLC --> DHO --> MEJ --> Kernel
+    KB --> Col --> MLC --> MLPS
+    MLC --> DHO --> MEJ --> Kernel
     DHO --> AMG
     RP --> Col
     DB --> Parse --> Sim --> MLPS --> Kernel
@@ -116,12 +117,12 @@ flowchart TB
 |------|-----|--------------|------|
 | `ManiaJudgementKernel` | M+N | **核心** | note/hold 评估 |
 | `ManiaJudgementRound` | M+N | 配置 | 开局冻结 |
-| `ManiaLaneController` | M | 否 | Drawable 列状态 + 路由（应收瘦） |
-| `ManiaLanePressSelector` | N（目标 M+N） | 否 | **待扩充**为完整 press 选目标；MLC 同位置直调 |
-| `collectCandidatesForInput` | N | 否 | ≈ M 的 `CollectOverlappingEntries`（待局部化） |
+| `ManiaLaneController` | M | 否 | Drawable 列状态；press 路由委托 MLPS |
+| `ManiaLanePressSelector` | M+N | 否 | **press 选目标**（Earliest/Combo/Duration/BMS post-Bad Drawable + Session） |
+| `collectCandidatesForInput` | N | 否 | Session 列候选；与 M `CollectOverlappingEntries` 语义对齐 |
 | `Column.pressTimes` | M | 否 | **Fix-1** 有界列表 |
 | `ManiaDrawableMissTiming` | M | 公式=N | **Fix-1** 零分配 |
-| `ManiaAutoMissGate` | M | 门前 | **Fix-2** 更早 |
+| `ManiaAutoMissGate` | M | 门前 | **Fix-2** `ShouldDeferAutoMissUpdate` 跳过 `UpdateResult` |
 | `parseReplay` | N | 否 | 待上提 Ez 层 |
 | `ManiaFramedReplayInputHandler` | M | 否 | 待与统一 ReplayFrame 消费合并 |
 | `ManiaScoreHitEventGenerator` | N | 委托 | **重复 API**，= `RunHitEventsAsync` |
@@ -141,8 +142,8 @@ flowchart TB
 
 ### 5.2 列路由（Combo/Duration）
 
-- 按 **本列** 一次 press，看 **前后少量 note**，不按整列扫 max 窗（`CollectOverlappingEntries` 标为过度设计候选）。
-- BMS 晚 KPoor 并进单列局部流程（待办 `route-bms-kpoor-local`）。
+- 按 **本列** 一次 press，看 **overlap 候选**（`CollectOverlappingEntries` 用 register 时缓存的列 max miss 窗，不再每按扫全列）。
+- BMS Drawable 侧 post-Bad KPoor 已进 MLPS；Session 侧仍用 `BmsHitModeJudgement.TryRoutePostBadKPoor`（待与 MLPS 合并）。
 
 ### 5.3 ReplayFrame
 
@@ -198,3 +199,5 @@ flowchart TB
 | 日期 | 说明 |
 |------|------|
 | 2026-07-13 | 批次 2–3：`ManiaJudgeHotPathTrace` 扩展；Fix-1 有界 pressTimes + 零分配 MissTiming |
+| 2026-07-14 | 批次 4：`DrawableHitObject.ShouldDeferAutoMissUpdate` + `ManiaAutoMissGate` 跳过 automiss 热路径 |
+| 2026-07-14 | 批次 5：MLPS M/N 共用；MLC/Session 直调；overlap max 窗边界缓存 |

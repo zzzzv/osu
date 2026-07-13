@@ -31,6 +31,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
         private bool expandBmsMissWindows;
         private HitModeHelper? missWindowHelper;
+        private double cachedMaxMissEarly;
+        private double cachedMaxMissLate;
+        private bool overlapSearchBoundsValid;
 
         public IReadOnlyList<ManiaLaneEntry> Entries => entries;
 
@@ -47,6 +50,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 insertIndex = ~insertIndex;
 
             insertEntryAt(insertIndex, entry);
+            invalidateOverlapSearchBounds();
         }
 
         public void RegisterIfNeeded(DrawableHitObject drawable)
@@ -72,6 +76,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 cursor--;
 
             invalidateSelectPressCache();
+            invalidateOverlapSearchBounds();
         }
 
         public void UnregisterByHitObject(HitObject hitObject)
@@ -125,19 +130,13 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         {
             expandBmsMissWindows = HitModeHelper.IsBMSHitMode(hitMode);
 
-            if (expandBmsMissWindows)
+            missWindowHelper = new HitModeHelper(hitMode)
             {
-                missWindowHelper = new HitModeHelper(hitMode)
-                {
-                    OverallDifficulty = overallDifficulty,
-                    BPM = bpm,
-                };
-            }
-            else
-            {
-                missWindowHelper = null;
-            }
+                OverallDifficulty = overallDifficulty,
+                BPM = bpm,
+            };
 
+            recomputeOverlapSearchBounds();
             invalidateSelectPressCache();
         }
 
@@ -219,23 +218,12 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             if (entries.Count == 0)
                 return result;
 
-            double maxEarly = 0;
-            double maxLate = 0;
+            ensureOverlapSearchBounds();
 
-            foreach (var entry in entries)
-            {
-                if (entry.PressWindows == null)
-                    continue;
-
-                getMissWindows(entry, out double early, out double late);
-                maxEarly = Math.Max(maxEarly, early);
-                maxLate = Math.Max(maxLate, late);
-            }
-
-            if (maxEarly == 0 && maxLate == 0)
+            if (cachedMaxMissEarly == 0 && cachedMaxMissLate == 0)
                 return result;
 
-            double searchLowerBound = time - maxLate;
+            double searchLowerBound = time - cachedMaxMissLate;
             int lo = 0;
             int hi = entries.Count;
 
@@ -249,7 +237,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                     hi = mid;
             }
 
-            double searchUpperBound = time + maxEarly;
+            double searchUpperBound = time + cachedMaxMissEarly;
 
             for (int i = lo; i < entries.Count; i++)
             {
@@ -269,6 +257,43 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
             return result;
         }
+
+        private void ensureOverlapSearchBounds()
+        {
+            if (!overlapSearchBoundsValid)
+                recomputeOverlapSearchBounds();
+        }
+
+        private void recomputeOverlapSearchBounds()
+        {
+            cachedMaxMissEarly = 0;
+            cachedMaxMissLate = 0;
+
+            if (missWindowHelper != null)
+            {
+                cachedMaxMissEarly = missWindowHelper.WindowFor(HitResult.Miss, true);
+                cachedMaxMissLate = missWindowHelper.WindowFor(HitResult.Miss, false);
+
+                if (expandBmsMissWindows)
+                    BmsHitModeJudgement.ExpandMissCollectionWindows(missWindowHelper, 1, ref cachedMaxMissEarly, ref cachedMaxMissLate);
+            }
+            else
+            {
+                foreach (var entry in entries)
+                {
+                    if (entry.PressWindows == null)
+                        continue;
+
+                    getMissWindows(entry, out double early, out double late);
+                    cachedMaxMissEarly = Math.Max(cachedMaxMissEarly, early);
+                    cachedMaxMissLate = Math.Max(cachedMaxMissLate, late);
+                }
+            }
+
+            overlapSearchBoundsValid = true;
+        }
+
+        private void invalidateOverlapSearchBounds() => overlapSearchBoundsValid = false;
 
         /// <summary>
         /// 按 JudgePrecedence 选择本列 press 目标（含 BMS post-Bad KPoor）。
@@ -296,90 +321,22 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
         private ManiaLaneEntry? selectPressEntryCore(double time, EzEnumJudgePrecedence precedence, bool allowBmsFallbackToEarliest, bool poorEnabled)
         {
-            if (allowBmsFallbackToEarliest && poorEnabled && trySelectPostBadEntry(time, out var postBad))
-                return postBad;
+            IReadOnlyList<ManiaLaneEntry> overlapping = precedence == EzEnumJudgePrecedence.Earliest
+                ? Array.Empty<ManiaLaneEntry>()
+                : CollectOverlappingEntries(time);
 
-            if (precedence == EzEnumJudgePrecedence.Earliest)
-            {
-                if (cursor >= entries.Count)
-                    return null;
-
-                var entry = entries[cursor];
-
-                if (entry.IsPressJudged || !isWithinMissWindow(entry, time))
-                    return null;
-
-                if (!IsHittableEarliestIndex(cursor, time))
-                    return null;
-
-                return entry;
-            }
-
-            var overlapping = CollectOverlappingEntries(time);
-
-            if (overlapping.Count == 0)
-                return null;
-
-            if (overlapping.Count == 1)
-                return overlapping[0];
-
-            overlapping.Sort((a, b) => a.StartTime.CompareTo(b.StartTime));
-
-            bool combo = precedence == EzEnumJudgePrecedence.Combo;
-
-            var picked = OrderedHitPolicyHelper.SelectFold(
-                overlapping,
-                e => e.IsPressJudged,
-                e => e.StartTime,
-                e => e.PressWindows,
+            return ManiaLanePressSelector.SelectDrawablePressEntry(
+                entries,
+                cursor,
                 time,
-                combo);
-
-            if (picked != null)
-                return picked;
-
-            return overlapping[0];
-        }
-
-        private bool trySelectPostBadEntry(double time, out ManiaLaneEntry? selected)
-        {
-            selected = null;
-            ManiaLaneEntry? postBadCandidate = null;
-            double postBadDistance = double.PositiveInfinity;
-
-            foreach (var entry in entries)
-            {
-                if (!isPostBadKPoorRoutable(entry) || !isWithinMissWindow(entry, time))
-                    continue;
-
-                double distance = distanceToNonBadWindow(entry.RoutedObject, time);
-
-                if (postBadCandidate == null || distance < postBadDistance
-                                             || (distance == postBadDistance && entry.StartTime < postBadCandidate.StartTime))
-                {
-                    postBadCandidate = entry;
-                    postBadDistance = distance;
-                }
-            }
-
-            if (postBadCandidate == null)
-                return false;
-
-            double unjudgedMin = double.PositiveInfinity;
-
-            foreach (var entry in entries)
-            {
-                if (entry.IsPressJudged || !isWithinMissWindow(entry, time))
-                    continue;
-
-                unjudgedMin = Math.Min(unjudgedMin, distanceToNonBadWindow(entry.RoutedObject, time));
-            }
-
-            if (postBadDistance > unjudgedMin || postBadCandidate.BmsRoute.HasLateKPoor)
-                return false;
-
-            selected = postBadCandidate;
-            return true;
+                precedence,
+                allowBmsFallbackToEarliest,
+                poorEnabled,
+                overlapping,
+                IsHittableEarliestIndex,
+                isWithinMissWindow,
+                isPostBadKPoorRoutable,
+                distanceToNonBadWindow);
         }
 
         private bool isWithinMissWindow(ManiaLaneEntry entry, double time)
