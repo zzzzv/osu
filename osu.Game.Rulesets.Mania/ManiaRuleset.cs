@@ -458,14 +458,10 @@ namespace osu.Game.Rulesets.Mania
         }
 
         public override IEnumerable<HitResult> GetValidHitResults()
-        {
-            return HitModeHelper.GetHitModeValidHitResults();
-        }
+            => getValidHitResultsForDisplay(resolveLiveDisplayHitMode(null), resolveLiveDisplayHealthMode(null));
 
         public override IEnumerable<HitResult> GetValidHitResults(ScoreInfo? score)
-        {
-            return HitModeHelper.GetHitModeValidHitResults(resolveDisplayHitMode(score));
-        }
+            => getValidHitResultsForDisplay(resolveLiveDisplayHitMode(score), resolveLiveDisplayHealthMode(score));
 
         public override LocalisableString GetDisplayNameForHitResult(HitResult result)
         {
@@ -474,16 +470,34 @@ namespace osu.Game.Rulesets.Mania
         }
 
         public override LocalisableString GetDisplayNameForHitResult(HitResult result, ScoreInfo? score)
-        {
-            return result.GetHitModeDisplayName(resolveDisplayHitMode(score));
-        }
+            => result.GetHitModeDisplayName(resolveLiveDisplayHitMode(score));
 
-        private static EzEnumHitMode resolveDisplayHitMode(ScoreInfo? score)
+        private static EzEnumHitMode resolveLiveDisplayHitMode(ScoreInfo? score)
         {
             if (score != null && score.TryGetManiaGameplayModes(out int hitMode, out _))
                 return (EzEnumHitMode)hitMode;
 
+            if (score == null)
+                return GlobalConfigStore.EzConfig.Get<EzEnumHitMode>(Ez2Setting.ManiaHitMode);
+
             return EzEnumHitMode.Lazer;
+        }
+
+        private static EzEnumHealthMode resolveLiveDisplayHealthMode(ScoreInfo? score)
+        {
+            if (score != null && score.TryGetManiaGameplayModes(out _, out int healthMode))
+                return (EzEnumHealthMode)healthMode;
+
+            if (score == null)
+                return GlobalConfigStore.EzConfig.Get<EzEnumHealthMode>(Ez2Setting.ManiaHealthMode);
+
+            return EzEnumHealthMode.Lazer;
+        }
+
+        private static IEnumerable<HitResult> getValidHitResultsForDisplay(EzEnumHitMode hitMode, EzEnumHealthMode healthMode)
+        {
+            foreach (var result in HitModeHelper.GetHitModeValidHitResults(hitMode))
+                yield return result;
         }
 
         public override StatisticItem[] CreateStatisticsForScore(ScoreInfo score, IBeatmap playableBeatmap) => new[]

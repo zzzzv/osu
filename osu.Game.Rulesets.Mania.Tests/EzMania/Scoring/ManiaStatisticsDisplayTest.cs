@@ -49,6 +49,21 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.Scoring
             Assert.That(displayed, Does.Contain(HitResult.Ok));
         }
 
+        [Test]
+        public void TestGlobalBmsHitModeIncludesKpoorInHitResultsForDisplay()
+        {
+            ReplayJudgeTestConfig.ApplyToGlobalConfig(
+                ReplayJudgeTestConfig.Create(EzEnumHitMode.IIDX_HD, EzEnumHealthMode.IIDX_HD));
+
+            var ruleset = new ManiaRuleset();
+            var displayResults = ruleset.GetHitResultsForDisplay().ToArray();
+
+            Assert.That(displayResults.Select(r => r.result), Does.Contain(HitResult.Poor));
+
+            var poorName = displayResults.First(r => r.result == HitResult.Poor).displayName;
+            Assert.That(poorName.ToString(), Is.EqualTo("KPoor"));
+        }
+
         private static ScoreInfo createScore(EzEnumHitMode? hitMode, EzEnumHealthMode? healthMode) => new ScoreInfo
         {
             Ruleset = new ManiaRuleset().RulesetInfo,
