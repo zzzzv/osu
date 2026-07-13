@@ -15,6 +15,7 @@ using osu.Game.Audio;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.Rulesets.Mania.EzMania.Helper;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
+using osu.Game.Rulesets.Objects;
 using osu.Game.Rulesets.Objects.Drawables;
 using osu.Game.Rulesets.Scoring;
 using osu.Game.Rulesets.UI.Scrolling;
@@ -137,6 +138,15 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
                     this.FadeOut();
                     break;
             }
+        }
+
+        protected override bool ShouldDeferAutoMissUpdate()
+        {
+            if (Judged)
+                return true;
+
+            double timeOffset = Time.Current - HitObject.GetEndTime();
+            return !ManiaAutoMissGate.ShouldEvaluateAutoMiss(HitObject, timeOffset);
         }
 
         /// <summary>

@@ -734,8 +734,16 @@ namespace osu.Game.Rulesets.Objects.Drawables
         {
             base.UpdateAfterChildren();
 
+            if (ShouldDeferAutoMissUpdate())
+                return;
+
             UpdateResult(false);
         }
+
+        /// <summary>
+        /// When true, skip the per-frame <see cref="UpdateResult"/> automiss pass (ruleset-specific early gate).
+        /// </summary>
+        protected virtual bool ShouldDeferAutoMissUpdate() => false;
 
         /// <summary>
         /// An offset prior to the start time of <see cref="HitObject"/> at which this <see cref="DrawableHitObject"/> may begin displaying contents.
