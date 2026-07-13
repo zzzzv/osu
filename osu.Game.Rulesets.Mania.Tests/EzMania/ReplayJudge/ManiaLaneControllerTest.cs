@@ -8,6 +8,7 @@ using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
 using osu.Game.Rulesets.Mania.Objects;
 using osu.Game.Rulesets.Mania.Objects.Drawables;
 using osu.Game.Rulesets.Mania.Scoring;
+using osu.Game.Rulesets.Scoring;
 
 namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
 {
@@ -66,7 +67,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
                 pressTime,
                 comboAlgorithm: true);
 
-            var selected = controller.SelectPressEntry(pressTime, EzEnumJudgePrecedence.Combo, allowBmsFallbackToEarliest: false);
+            var selected = controller.SelectPressEntry(pressTime, EzEnumJudgePrecedence.Combo, allowBmsFallbackToEarliest: false, poorEnabled: false);
 
             Assert.That(selected, Is.SameAs(expected));
         }
@@ -91,9 +92,27 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
                 pressTime,
                 comboAlgorithm: false);
 
-            var selected = controller.SelectPressEntry(pressTime, EzEnumJudgePrecedence.Duration, allowBmsFallbackToEarliest: false);
+            var selected = controller.SelectPressEntry(pressTime, EzEnumJudgePrecedence.Duration, allowBmsFallbackToEarliest: false, poorEnabled: false);
 
             Assert.That(selected, Is.SameAs(expected));
+        }
+
+        [Test]
+        public void TestCollectOverlappingEntriesExpandsWindowsForBms()
+        {
+            var note = createBmsNote(10_000);
+            var windows = (ManiaHitWindows)note.HitObject.HitWindows!;
+            double missLate = windows.WindowFor(HitResult.Miss, false);
+            double pressTime = note.HitObject.StartTime + missLate + 50;
+
+            var unconfigured = new ManiaLaneController();
+            unconfigured.Register(note);
+            Assert.That(unconfigured.CollectOverlappingEntries(pressTime), Is.Empty);
+
+            var controller = new ManiaLaneController();
+            controller.Register(createBmsNote(10_000));
+            controller.ConfigureMissCollection(EzEnumHitMode.IIDX_HD, overallDifficulty: 5);
+            Assert.That(controller.CollectOverlappingEntries(pressTime), Has.Count.EqualTo(1));
         }
 
         private static DrawableNote createNote(double startTime)
@@ -102,6 +121,19 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             {
                 StartTime = startTime,
                 HitWindows = new ManiaHitWindows(EzEnumHitMode.Lazer)
+            };
+
+            var drawable = new DrawableNote();
+            drawable.Apply(note);
+            return drawable;
+        }
+
+        private static DrawableNote createBmsNote(double startTime)
+        {
+            var note = new Note
+            {
+                StartTime = startTime,
+                HitWindows = new ManiaHitWindows(EzEnumHitMode.IIDX_HD)
             };
 
             var drawable = new DrawableNote();

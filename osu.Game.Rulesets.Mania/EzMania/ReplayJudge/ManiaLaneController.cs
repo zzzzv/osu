@@ -26,7 +26,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         private double lastSelectPressTime = double.NaN;
         private EzEnumJudgePrecedence lastSelectPrecedence;
         private bool lastSelectBmsMode;
+        private bool lastSelectPoorEnabled;
         private ManiaLaneEntry? lastSelectResult;
+
+        private bool expandBmsMissWindows;
+        private HitModeHelper? missWindowHelper;
 
         public IReadOnlyList<ManiaLaneEntry> Entries => entries;
 
@@ -117,12 +121,32 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         public bool IsHittableEarliestIndex(int index, double time)
             => IsHittableEarliest(entries, index, time, static e => e.IsPressJudged, static e => e.StartTime);
 
-        public bool IsHittable(DrawableHitObject drawable, double time, EzEnumJudgePrecedence precedence, bool bmsMode)
+        public void ConfigureMissCollection(EzEnumHitMode hitMode, double overallDifficulty, double bpm = 180)
+        {
+            expandBmsMissWindows = HitModeHelper.IsBMSHitMode(hitMode);
+
+            if (expandBmsMissWindows)
+            {
+                missWindowHelper = new HitModeHelper(hitMode)
+                {
+                    OverallDifficulty = overallDifficulty,
+                    BPM = bpm,
+                };
+            }
+            else
+            {
+                missWindowHelper = null;
+            }
+
+            invalidateSelectPressCache();
+        }
+
+        public bool IsHittable(DrawableHitObject drawable, double time, EzEnumJudgePrecedence precedence, bool bmsMode, bool poorEnabled)
         {
             if (precedence == EzEnumJudgePrecedence.Earliest)
                 return IsHittableEarliest(drawable, time);
 
-            var entry = selectPressEntry(time, precedence, bmsMode);
+            var entry = selectPressEntry(time, precedence, bmsMode, poorEnabled);
 
             if (entry == null)
                 return true;
@@ -203,8 +227,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 if (entry.PressWindows == null)
                     continue;
 
-                maxEarly = Math.Max(maxEarly, entry.PressWindows.WindowFor(HitResult.Miss, true));
-                maxLate = Math.Max(maxLate, entry.PressWindows.WindowFor(HitResult.Miss, false));
+                getMissWindows(entry, out double early, out double late);
+                maxEarly = Math.Max(maxEarly, early);
+                maxLate = Math.Max(maxLate, late);
             }
 
             if (maxEarly == 0 && maxLate == 0)
@@ -236,8 +261,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 if (entry.IsPressJudged || entry.PressWindows == null)
                     continue;
 
-                double early = entry.PressWindows.WindowFor(HitResult.Miss, true);
-                double late = entry.PressWindows.WindowFor(HitResult.Miss, false);
+                getMissWindows(entry, out double early, out double late);
 
                 if (time >= entry.StartTime - early && time <= entry.StartTime + late)
                     result.Add(entry);
@@ -249,14 +273,15 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         /// <summary>
         /// 按 JudgePrecedence 选择本列 press 目标（含 BMS post-Bad KPoor）。
         /// </summary>
-        public ManiaLaneEntry? SelectPressEntry(double time, EzEnumJudgePrecedence precedence, bool allowBmsFallbackToEarliest)
-            => selectPressEntry(time, precedence, allowBmsFallbackToEarliest);
+        public ManiaLaneEntry? SelectPressEntry(double time, EzEnumJudgePrecedence precedence, bool allowBmsFallbackToEarliest, bool poorEnabled)
+            => selectPressEntry(time, precedence, allowBmsFallbackToEarliest, poorEnabled);
 
-        private ManiaLaneEntry? selectPressEntry(double time, EzEnumJudgePrecedence precedence, bool allowBmsFallbackToEarliest)
+        private ManiaLaneEntry? selectPressEntry(double time, EzEnumJudgePrecedence precedence, bool allowBmsFallbackToEarliest, bool poorEnabled)
         {
             if (time == lastSelectPressTime
                 && precedence == lastSelectPrecedence
-                && allowBmsFallbackToEarliest == lastSelectBmsMode)
+                && allowBmsFallbackToEarliest == lastSelectBmsMode
+                && poorEnabled == lastSelectPoorEnabled)
             {
                 return lastSelectResult;
             }
@@ -264,13 +289,14 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             lastSelectPressTime = time;
             lastSelectPrecedence = precedence;
             lastSelectBmsMode = allowBmsFallbackToEarliest;
-            lastSelectResult = selectPressEntryCore(time, precedence, allowBmsFallbackToEarliest);
+            lastSelectPoorEnabled = poorEnabled;
+            lastSelectResult = selectPressEntryCore(time, precedence, allowBmsFallbackToEarliest, poorEnabled);
             return lastSelectResult;
         }
 
-        private ManiaLaneEntry? selectPressEntryCore(double time, EzEnumJudgePrecedence precedence, bool allowBmsFallbackToEarliest)
+        private ManiaLaneEntry? selectPressEntryCore(double time, EzEnumJudgePrecedence precedence, bool allowBmsFallbackToEarliest, bool poorEnabled)
         {
-            if (allowBmsFallbackToEarliest && trySelectPostBadEntry(time, out var postBad))
+            if (allowBmsFallbackToEarliest && poorEnabled && trySelectPostBadEntry(time, out var postBad))
                 return postBad;
 
             if (precedence == EzEnumJudgePrecedence.Earliest)
@@ -356,14 +382,22 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             return true;
         }
 
-        private static bool isWithinMissWindow(ManiaLaneEntry entry, double time)
+        private bool isWithinMissWindow(ManiaLaneEntry entry, double time)
         {
             if (entry.PressWindows == null)
                 return false;
 
-            double early = entry.PressWindows.WindowFor(HitResult.Miss, true);
-            double late = entry.PressWindows.WindowFor(HitResult.Miss, false);
+            getMissWindows(entry, out double early, out double late);
             return time >= entry.StartTime - early && time <= entry.StartTime + late;
+        }
+
+        private void getMissWindows(ManiaLaneEntry entry, out double early, out double late)
+        {
+            early = entry.PressWindows!.WindowFor(HitResult.Miss, true);
+            late = entry.PressWindows.WindowFor(HitResult.Miss, false);
+
+            if (expandBmsMissWindows && missWindowHelper != null)
+                BmsHitModeJudgement.ExpandMissCollectionWindows(missWindowHelper, 1, ref early, ref late);
         }
 
         private static bool isPostBadKPoorRoutable(ManiaLaneEntry entry)

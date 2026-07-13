@@ -50,12 +50,12 @@ namespace osu.Game.Rulesets.Mania.UI
         /// <summary>
         /// 列级按键路由：选出本列唯一 press 目标（Combo / Duration / Earliest + BMS post-Bad）。
         /// </summary>
-        public bool TryRoutePress(double time, out DrawableHitObject? target)
+        public bool TryRoutePress(double time, EzEnumJudgePrecedence precedence, bool bmsMode, bool poorEnabled, out DrawableHitObject? target)
         {
             columnRoutedPressTarget = null;
             target = null;
 
-            var entry = laneController.SelectPressEntry(time, judgePrecedence, bmsMode);
+            var entry = laneController.SelectPressEntry(time, precedence, bmsMode, poorEnabled);
 
             if (entry == null)
                 return false;
@@ -95,15 +95,15 @@ namespace osu.Game.Rulesets.Mania.UI
             }
         }
 
-        public bool IsHittable(DrawableHitObject hitObject, double time)
+        public bool IsHittable(DrawableHitObject hitObject, double time, EzEnumJudgePrecedence precedence, bool bmsMode, bool poorEnabled)
         {
             ManiaJudgeHotPathTrace.RecordIsHittable();
 
             if (hitObject is DrawableHoldNoteTail)
-                return helper.IsHittableWithPrecedence(hitObject, time);
+                return helper.IsHittableWithPrecedence(hitObject, time, precedence, bmsMode, poorEnabled);
 
-            if (judgePrecedence != EzEnumJudgePrecedence.Earliest)
-                return helper.IsHittableWithPrecedence(hitObject, time);
+            if (precedence != EzEnumJudgePrecedence.Earliest)
+                return helper.IsHittableWithPrecedence(hitObject, time, precedence, bmsMode, poorEnabled);
 
             return laneController.IsHittableEarliest(hitObject, time);
         }

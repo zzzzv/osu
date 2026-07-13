@@ -40,12 +40,20 @@ namespace osu.Game.Rulesets.Mania.EzMania.Helper
         /// <param name="hitObject">要检查的 <see cref="DrawableHitObject"/>。</param>
         /// <param name="time">要检查的时间点。</param>
         /// <returns><paramref name="hitObject"/> 是否可以在给定的 <paramref name="time"/> 被击中。</returns>
+        public bool IsHittableWithPrecedence(DrawableHitObject hitObject, double time, EzEnumJudgePrecedence judgePrecedence, bool bmsMode, bool poorEnabled)
+        {
+            if (laneController != null && hitObject is not DrawableHoldNoteTail)
+                return laneController.IsHittable(hitObject, time, judgePrecedence, bmsMode, poorEnabled);
+
+            return IsHittableWithPrecedence(hitObject, time);
+        }
+
         public bool IsHittableWithPrecedence(DrawableHitObject hitObject, double time)
         {
             var judgePrecedence = ezConfig.Get<EzEnumJudgePrecedence>(Ez2Setting.JudgePrecedence);
 
             if (laneController != null && hitObject is not DrawableHoldNoteTail)
-                return laneController.IsHittable(hitObject, time, judgePrecedence, isBMS());
+                return laneController.IsHittable(hitObject, time, judgePrecedence, isBMS(), isKPoorEnabled());
 
             if (isBMS())
             {
@@ -286,10 +294,12 @@ namespace osu.Game.Rulesets.Mania.EzMania.Helper
         }
 
         private bool isBMS()
-        {
-            var mode = ezConfig.Get<EzEnumHitMode>(Ez2Setting.ManiaHitMode);
-            return HitModeHelper.IsBMSHitMode(mode);
-        }
+            => HitModeHelper.IsBMSHitMode(ezConfig.Get<EzEnumHitMode>(Ez2Setting.ManiaHitMode));
+
+        private bool isKPoorEnabled()
+            => HealthModeHelper.ComputeKPoorEnabled(
+                ezConfig.Get<EzEnumHealthMode>(Ez2Setting.ManiaHealthMode),
+                ezConfig.Get<bool>(Ez2Setting.BmsPoorHitResultEnable));
 
         public static DrawableHitObject? SelectFoldDrawable(IReadOnlyList<DrawableHitObject> sortedByStartTime, double pressTime, bool comboAlgorithm)
         {

@@ -60,6 +60,8 @@ namespace osu.Game.Rulesets.Mania.UI
         private OrderedHitPolicy hitPolicy = null!;
         private EzEnumJudgePrecedence judgePrecedence;
         private bool bmsMode;
+        private EzEnumHitMode? configuredMissCollectionHitMode;
+
         public Container UnderlayElements => HitObjectArea.UnderlayElements;
 
         private GameplaySampleTriggerSource sampleTriggerSource = null!;
@@ -297,7 +299,8 @@ namespace osu.Game.Rulesets.Mania.UI
             maniaObject.CheckHittable = (d, time) =>
             {
                 hitPolicy.EnsureRegistered(d);
-                return hitPolicy.IsHittable(d, time);
+                resolvePressRouting(out var precedence, out var bms, out var poorEnabled);
+                return hitPolicy.IsHittable(d, time, precedence, bms, poorEnabled);
             };
             maniaObject.ShouldSkipColumnRoutedPress = hitPolicy.ShouldSkipDrawablePress;
         }
@@ -356,7 +359,9 @@ namespace osu.Game.Rulesets.Mania.UI
                 if (drawableRuleset.JudgementRound is { IsO2Jam: true } round)
                     round.NotifyO2InputAt(Time.Current);
 
-                if (hitPolicy.TryRoutePress(Time.Current, out var target))
+                resolvePressRouting(out var precedence, out var bms, out var poorEnabled);
+
+                if (hitPolicy.TryRoutePress(Time.Current, precedence, bms, poorEnabled, out var target))
                     routed = hitPolicy.ApplyRoutedPress(target!, Time.Current, e);
             }
 
@@ -385,6 +390,36 @@ namespace osu.Game.Rulesets.Mania.UI
                 ManiaEzDrawableJudgement.TryColumnHoldTailRelease(activeHold, Time.Current, round);
 
             LaneController.SetActiveHold(null);
+        }
+
+        private void resolvePressRouting(out EzEnumJudgePrecedence precedence, out bool bms, out bool poorEnabled)
+        {
+            var round = drawableRuleset?.JudgementRound;
+
+            if (round != null)
+            {
+                precedence = round.JudgePrecedence;
+                bms = HitModeHelper.IsBMSHitMode(round.Environment.ManiaHitMode);
+                poorEnabled = round.PoorEnabled;
+                ensureLaneConfigured(round);
+                return;
+            }
+
+            precedence = judgePrecedence;
+            bms = bmsMode;
+            poorEnabled = false;
+        }
+
+        private void ensureLaneConfigured(ManiaJudgementRound round)
+        {
+            var hitMode = round.Environment.ManiaHitMode;
+
+            if (configuredMissCollectionHitMode == hitMode)
+                return;
+
+            configuredMissCollectionHitMode = hitMode;
+            double overallDifficulty = drawableRuleset?.Beatmap.Difficulty.OverallDifficulty ?? 5;
+            LaneController.ConfigureMissCollection(hitMode, overallDifficulty);
         }
 
         public override bool ReceivePositionalInputAt(Vector2 screenSpacePos)
