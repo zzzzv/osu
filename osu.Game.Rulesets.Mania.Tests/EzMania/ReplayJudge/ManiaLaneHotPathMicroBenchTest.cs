@@ -26,8 +26,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             Assert.That(result.FrameCount, Is.EqualTo(2000));
             Assert.That(result.PressCount, Is.GreaterThan(0));
             Assert.That(result.ElapsedMilliseconds, Is.LessThan(5_000), result.ToString());
-            Assert.That(result.AutoMissGateTrueCount, Is.LessThan(result.AutoMissGateCalls),
-                "Empty Hold + miss-early should skip majority of gate evaluates");
+            Assert.That(result.AutoMissQueuePolls, Is.EqualTo(result.FrameCount * result.Keys));
         }
 
         [Test]
@@ -104,14 +103,13 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
         }
 
         [Test]
-        public void TestEmptyHoldBodyNeverEvaluatesAutoMiss()
+        public void TestFutureDeadlinesNeverVisitAutoMissCandidate()
         {
-            var result = ManiaLaneHotPathWorkload.RunEmptyHoldDeferGuard();
+            var result = ManiaLaneHotPathWorkload.RunFutureDeadlineGuard();
             TestContext.WriteLine(result.ToString());
 
-            Assert.That(result.AutoMissGateCalls, Is.GreaterThan(0));
-            Assert.That(result.AutoMissGateTrueCount, Is.EqualTo(0),
-                "Empty Hold must stay deferred for entire body (timeOffset < 0)");
+            Assert.That(result.AutoMissQueuePolls, Is.GreaterThan(0));
+            Assert.That(result.AutoMissDueVisits, Is.EqualTo(0));
             Assert.That(result.AllocatedBytes, Is.LessThan(64_000), result.ToString());
         }
 

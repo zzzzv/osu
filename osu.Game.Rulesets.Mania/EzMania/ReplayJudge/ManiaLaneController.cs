@@ -115,8 +115,10 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         /// <summary>
         /// 仅检查已经越过 late miss 边界的对象。远期存活对象不再逐帧参与 Drawable 更新。
         /// </summary>
-        public void ProcessAutoMiss(double time)
+        public int ProcessAutoMiss(double time, bool evaluateResults = true)
         {
+            int dueCount = 0;
+
             for (int i = autoMissCursor; i < autoMissEntries.Count; i++)
             {
                 var entry = autoMissEntries[i];
@@ -125,11 +127,18 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                     break;
 
                 if (!entry.Drawable.Judged)
-                    entry.Drawable.EvaluateColumnAutoMiss();
+                {
+                    dueCount++;
+
+                    if (evaluateResults)
+                        entry.Drawable.EvaluateColumnAutoMiss();
+                }
             }
 
             while (autoMissCursor < autoMissEntries.Count && autoMissEntries[autoMissCursor].Drawable.Judged)
                 autoMissCursor++;
+
+            return dueCount;
         }
 
         private void registerAutoMiss(DrawableHitObject drawable)
@@ -152,13 +161,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             if (autoMissByDrawable.ContainsKey(drawable))
                 return;
 
-            double evaluationStartTime;
+            double evaluationStartTime = GetAutoMissEvaluationTime(drawable);
 
-            if (drawable.HitObject.HitWindows is ManiaHitWindows windows)
-                evaluationStartTime = drawable.HitObject.GetEndTime() + windows.MissLateWindow;
-            else if (drawable is DrawableHoldNote)
-                evaluationStartTime = drawable.HitObject.GetEndTime();
-            else
+            if (!double.IsFinite(evaluationStartTime))
             {
                 // Body and other Empty-window auxiliaries are finalized by their owner.
                 drawable.ColumnSchedulesAutoMiss = true;
@@ -210,6 +215,17 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
             if (index < autoMissCursor)
                 autoMissCursor--;
+        }
+
+        internal static double GetAutoMissEvaluationTime(DrawableManiaHitObject drawable)
+        {
+            if (drawable.HitObject.HitWindows is ManiaHitWindows windows)
+                return drawable.HitObject.GetEndTime() + windows.MissLateWindow;
+
+            if (drawable is DrawableHoldNote)
+                return drawable.HitObject.GetEndTime();
+
+            return double.PositiveInfinity;
         }
 
         public void UnregisterByHitObject(HitObject hitObject)
