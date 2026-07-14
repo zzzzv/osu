@@ -58,7 +58,8 @@ namespace osu.Game.Rulesets.Mania.UI
         internal readonly Container TopLevelContainer = new Container { RelativeSizeAxes = Axes.Both };
 
         private DrawablePool<PoolableHitExplosion> hitExplosionPool = null!;
-        private OrderedHitPolicy hitPolicy = null!;
+        private OrderedHitPolicyHelper hitPolicyHelper = null!;
+        private DrawableHitObject? columnRoutedPressTarget;
         private EzEnumJudgePrecedence judgePrecedence;
         private bool bmsMode;
         private EzEnumHitMode? configuredMissCollectionHitMode;
@@ -182,9 +183,9 @@ namespace osu.Game.Rulesets.Mania.UI
             => new LaneTrackingScrollingHitObjectContainer(this);
 
         internal void RegisterLaneDrawable(DrawableHitObject drawable)
-            => hitPolicy.RegisterDrawable(drawable, drawableRuleset?.ColumnRoutesInput == true);
+            => LaneController.Register(drawable, drawableRuleset?.ColumnRoutesInput == true);
 
-        internal void UnregisterLaneDrawable(DrawableHitObject drawable) => hitPolicy.UnregisterDrawable(drawable);
+        internal void UnregisterLaneDrawable(DrawableHitObject drawable) => LaneController.Unregister(drawable);
 
         [BackgroundDependencyLoader]
         private void load(GameHost host, ManiaRulesetConfigManager? rulesetConfig, StageDefinition stageDefinition)
@@ -198,7 +199,7 @@ namespace osu.Game.Rulesets.Mania.UI
             bmsMode = HitModeHelper.IsBMSHitMode(hitMode);
 
             LaneController = new ManiaLaneController();
-            hitPolicy = new OrderedHitPolicy(HitObjectContainer, judgePrecedence, LaneController, bmsMode);
+            hitPolicyHelper = new OrderedHitPolicyHelper(HitObjectContainer, LaneController);
 
             EzNoteTypeBindable = ezConfig.GetColumnTypeBindable(KeyMode, Index);
             EzNoteSizeBindable = ezFactory.GetNoteSizeBindable(KeyMode, Index);
@@ -347,11 +348,11 @@ namespace osu.Game.Rulesets.Mania.UI
             maniaObject.AccentColour.BindTo(AccentColour);
             maniaObject.CheckHittable = (d, time) =>
             {
-                hitPolicy.EnsureRegistered(d, drawableRuleset?.ColumnRoutesInput == true);
+                LaneController.RegisterIfNeeded(d, drawableRuleset?.ColumnRoutesInput == true);
                 resolvePressRouting(out var precedence, out var bms, out var poorEnabled);
-                return hitPolicy.IsHittable(d, time, precedence, bms, poorEnabled);
+                return isHittable(d, time, precedence, bms, poorEnabled);
             };
-            maniaObject.ShouldSkipColumnRoutedPress = hitPolicy.ShouldSkipDrawablePress;
+            maniaObject.ShouldSkipColumnRoutedPress = _ => columnRoutedPressTarget != null;
         }
 
         private sealed partial class LaneTrackingScrollingHitObjectContainer : ScrollingHitObjectContainer
@@ -379,14 +380,67 @@ namespace osu.Game.Rulesets.Mania.UI
         internal void OnNewResult(DrawableHitObject judgedObject, JudgementResult result)
         {
             if (result.IsHit)
-                hitPolicy.HandleHit(judgedObject);
+                handleHit(judgedObject);
             else
-                hitPolicy.NotifyJudged(judgedObject);
+                LaneController.NotifyJudged(judgedObject);
 
             if (!result.IsHit || !judgedObject.DisplayResult || !DisplayJudgements.Value)
                 return;
 
             HitObjectArea.Explosions.Add(hitExplosionPool.Get(e => e.Apply(result)));
+        }
+
+        private bool isHittable(DrawableHitObject drawable, double time, EzEnumJudgePrecedence precedence, bool bms, bool poorEnabled)
+        {
+            ManiaJudgeHotPathTrace.RecordIsHittable();
+
+            if (drawable is DrawableHoldNoteTail)
+                return hitPolicyHelper.IsHittableWithPrecedence(drawable, time, precedence, bms, poorEnabled);
+
+            return LaneController.IsHittable(drawable, time, precedence, bms, poorEnabled);
+        }
+
+        private bool applyRoutedPress(DrawableHitObject target, double time, KeyBindingPressEvent<ManiaAction> e)
+        {
+            switch (target)
+            {
+                case DrawableNote note when ManiaEzDrawableJudgement.TryBmsOnPressed(note, e):
+                    columnRoutedPressTarget = target;
+                    return true;
+
+                case DrawableNote note:
+                    if (!note.ApplyColumnRoutedPress())
+                        return false;
+
+                    columnRoutedPressTarget = target;
+                    return true;
+
+                case DrawableHoldNote hold:
+                    if (!hold.TryBeginHoldPressFromColumn(time))
+                        return false;
+
+                    LaneController.SetActiveHold(hold);
+                    columnRoutedPressTarget = target;
+                    return true;
+
+                default:
+                    return false;
+            }
+        }
+
+        private void handleHit(DrawableHitObject hitObject)
+        {
+            double judgementTime = hitObject.Result.TimeAbsolute;
+
+            foreach (var entry in LaneController.EnumerateForceMissBefore(hitObject.HitObject.StartTime))
+            {
+                if (OrderedHitPolicyHelper.IsUserTriggerJudgeableNow(entry.RoutedObject, judgementTime))
+                    continue;
+
+                ((DrawableManiaHitObject)entry.RoutedObject).MissForcefully();
+            }
+
+            LaneController.NotifyJudged(hitObject);
         }
 
         public bool OnPressed(KeyBindingPressEvent<ManiaAction> e)
@@ -405,13 +459,17 @@ namespace osu.Game.Rulesets.Mania.UI
 
             if (drawableRuleset?.ColumnRoutesInput == true)
             {
+                columnRoutedPressTarget = null;
+
                 if (drawableRuleset.JudgementRound is { IsO2Jam: true } round)
                     round.NotifyO2InputAt(Time.Current);
 
                 resolvePressRouting(out var precedence, out var bms, out var poorEnabled);
 
-                if (hitPolicy.TryRoutePress(Time.Current, precedence, bms, poorEnabled, out var target))
-                    routed = hitPolicy.ApplyRoutedPress(target!, Time.Current, e);
+                var entry = LaneController.SelectPressEntry(Time.Current, precedence, bms, poorEnabled);
+
+                if (entry != null)
+                    routed = applyRoutedPress(entry.RoutedObject, Time.Current, e);
             }
 
             if (keySoundPreviewMode != KeySoundPreviewMode.AutoPlayPlus)
