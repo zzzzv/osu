@@ -1,6 +1,7 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using osu.Game.Beatmaps;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Scoring;
 using osu.Game.Rulesets.Mania.EzMania.Diagnostics;
@@ -31,6 +32,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
         public bool IsO2Jam { get; }
 
+        private readonly IBeatmap? beatmap;
         private long o2AutoMissFrame = -1;
         private double o2AutoMissBpm;
 
@@ -39,7 +41,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             IManiaHitModeJudgement? strategy,
             bool poorEnabled,
             bool pillModeEnabled,
-            ManiaReplayJudgementState mutableState)
+            ManiaReplayJudgementState mutableState,
+            IBeatmap? beatmap)
         {
             Environment = environment;
             Strategy = strategy;
@@ -48,9 +51,10 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             JudgePrecedence = environment.JudgePrecedence;
             MutableState = mutableState;
             IsO2Jam = environment.ManiaHitMode == EzEnumHitMode.O2Jam;
+            this.beatmap = beatmap;
         }
 
-        public static ManiaJudgementRound Create(GameplayEnvironment environment)
+        public static ManiaJudgementRound Create(GameplayEnvironment environment, IBeatmap? beatmap = null)
         {
             var strategy = ManiaJudgementRegistry.GetHitModeJudgement(environment.ManiaHitMode);
             bool poorEnabled = HealthModeHelper.ComputeKPoorEnabled(environment.ManiaHealthMode, environment.BmsPoorHitResultEnable);
@@ -61,7 +65,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 strategy,
                 poorEnabled,
                 pillModeEnabled,
-                new ManiaReplayJudgementState());
+                new ManiaReplayJudgementState(),
+                beatmap);
         }
 
         public bool IsEzHitMode => ManiaJudgementRegistry.IsEzHitMode(Environment.ManiaHitMode);
@@ -71,7 +76,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         /// </summary>
         public void NotifyO2InputAt(double time)
         {
-            O2PressBpm = O2HitModeExtension.GetBPMAtTime(time);
+            O2PressBpm = resolveO2Bpm(time);
             ManiaJudgeHotPathTrace.RecordO2BpmLookup();
         }
 
@@ -84,7 +89,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         {
             if (frameStableId != o2AutoMissFrame)
             {
-                o2AutoMissBpm = O2HitModeExtension.GetBPMAtTime(time);
+                o2AutoMissBpm = resolveO2Bpm(time);
                 o2AutoMissFrame = frameStableId;
             }
 
@@ -93,5 +98,14 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
         public static double GetTotalMultiplier(HitWindows hitWindows)
             => hitWindows is ManiaHitWindows mania ? mania.TotalMultiplier : 1;
+
+        private double resolveO2Bpm(double time)
+        {
+            if (beatmap != null)
+                return O2HitModeExtension.SafeBpm(beatmap.ControlPointInfo.TimingPointAt(time).BPM);
+
+            // Detached compatibility only. Live and Session always provide their beatmap.
+            return O2HitModeExtension.GetBPMAtTime(time);
+        }
     }
 }

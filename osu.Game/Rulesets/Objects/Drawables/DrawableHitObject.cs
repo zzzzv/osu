@@ -730,20 +730,18 @@ namespace osu.Game.Rulesets.Objects.Drawables
 
         public override bool UpdateSubTreeMasking() => false;
 
+        /// <summary>
+        /// Whether automiss timing is driven by an owning ruleset scheduler.
+        /// </summary>
+        protected bool AutomissHandledExternally { get; set; }
+
         protected override void UpdateAfterChildren()
         {
             base.UpdateAfterChildren();
 
-            if (ShouldDeferAutoMissUpdate())
-                return;
-
-            UpdateResult(false);
+            if (!AutomissHandledExternally)
+                UpdateResult(false);
         }
-
-        /// <summary>
-        /// When true, skip the per-frame <see cref="UpdateResult"/> automiss pass (ruleset-specific early gate).
-        /// </summary>
-        protected virtual bool ShouldDeferAutoMissUpdate() => false;
 
         /// <summary>
         /// An offset prior to the start time of <see cref="HitObject"/> at which this <see cref="DrawableHitObject"/> may begin displaying contents.

@@ -539,10 +539,12 @@ namespace osu.Game.Rulesets.Mania.Tests
                 const double tolerance = 1e-6;
 
                 if (Math.Abs(currentPlayer.ScoreProcessor.Accuracy.Value - recalculatedScoreInfo.Accuracy) >= tolerance)
-                    return false;
+                    throw new AssertionException(
+                        $"accuracy mismatch: drawable={currentPlayer.ScoreProcessor.Accuracy.Value}, session={recalculatedScoreInfo.Accuracy}");
 
                 if (currentPlayer.ScoreProcessor.TotalScore.Value != recalculatedScoreInfo.TotalScore)
-                    return false;
+                    throw new AssertionException(
+                        $"total score mismatch: drawable={currentPlayer.ScoreProcessor.TotalScore.Value}, session={recalculatedScoreInfo.TotalScore}");
 
                 foreach (var result in Enum.GetValues<HitResult>())
                 {
@@ -550,7 +552,11 @@ namespace osu.Game.Rulesets.Mania.Tests
                         continue;
 
                     if (currentPlayer.ScoreProcessor.Statistics.GetValueOrDefault(result) != recalculatedScoreInfo.Statistics.GetValueOrDefault(result))
-                        return false;
+                    {
+                        throw new AssertionException(
+                            $"{result} mismatch: drawable={currentPlayer.ScoreProcessor.Statistics.GetValueOrDefault(result)}, "
+                            + $"session={recalculatedScoreInfo.Statistics.GetValueOrDefault(result)}");
+                    }
                 }
 
                 return true;

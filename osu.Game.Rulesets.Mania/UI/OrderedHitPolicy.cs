@@ -34,9 +34,9 @@ namespace osu.Game.Rulesets.Mania.UI
             helper = new OrderedHitPolicyHelper(hitObjectContainer, laneController);
         }
 
-        internal void RegisterDrawable(DrawableHitObject drawable) => laneController.Register(drawable);
+        internal void RegisterDrawable(DrawableHitObject drawable, bool scheduleAutoMiss) => laneController.Register(drawable, scheduleAutoMiss);
 
-        internal void EnsureRegistered(DrawableHitObject drawable) => laneController.RegisterIfNeeded(drawable);
+        internal void EnsureRegistered(DrawableHitObject drawable, bool scheduleAutoMiss) => laneController.RegisterIfNeeded(drawable, scheduleAutoMiss);
 
         internal void UnregisterDrawable(DrawableHitObject drawable) => laneController.Unregister(drawable);
 

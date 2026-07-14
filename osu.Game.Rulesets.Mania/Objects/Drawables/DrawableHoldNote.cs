@@ -281,11 +281,14 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
 
         protected override void CheckForResult(bool userTriggered, double timeOffset)
         {
-            if (ManiaEzDrawableJudgement.TryMalodyHoldCheckForResult(this, userTriggered, timeOffset))
-                return;
+            if (UsesEzJudgement)
+            {
+                if (ManiaEzDrawableJudgement.TryMalodyHoldCheckForResult(this, userTriggered, timeOffset))
+                    return;
 
-            if (ManiaEzDrawableJudgement.TryO2HoldCheckForResult(this, userTriggered, timeOffset))
-                return;
+                if (ManiaEzDrawableJudgement.TryO2HoldCheckForResult(this, userTriggered, timeOffset))
+                    return;
+            }
 
             if (Tail.AllJudged)
             {

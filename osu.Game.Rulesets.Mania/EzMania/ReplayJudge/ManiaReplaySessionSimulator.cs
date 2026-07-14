@@ -42,7 +42,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
             bool pillModeEnabled = environment.ManiaHealthMode.ToString().Contains("O2Jam");
             var bms = noteStrategy as BmsHitModeJudgement;
-            var judgementRound = createJudgementRound(environment);
+            var judgementRound = createJudgementRound(environment, beatmap);
 
             var hitWindowHelper = new HitModeHelper(environment.ManiaHitMode)
             {
@@ -279,7 +279,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             }
         }
 
-        private static ManiaJudgementRound createJudgementRound(IGameplayEnvironment environment)
+        private static ManiaJudgementRound createJudgementRound(IGameplayEnvironment environment, IBeatmap beatmap)
         {
             GameplayEnvironment gameplay = environment as GameplayEnvironment ?? new GameplayEnvironment
             {
@@ -290,7 +290,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 BmsPoorHitResultEnable = environment.BmsPoorHitResultEnable,
             };
 
-            return ManiaJudgementRound.Create(gameplay);
+            return ManiaJudgementRound.Create(gameplay, beatmap);
         }
 
         private static bool tryMapNoteEvaluation(ManiaJudgementKernel.NoteEvaluationResult evaluation, out HitResult result)

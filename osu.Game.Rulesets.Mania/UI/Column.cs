@@ -181,7 +181,8 @@ namespace osu.Game.Rulesets.Mania.UI
         protected override ScrollingHitObjectContainer CreateScrollingHitObjectContainer()
             => new LaneTrackingScrollingHitObjectContainer(this);
 
-        internal void RegisterLaneDrawable(DrawableHitObject drawable) => hitPolicy.RegisterDrawable(drawable);
+        internal void RegisterLaneDrawable(DrawableHitObject drawable)
+            => hitPolicy.RegisterDrawable(drawable, drawableRuleset?.ColumnRoutesInput == true);
 
         internal void UnregisterLaneDrawable(DrawableHitObject drawable) => hitPolicy.UnregisterDrawable(drawable);
 
@@ -270,6 +271,8 @@ namespace osu.Game.Rulesets.Mania.UI
         protected override void LoadComplete()
         {
             base.LoadComplete();
+
+            drawableRuleset ??= this.FindClosestParent<DrawableManiaRuleset>();
             NewResult += OnNewResult;
 
             onNoteDrawableChangedHandler = () => NoteSetChanged?.Invoke();
@@ -287,6 +290,22 @@ namespace osu.Game.Rulesets.Mania.UI
 
             onNoteColourChangedHandler = () => NoteColourChanged?.Invoke();
             ezFactory.OnNoteColourChanged += onNoteColourChangedHandler;
+        }
+
+        protected override void Update()
+        {
+            if (drawableRuleset?.ColumnRoutesInput == true)
+                LaneController.EnableAutoMissScheduling();
+
+            base.Update();
+        }
+
+        protected override void UpdateAfterChildren()
+        {
+            base.UpdateAfterChildren();
+
+            if (drawableRuleset?.ColumnRoutesInput == true)
+                LaneController.ProcessAutoMiss(Time.Current);
         }
 
         protected override void Dispose(bool isDisposing)
@@ -328,7 +347,7 @@ namespace osu.Game.Rulesets.Mania.UI
             maniaObject.AccentColour.BindTo(AccentColour);
             maniaObject.CheckHittable = (d, time) =>
             {
-                hitPolicy.EnsureRegistered(d);
+                hitPolicy.EnsureRegistered(d, drawableRuleset?.ColumnRoutesInput == true);
                 resolvePressRouting(out var precedence, out var bms, out var poorEnabled);
                 return hitPolicy.IsHittable(d, time, precedence, bms, poorEnabled);
             };

@@ -87,7 +87,7 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
 
         protected override void CheckForResult(bool userTriggered, double timeOffset)
         {
-            if (ManiaEzDrawableJudgement.TryHitModeCheckForResult(this, userTriggered, timeOffset))
+            if (UsesEzJudgement && ManiaEzDrawableJudgement.TryHitModeCheckForResult(this, userTriggered, timeOffset))
                 return;
 
             Debug.Assert(HitObject.HitWindows != null);

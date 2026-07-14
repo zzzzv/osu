@@ -60,7 +60,7 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
 
         protected override void CheckForResult(bool userTriggered, double timeOffset)
         {
-            if (ManiaEzDrawableJudgement.TryHoldTailCheckForResult(this, userTriggered, timeOffset))
+            if (UsesEzJudgement && ManiaEzDrawableJudgement.TryHoldTailCheckForResult(this, userTriggered, timeOffset))
                 return;
 
             // Factor in the release lenience

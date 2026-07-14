@@ -16,7 +16,6 @@ using osu.Game.EzOsuGame.Configuration;
 using osu.Game.Rulesets.Mania.EzMania.Helper;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
 using osu.Game.Rulesets.Mania.Scoring;
-using osu.Game.Rulesets.Objects;
 using osu.Game.Rulesets.Objects.Drawables;
 using osu.Game.Rulesets.Scoring;
 using osu.Game.Rulesets.UI.Scrolling;
@@ -45,6 +44,19 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
         private DrawableManiaRuleset drawableManiaRuleset { get; set; }
 
         internal DrawableManiaRuleset EzDrawableManiaRuleset => drawableManiaRuleset;
+
+        private bool usesEzJudgement;
+
+        protected bool UsesEzJudgement => usesEzJudgement;
+
+        /// <summary>
+        /// 本地完整规则集由 Column 到期队列统一驱动 automiss；detached / 预览场景仍沿用 Drawable 自身更新。
+        /// </summary>
+        internal bool ColumnSchedulesAutoMiss
+        {
+            get => AutomissHandledExternally;
+            set => AutomissHandledExternally = value;
+        }
 
         protected override float SamplePlaybackPosition
         {
@@ -88,6 +100,12 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
         protected override void LoadComplete()
         {
             base.LoadComplete();
+
+            drawableManiaRuleset ??= this.FindClosestParent<DrawableManiaRuleset>();
+            usesEzJudgement = drawableManiaRuleset?.JudgementRound?.IsEzHitMode
+                              ?? (HitObject.HitWindows is ManiaHitWindows windows
+                                  && windows.ActiveHitMode is not (EzEnumHitMode.Lazer or EzEnumHitMode.Classic));
+            ColumnSchedulesAutoMiss = drawableManiaRuleset?.ColumnRoutesInput == true;
 
             Direction.BindValueChanged(OnDirectionChanged, true);
         }
@@ -141,25 +159,7 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
             }
         }
 
-        protected override bool ShouldDeferAutoMissUpdate()
-        {
-            if (Judged)
-                return true;
-
-            var hitObject = HitObject;
-            var windows = hitObject.HitWindows;
-
-            // 内联 Empty / miss-early 早退，避免每帧虚分派到 Gate 再进 helper。
-            if (windows == null || ReferenceEquals(windows, HitWindows.Empty))
-                return Time.Current < hitObject.GetEndTime();
-
-            double timeOffset = Time.Current - hitObject.GetEndTime();
-
-            if (windows is ManiaHitWindows maniaWindows)
-                return timeOffset < -maniaWindows.MissEarlyWindow;
-
-            return !ManiaAutoMissGate.ShouldEvaluateAutoMiss(hitObject, timeOffset);
-        }
+        internal bool EvaluateColumnAutoMiss() => UpdateResult(false);
 
         /// <summary>
         /// 被动 miss：在通知 <see cref="ScoreProcessor"/> 前写入 stored TimeOffset（与 Session end-sweep 对齐）。

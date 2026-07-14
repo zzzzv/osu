@@ -23,6 +23,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         private readonly Dictionary<DrawableHitObject, int> drawableIndices = new Dictionary<DrawableHitObject, int>();
         private int cursor;
 
+        private readonly List<AutoMissEntry> autoMissEntries = new List<AutoMissEntry>();
+        private readonly Dictionary<DrawableManiaHitObject, AutoMissEntry> autoMissByDrawable = new Dictionary<DrawableManiaHitObject, AutoMissEntry>();
+        private int autoMissCursor;
+        private bool autoMissSchedulingEnabled;
+
         private double lastSelectPressTime = double.NaN;
         private EzEnumJudgePrecedence lastSelectPrecedence;
         private bool lastSelectBmsMode;
@@ -48,8 +53,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
         public IReadOnlyList<ManiaLaneEntry> Entries => entries;
 
-        public void Register(DrawableHitObject drawable)
+        public void Register(DrawableHitObject drawable, bool scheduleAutoMiss = false)
         {
+            if (scheduleAutoMiss || autoMissSchedulingEnabled)
+                registerAutoMiss(drawable);
+
             if (!TryCreateEntry(drawable, out var entry))
                 return;
 
@@ -64,16 +72,30 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             invalidateOverlapSearchBounds();
         }
 
-        public void RegisterIfNeeded(DrawableHitObject drawable)
+        public void RegisterIfNeeded(DrawableHitObject drawable, bool scheduleAutoMiss = false)
         {
-            if (drawableIndices.ContainsKey(drawable))
+            if (scheduleAutoMiss || autoMissSchedulingEnabled)
+                registerAutoMiss(drawable);
+
+            if (!drawableIndices.ContainsKey(drawable))
+                Register(drawable, scheduleAutoMiss);
+        }
+
+        public void EnableAutoMissScheduling()
+        {
+            if (autoMissSchedulingEnabled)
                 return;
 
-            Register(drawable);
+            autoMissSchedulingEnabled = true;
+
+            foreach (var entry in entries)
+                registerAutoMiss(entry.Drawable);
         }
 
         public void Unregister(DrawableHitObject drawable)
         {
+            unregisterAutoMiss(drawable);
+
             if (!drawableIndices.TryGetValue(drawable, out int index))
                 return;
 
@@ -88,6 +110,106 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
             invalidateSelectPressCache();
             invalidateOverlapSearchBounds();
+        }
+
+        /// <summary>
+        /// 仅检查已经越过 late miss 边界的对象。远期存活对象不再逐帧参与 Drawable 更新。
+        /// </summary>
+        public void ProcessAutoMiss(double time)
+        {
+            for (int i = autoMissCursor; i < autoMissEntries.Count; i++)
+            {
+                var entry = autoMissEntries[i];
+
+                if (entry.EvaluationStartTime > time)
+                    break;
+
+                if (!entry.Drawable.Judged)
+                    entry.Drawable.EvaluateColumnAutoMiss();
+            }
+
+            while (autoMissCursor < autoMissEntries.Count && autoMissEntries[autoMissCursor].Drawable.Judged)
+                autoMissCursor++;
+        }
+
+        private void registerAutoMiss(DrawableHitObject drawable)
+        {
+            if (drawable is DrawableHoldNote hold)
+            {
+                registerAutoMissDrawable(hold.Head);
+                registerAutoMissDrawable(hold.Tail);
+                registerAutoMissDrawable(hold);
+                hold.Body.ColumnSchedulesAutoMiss = true;
+                return;
+            }
+
+            if (drawable is DrawableManiaHitObject maniaDrawable)
+                registerAutoMissDrawable(maniaDrawable);
+        }
+
+        private void registerAutoMissDrawable(DrawableManiaHitObject drawable)
+        {
+            if (autoMissByDrawable.ContainsKey(drawable))
+                return;
+
+            double evaluationStartTime;
+
+            if (drawable.HitObject.HitWindows is ManiaHitWindows windows)
+                evaluationStartTime = drawable.HitObject.GetEndTime() + windows.MissLateWindow;
+            else if (drawable is DrawableHoldNote)
+                evaluationStartTime = drawable.HitObject.GetEndTime();
+            else
+            {
+                // Body and other Empty-window auxiliaries are finalized by their owner.
+                drawable.ColumnSchedulesAutoMiss = true;
+                return;
+            }
+
+            var entry = new AutoMissEntry(drawable, evaluationStartTime);
+            int index = autoMissEntries.BinarySearch(entry, AutoMissEntry.StartTimeComparer.INSTANCE);
+
+            if (index < 0)
+                index = ~index;
+
+            autoMissEntries.Insert(index, entry);
+            autoMissByDrawable.Add(drawable, entry);
+            drawable.ColumnSchedulesAutoMiss = true;
+
+            if (index < autoMissCursor)
+                autoMissCursor = index;
+        }
+
+        private void unregisterAutoMiss(DrawableHitObject drawable)
+        {
+            if (drawable is DrawableHoldNote hold)
+            {
+                unregisterAutoMissDrawable(hold.Head);
+                unregisterAutoMissDrawable(hold.Tail);
+                unregisterAutoMissDrawable(hold);
+                hold.Body.ColumnSchedulesAutoMiss = false;
+                return;
+            }
+
+            if (drawable is DrawableManiaHitObject maniaDrawable)
+                unregisterAutoMissDrawable(maniaDrawable);
+        }
+
+        private void unregisterAutoMissDrawable(DrawableManiaHitObject drawable)
+        {
+            drawable.ColumnSchedulesAutoMiss = false;
+
+            if (!autoMissByDrawable.Remove(drawable, out var entry))
+                return;
+
+            int index = autoMissEntries.IndexOf(entry);
+
+            if (index < 0)
+                return;
+
+            autoMissEntries.RemoveAt(index);
+
+            if (index < autoMissCursor)
+                autoMissCursor--;
         }
 
         public void UnregisterByHitObject(HitObject hitObject)
@@ -486,6 +608,38 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         {
             lastSelectPressTime = double.NaN;
             lastSelectResult = null;
+        }
+
+        private sealed class AutoMissEntry
+        {
+            public DrawableManiaHitObject Drawable { get; }
+
+            public double EvaluationStartTime { get; }
+
+            public AutoMissEntry(DrawableManiaHitObject drawable, double evaluationStartTime)
+            {
+                Drawable = drawable;
+                EvaluationStartTime = evaluationStartTime;
+            }
+
+            internal sealed class StartTimeComparer : IComparer<AutoMissEntry>
+            {
+                public static readonly StartTimeComparer INSTANCE = new StartTimeComparer();
+
+                public int Compare(AutoMissEntry? x, AutoMissEntry? y)
+                {
+                    if (ReferenceEquals(x, y))
+                        return 0;
+
+                    if (x is null)
+                        return -1;
+
+                    if (y is null)
+                        return 1;
+
+                    return x.EvaluationStartTime.CompareTo(y.EvaluationStartTime);
+                }
+            }
         }
     }
 
