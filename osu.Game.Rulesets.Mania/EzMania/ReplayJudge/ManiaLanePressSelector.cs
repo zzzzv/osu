@@ -15,6 +15,10 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
     /// </summary>
     internal static class ManiaLanePressSelector
     {
+        private static readonly Func<ManiaLaneEntry, bool> entry_is_press_judged = e => e.IsPressJudged;
+        private static readonly Func<ManiaLaneEntry, double> entry_start_time = e => e.StartTime;
+        private static readonly Func<ManiaLaneEntry, ManiaHitWindows?> entry_press_windows = e => e.PressWindows;
+
         internal static LaneTargetState? SelectSessionTarget(
             IReadOnlyList<LaneTargetState> candidates,
             IReadOnlyList<LaneTargetState> laneStates,
@@ -65,13 +69,14 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             if (overlapping.Count == 1)
                 return overlapping[0];
 
-            return selectByPrecedence(
+            // CollectOverlappingEntries 已按 StartTime 递增；勿再 new List+Sort；SelectFold 用静态 Func 避免每按分配。
+            return OrderedHitPolicyHelper.SelectFold(
                 overlapping,
+                entry_is_press_judged,
+                entry_start_time,
+                entry_press_windows,
                 time,
-                precedence,
-                e => e.IsPressJudged,
-                e => e.StartTime,
-                e => e.PressWindows);
+                precedence == EzEnumJudgePrecedence.Combo);
         }
 
         private static LaneTargetState? selectEarliestSessionTarget(

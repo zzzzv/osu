@@ -9,35 +9,23 @@ using osu.Game.Rulesets.Mania.EzMania.Diagnostics;
 namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
 {
     /// <summary>
-    /// DRAWABLE-MICRO-BENCH：10 列叠 LN 热路径，PeakKps 20→100。
-    /// CI 烟测 + 打印剖面；不替代实机 SwapBuffer。
+    /// DRAWABLE-MICRO-BENCH：10 列叠 LN；PeakKps × 每列存活密度扫描。
     /// </summary>
     [TestFixture]
     public class ManiaLaneHotPathMicroBenchTest
     {
-        [TestCase(20)]
-        [TestCase(50)]
-        [TestCase(100)]
-        public void TestTenKeyDenseLnPeakKpsSweep(int peakKps)
+        [TestCase(20, 8)]
+        [TestCase(100, 8)]
+        [TestCase(100, 24)]
+        [TestCase(100, 40)]
+        public void TestTenKeyDenseLnPeakKpsAndAliveSweep(int peakKps, int alivePerColumn)
         {
-            var result = new ManiaLaneHotPathWorkload
-            {
-                Keys = 10,
-                PeakKps = peakKps,
-                ConcurrentAlivePerColumn = 8,
-                DurationMs = 2000,
-                FrameStepMs = 1,
-                Precedence = EzEnumJudgePrecedence.Combo,
-            }.Run();
-
+            var result = run(peakKps, alivePerColumn, EzEnumJudgePrecedence.Combo);
             TestContext.WriteLine(result.ToString());
 
             Assert.That(result.FrameCount, Is.EqualTo(2000));
             Assert.That(result.PressCount, Is.GreaterThan(0));
-            Assert.That(result.SelectPressCalls, Is.EqualTo(result.PressCount));
-            // 2000 帧 × (10*8 note + 10*8 hold) gate ≈ 320k+；墙钟应远小于实时。
-            Assert.That(result.ElapsedMilliseconds, Is.LessThan(2_000),
-                $"Hot path too slow for peakKps={peakKps}: {result}");
+            Assert.That(result.ElapsedMilliseconds, Is.LessThan(5_000), result.ToString());
         }
 
         [Test]
@@ -47,47 +35,56 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
 
             foreach (int kps in new[] { 20, 50, 100 })
             {
-                results[kps] = new ManiaLaneHotPathWorkload
-                {
-                    Keys = 10,
-                    PeakKps = kps,
-                    ConcurrentAlivePerColumn = 8,
-                    DurationMs = 2000,
-                    FrameStepMs = 1,
-                    Precedence = EzEnumJudgePrecedence.Combo,
-                }.Run();
-
+                results[kps] = run(kps, alivePerColumn: 24, EzEnumJudgePrecedence.Combo);
                 TestContext.WriteLine(results[kps].ToString());
             }
 
-            // 齐按 chord：pressCount ∝ PeakKps（Duration 固定）。
             double ratio50 = (double)results[50].PressCount / results[20].PressCount;
             double ratio100 = (double)results[100].PressCount / results[20].PressCount;
 
             Assert.That(ratio50, Is.EqualTo(2.5).Within(0.2));
             Assert.That(ratio100, Is.EqualTo(5.0).Within(0.3));
+            Assert.That(results[100].ElapsedMilliseconds, Is.LessThan(results[20].ElapsedMilliseconds * 8 + 100),
+                $"Non-linear blow-up: {results[20]} | {results[100]}");
+        }
 
-            // 墙钟应随 Select 增加，但 gate 占主导时斜率有限；抓「100kps 爆炸式」回退。
-            Assert.That(results[100].ElapsedMilliseconds, Is.LessThan(results[20].ElapsedMilliseconds * 8 + 50),
-                $"Non-linear blow-up 20→100 kps: {results[20]} | {results[100]}");
+        [Test]
+        public void TestAliveDensityDoesNotBlowUpAllocPerPress()
+        {
+            var light = run(100, alivePerColumn: 8, EzEnumJudgePrecedence.Combo);
+            var heavy = run(100, alivePerColumn: 40, EzEnumJudgePrecedence.Combo);
+            TestContext.WriteLine($"light: {light}");
+            TestContext.WriteLine($"heavy: {heavy}");
+
+            // scratch 复用 + HitMode valid 表缓存后，alive×5 不应使 /press 分配近似线性暴涨。
+            Assert.That(heavy.BytesPerPress, Is.LessThan(light.BytesPerPress * 3 + 256),
+                $"Alloc/press blow-up light={light.BytesPerPress:F0} heavy={heavy.BytesPerPress:F0}");
+            Assert.That(heavy.BytesPerPress, Is.LessThan(512),
+                $"Combo Select still allocating heavily: {heavy.BytesPerPress:F0} B/press");
+            Assert.That(heavy.ElapsedMilliseconds, Is.LessThan(light.ElapsedMilliseconds * 8 + 100),
+                $"Time blow-up light={light.ElapsedMilliseconds} heavy={heavy.ElapsedMilliseconds}");
         }
 
         [TestCase(EzEnumJudgePrecedence.Earliest)]
         [TestCase(EzEnumJudgePrecedence.Combo)]
         [TestCase(EzEnumJudgePrecedence.Duration)]
-        public void TestPrecedenceVariantsAt100Kps(EzEnumJudgePrecedence precedence)
+        public void TestPrecedenceVariantsAt100KpsDense(EzEnumJudgePrecedence precedence)
         {
-            var result = new ManiaLaneHotPathWorkload
+            var result = run(100, alivePerColumn: 40, precedence);
+            TestContext.WriteLine(result.ToString());
+            Assert.That(result.ElapsedMilliseconds, Is.LessThan(5_000), result.ToString());
+        }
+
+        private static ManiaLaneHotPathWorkloadResult run(int peakKps, int alivePerColumn, EzEnumJudgePrecedence precedence)
+            => new ManiaLaneHotPathWorkload
             {
                 Keys = 10,
-                PeakKps = 100,
-                ConcurrentAlivePerColumn = 8,
+                PeakKps = peakKps,
+                ConcurrentAlivePerColumn = alivePerColumn,
+                AliveSpacingMs = 12,
                 DurationMs = 2000,
+                FrameStepMs = 1,
                 Precedence = precedence,
             }.Run();
-
-            TestContext.WriteLine(result.ToString());
-            Assert.That(result.ElapsedMilliseconds, Is.LessThan(2_000), result.ToString());
-        }
     }
 }

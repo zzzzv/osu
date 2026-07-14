@@ -34,6 +34,17 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         private double cachedMaxMissEarly;
         private double cachedMaxMissLate;
         private bool overlapSearchBoundsValid;
+        private readonly List<ManiaLaneEntry> overlapScratch = new List<ManiaLaneEntry>();
+
+        // 热路径避免每次 SelectPress 把实例方法转成新 Func。
+        private readonly Func<int, double, bool> isHittableEarliestIndexFunc;
+        private readonly Func<ManiaLaneEntry, double, bool> isWithinMissWindowFunc;
+
+        public ManiaLaneController()
+        {
+            isHittableEarliestIndexFunc = IsHittableEarliestIndex;
+            isWithinMissWindowFunc = isWithinMissWindow;
+        }
 
         public IReadOnlyList<ManiaLaneEntry> Entries => entries;
 
@@ -210,18 +221,26 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
         /// <summary>
         /// 收集 miss 窗内、未判定的列内 press 候选（O(log n + k)）。
+        /// 返回新列表（测试/外部可用）；热路径请走 <see cref="selectPressEntryCore"/> 的 scratch 复用。
         /// </summary>
         public List<ManiaLaneEntry> CollectOverlappingEntries(double time)
         {
             var result = new List<ManiaLaneEntry>();
+            collectOverlappingInto(time, result);
+            return result;
+        }
+
+        private void collectOverlappingInto(double time, List<ManiaLaneEntry> result)
+        {
+            result.Clear();
 
             if (entries.Count == 0)
-                return result;
+                return;
 
             ensureOverlapSearchBounds();
 
             if (cachedMaxMissEarly == 0 && cachedMaxMissLate == 0)
-                return result;
+                return;
 
             double searchLowerBound = time - cachedMaxMissLate;
             int lo = 0;
@@ -254,8 +273,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 if (time >= entry.StartTime - early && time <= entry.StartTime + late)
                     result.Add(entry);
             }
-
-            return result;
         }
 
         private void ensureOverlapSearchBounds()
@@ -321,9 +338,23 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
         private ManiaLaneEntry? selectPressEntryCore(double time, EzEnumJudgePrecedence precedence, bool allowBmsFallbackToEarliest, bool poorEnabled)
         {
-            IReadOnlyList<ManiaLaneEntry> overlapping = precedence == EzEnumJudgePrecedence.Earliest
-                ? Array.Empty<ManiaLaneEntry>()
-                : CollectOverlappingEntries(time);
+            if (precedence == EzEnumJudgePrecedence.Earliest)
+            {
+                return ManiaLanePressSelector.SelectDrawablePressEntry(
+                    entries,
+                    cursor,
+                    time,
+                    precedence,
+                    allowBmsFallbackToEarliest,
+                    poorEnabled,
+                    Array.Empty<ManiaLaneEntry>(),
+                    isHittableEarliestIndexFunc,
+                    isWithinMissWindowFunc,
+                    isPostBadKPoorRoutable,
+                    distanceToNonBadWindow);
+            }
+
+            collectOverlappingInto(time, overlapScratch);
 
             return ManiaLanePressSelector.SelectDrawablePressEntry(
                 entries,
@@ -332,9 +363,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 precedence,
                 allowBmsFallbackToEarliest,
                 poorEnabled,
-                overlapping,
-                IsHittableEarliestIndex,
-                isWithinMissWindow,
+                overlapScratch,
+                isHittableEarliestIndexFunc,
+                isWithinMissWindowFunc,
                 isPostBadKPoorRoutable,
                 distanceToNonBadWindow);
         }

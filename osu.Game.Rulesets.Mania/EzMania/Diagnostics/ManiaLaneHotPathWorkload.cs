@@ -36,6 +36,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
 
         public int FrameStepMs { get; init; } = 1;
 
+        /// <summary>叠窗间距（ms）；越小 Collect 候选越多。</summary>
+        public double AliveSpacingMs { get; init; } = 12;
+
         public EzEnumJudgePrecedence Precedence { get; init; } = EzEnumJudgePrecedence.Combo;
 
         public ManiaLaneHotPathWorkloadResult Run()
@@ -60,11 +63,10 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
 
                 for (int i = 0; i < ConcurrentAlivePerColumn; i++)
                 {
-                    double start = mid - 180 - i * 28;
+                    double start = mid - 40 - i * AliveSpacingMs;
                     var note = createNote(start);
                     lane.Register(note);
 
-                    // Empty-窗 LN 父体：只喂 AutoMissGate（与 Register 路径分离）。
                     var hold = createHold(start, duration: 400);
                     gateObjects.Add(hold);
                     gateObjects.Add(note.HitObject);
@@ -81,6 +83,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
             int gateCalls = 0;
             int selectCalls = 0;
 
+            int gen0Before = GC.CollectionCount(0);
+            long allocBefore = GC.GetAllocatedBytesForCurrentThread();
             var sw = Stopwatch.StartNew();
 
             for (int t = 0; t < DurationMs; t += FrameStepMs)
@@ -113,6 +117,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
             }
 
             sw.Stop();
+            long allocAfter = GC.GetAllocatedBytesForCurrentThread();
+            int gen0After = GC.CollectionCount(0);
 
             return new ManiaLaneHotPathWorkloadResult(
                 sw.ElapsedMilliseconds,
@@ -123,7 +129,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
                 Keys,
                 PeakKps,
                 ConcurrentAlivePerColumn,
-                Precedence);
+                Precedence,
+                allocAfter - allocBefore,
+                gen0After - gen0Before);
         }
 
         private static DrawableNote createNote(double startTime)
@@ -148,7 +156,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
                 Column = 0,
             };
 
-            // Nested Head/Body/Tail for Empty-窗语义。
             hold.ApplyDefaults(new ControlPointInfo(), new BeatmapDifficulty { OverallDifficulty = 8 });
             return hold;
         }
@@ -177,11 +184,12 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
         public int PeakKps { get; }
         public int ConcurrentAlivePerColumn { get; }
         public EzEnumJudgePrecedence Precedence { get; }
+        public long AllocatedBytes { get; }
+        public int Gen0Collections { get; }
 
         public double MillisecondsPerFrame => FrameCount == 0 ? 0 : (double)ElapsedMilliseconds / FrameCount;
 
-        public double EffectivePressesPerSecond =>
-            ElapsedMilliseconds <= 0 ? 0 : PressCount * 1000.0 / ElapsedMilliseconds;
+        public double BytesPerPress => PressCount == 0 ? 0 : (double)AllocatedBytes / PressCount;
 
         public ManiaLaneHotPathWorkloadResult(
             long elapsedMilliseconds,
@@ -192,7 +200,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
             int keys,
             int peakKps,
             int concurrentAlivePerColumn,
-            EzEnumJudgePrecedence precedence)
+            EzEnumJudgePrecedence precedence,
+            long allocatedBytes,
+            int gen0Collections)
         {
             ElapsedMilliseconds = elapsedMilliseconds;
             FrameCount = frameCount;
@@ -203,12 +213,14 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
             PeakKps = peakKps;
             ConcurrentAlivePerColumn = concurrentAlivePerColumn;
             Precedence = precedence;
+            AllocatedBytes = allocatedBytes;
+            Gen0Collections = gen0Collections;
         }
 
         public override string ToString()
             => $"keys={Keys} peakKps={PeakKps} alive/col={ConcurrentAlivePerColumn} prec={Precedence} "
                + $"elapsed={ElapsedMilliseconds}ms frames={FrameCount} presses={PressCount} "
                + $"gate={AutoMissGateCalls} select={SelectPressCalls} "
-               + $"ms/frame={MillisecondsPerFrame:F4} press/s(wall)={EffectivePressesPerSecond:F0}";
+               + $"ms/frame={MillisecondsPerFrame:F4} alloc={AllocatedBytes}B (~{BytesPerPress:F0}/press) gen0={Gen0Collections}";
     }
 }

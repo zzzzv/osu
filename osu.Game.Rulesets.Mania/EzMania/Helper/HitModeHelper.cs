@@ -548,96 +548,108 @@ namespace osu.Game.Rulesets.Mania.EzMania.Helper
             return timeOffsetFromHit >= -maxEarlyMs;
         }
 
-        public static IEnumerable<HitResult> GetHitModeValidHitResults(EzEnumHitMode mode)
+        // ResultFor → IsHitResultAllowed 每候选多次调用；禁止每次 new[]。
+        private static readonly HitResult[] valid_results_o2jam =
+        {
+            HitResult.Perfect,
+            HitResult.Good,
+            HitResult.Meh,
+            HitResult.Miss,
+            HitResult.IgnoreHit,
+            HitResult.ComboBreak,
+            HitResult.IgnoreMiss,
+        };
+
+        private static readonly HitResult[] valid_results_ez2ac =
+        {
+            HitResult.Perfect,
+            HitResult.Great,
+            HitResult.Good,
+            HitResult.Meh,
+            HitResult.Miss,
+            HitResult.IgnoreHit,
+            HitResult.ComboBreak,
+            HitResult.IgnoreMiss,
+        };
+
+        private static readonly HitResult[] valid_results_bms_family =
+        {
+            HitResult.Perfect,
+            HitResult.Great,
+            HitResult.Good,
+            HitResult.Meh,
+            HitResult.Miss,
+            HitResult.Poor,
+            HitResult.IgnoreHit,
+            HitResult.ComboBreak,
+            HitResult.IgnoreMiss,
+        };
+
+        private static readonly HitResult[] valid_results_malody =
+        {
+            HitResult.Perfect,
+            HitResult.Great,
+            HitResult.Good,
+            HitResult.Miss,
+            HitResult.IgnoreHit,
+            HitResult.ComboBreak,
+            HitResult.IgnoreMiss,
+        };
+
+        private static readonly HitResult[] valid_results_lazer_classic =
+        {
+            HitResult.Perfect,
+            HitResult.Great,
+            HitResult.Good,
+            HitResult.Ok,
+            HitResult.Meh,
+            HitResult.Miss,
+            HitResult.IgnoreHit,
+            HitResult.ComboBreak,
+            HitResult.IgnoreMiss,
+        };
+
+        public static IReadOnlyList<HitResult> GetHitModeValidHitResults(EzEnumHitMode mode)
         {
             switch (mode)
             {
                 case EzEnumHitMode.O2Jam:
-                    return new[]
-                    {
-                        HitResult.Perfect,
-                        HitResult.Good,
-                        HitResult.Meh,
-                        HitResult.Miss,
-                        HitResult.IgnoreHit,
-                        HitResult.ComboBreak,
-                        HitResult.IgnoreMiss,
-                    };
+                    return valid_results_o2jam;
 
                 case EzEnumHitMode.EZ2AC:
-                    return new[]
-                    {
-                        HitResult.Perfect,
-                        HitResult.Great,
-                        HitResult.Good,
-                        HitResult.Meh,
-                        HitResult.Miss,
-                        HitResult.IgnoreHit,
-                        HitResult.ComboBreak,
-                        HitResult.IgnoreMiss,
-                    };
+                    return valid_results_ez2ac;
 
                 case EzEnumHitMode.IIDX_HD:
                 case EzEnumHitMode.LR2_HD:
                 case EzEnumHitMode.Raja_NM:
-                    return new[]
-                    {
-                        HitResult.Perfect,
-                        HitResult.Great,
-                        HitResult.Good,
-                        HitResult.Meh,
-                        HitResult.Miss,
-                        HitResult.Poor,
-                        HitResult.IgnoreHit,
-                        HitResult.ComboBreak,
-                        HitResult.IgnoreMiss,
-                    };
+                    return valid_results_bms_family;
 
                 case EzEnumHitMode.Malody_E:
                 case EzEnumHitMode.Malody_B:
-                    return new[]
-                    {
-                        HitResult.Perfect,
-                        HitResult.Great,
-                        HitResult.Good,
-                        HitResult.Miss,
-                        HitResult.IgnoreHit,
-                        HitResult.ComboBreak,
-                        HitResult.IgnoreMiss,
-                    };
+                    return valid_results_malody;
 
                 case EzEnumHitMode.Lazer:
                 case EzEnumHitMode.Classic:
-                    return new[]
-                    {
-                        HitResult.Perfect,
-                        HitResult.Great,
-                        HitResult.Good,
-                        HitResult.Ok,
-                        HitResult.Meh,
-                        HitResult.Miss,
-                        HitResult.IgnoreHit,
-                        HitResult.ComboBreak,
-                        HitResult.IgnoreMiss,
-                    };
-
                 default:
-                    return new[]
-                    {
-                        HitResult.Perfect,
-                        HitResult.Great,
-                        HitResult.Good,
-                        HitResult.Ok,
-                        HitResult.Meh,
-                        HitResult.Miss,
-                        HitResult.IgnoreHit,
-                        HitResult.ComboBreak,
-                        HitResult.IgnoreMiss,
-                    };
+                    return valid_results_lazer_classic;
             }
         }
 
-        public static IEnumerable<HitResult> GetHitModeValidHitResults()
+        /// <summary>零分配查找：供 HitWindows.IsHitResultAllowed / ResultFor 热路径。</summary>
+        public static bool IsHitResultValidForMode(EzEnumHitMode mode, HitResult result)
+        {
+            var valid = (HitResult[])GetHitModeValidHitResults(mode);
+
+            for (int i = 0; i < valid.Length; i++)
+            {
+                if (valid[i] == result)
+                    return true;
+            }
+
+            return false;
+        }
+
+        public static IReadOnlyList<HitResult> GetHitModeValidHitResults()
         {
             var mode = GlobalConfigStore.EzConfig.Get<EzEnumHitMode>(Ez2Setting.ManiaHitMode);
             return GetHitModeValidHitResults(mode);
@@ -646,7 +658,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Helper
         /// <summary>
         /// 按 <see cref="EzManiaScoreModeExtensions.ResolveDisplayHitMode"/> 解析展示用 HitMode 后返回有效判定集合。
         /// </summary>
-        public static IEnumerable<HitResult> GetHitModeValidHitResultsForDisplay(ScoreInfo? score)
+        public static IReadOnlyList<HitResult> GetHitModeValidHitResultsForDisplay(ScoreInfo? score)
             => GetHitModeValidHitResults(EzManiaScoreModeExtensions.ResolveDisplayHitMode(score));
 
 #endregion

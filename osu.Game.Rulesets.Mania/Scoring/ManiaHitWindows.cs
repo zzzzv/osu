@@ -2,7 +2,6 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
-using System.Linq;
 using osu.Game.Beatmaps;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.Rulesets.Mania.EzMania.Helper;
@@ -188,9 +187,8 @@ namespace osu.Game.Rulesets.Mania.Scoring
                     return false;
             }
 
-            // 使用当前实例的 HitMode 判定列表，只允许有判定区间的结果。
-            var validResults = HitModeHelper.GetHitModeValidHitResults(ActiveHitMode);
-            return validResults.Contains(result);
+            // 使用当前实例的 HitMode 判定列表，只允许有判定区间的结果（零分配查找）。
+            return HitModeHelper.IsHitResultValidForMode(ActiveHitMode, result);
         }
 
         public override void SetDifficulty(double difficulty)
