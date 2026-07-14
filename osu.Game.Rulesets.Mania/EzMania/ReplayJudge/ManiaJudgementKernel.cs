@@ -327,6 +327,5 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
         private static double resolveO2PressBpm(in HoldTailEvaluationRequest request)
             => request.PressBpm ?? request.Round.O2PressBpm;
-
     }
 }

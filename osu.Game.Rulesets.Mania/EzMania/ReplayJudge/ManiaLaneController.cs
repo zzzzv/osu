@@ -273,7 +273,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         }
 
         public bool IsHittableEarliestIndex(int index, double time)
-            => IsHittableEarliest(entries, index, time, static e => e.IsPressJudged, static e => e.StartTime);
+            => ManiaLanePressSelector.IsHittableEarliest(entries, index, time, static e => e.IsPressJudged, static e => e.StartTime);
 
         public void ConfigureMissCollection(EzEnumHitMode hitMode, double overallDifficulty, double bpm = 180)
         {
@@ -317,31 +317,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         public DrawableHoldNote? ActiveHold { get; private set; }
 
         internal void SetActiveHold(DrawableHoldNote? hold) => ActiveHold = hold;
-
-        /// <summary>
-        /// Session：<see cref="LaneTargetState"/> 列版本。
-        /// </summary>
-        internal static bool IsHittableEarliest(IReadOnlyList<LaneTargetState> column, int index, double time)
-            => IsHittableEarliest(column, index, time, static s => s.Judged, static s => s.Target.StartTime);
-
-        internal static bool IsHittableEarliest<T>(
-            IReadOnlyList<T> column,
-            int index,
-            double time,
-            Func<T, bool> isJudged,
-            Func<T, double> startTime)
-        {
-            for (int i = index + 1; i < column.Count; i++)
-            {
-                if (isJudged(column[i]))
-                    continue;
-
-                if (time >= startTime(column[i]))
-                    return false;
-            }
-
-            return true;
-        }
 
         public IEnumerable<ManiaLaneEntry> EnumerateForceMissBefore(double targetStartTime)
         {

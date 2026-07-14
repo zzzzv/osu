@@ -19,6 +19,25 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         private static readonly Func<ManiaLaneEntry, double> entry_start_time = e => e.StartTime;
         private static readonly Func<ManiaLaneEntry, ManiaHitWindows?> entry_press_windows = e => e.PressWindows;
 
+        internal static bool IsHittableEarliest<T>(
+            IReadOnlyList<T> column,
+            int index,
+            double time,
+            Func<T, bool> isJudged,
+            Func<T, double> startTime)
+        {
+            for (int i = index + 1; i < column.Count; i++)
+            {
+                if (isJudged(column[i]))
+                    continue;
+
+                if (time >= startTime(column[i]))
+                    return false;
+            }
+
+            return true;
+        }
+
         internal static LaneTargetState? SelectSessionTarget(
             IReadOnlyList<LaneTargetState> candidates,
             IReadOnlyList<LaneTargetState> laneStates,
@@ -90,7 +109,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             foreach (var candidate in sorted)
             {
                 int index = indexOf(laneStates, candidate);
-                if (index < 0 || !ManiaLaneController.IsHittableEarliest(laneStates, index, time))
+                if (index < 0 || !IsHittableEarliest(laneStates, index, time, static s => s.Judged, static s => s.Target.StartTime))
                     continue;
 
                 return candidate;
