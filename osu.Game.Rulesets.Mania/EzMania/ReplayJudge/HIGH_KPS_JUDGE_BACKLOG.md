@@ -52,7 +52,7 @@
 | **BMS-ROUTE-COL** | [ ] tail `BmsRouteState` 完全列级化 | BMS |
 | **HOLD-TAIL-FAST** | [ ] `Column.OnReleased` → 列级 tail release | LN |
 | **SOUND-DECOUPLE** | [ ] 判定与 `sampleTriggerSource.Play()` 解耦 | 仅 profile 证明阻塞时做 |
-| **DRAWABLE-MICRO-BENCH** | [ ] headless Column press micro-bench | BENCH-KPS Drawable 侧补充 |
+| **DRAWABLE-MICRO-BENCH** | [x] `ManiaLaneHotPathWorkload` + `ManiaLaneHotPathMicroBenchTest` + `BenchmarkManiaLaneHotPath`（10 列 × PeakKps 20/50/100） | 观测 |
 
 ---
 
@@ -97,3 +97,4 @@ flowchart LR
 | 2026-07-06 | Phase C 完成：`LANE-PRECEDENCE` + `COLUMN-INPUT`；Phase D 标注暂缓 |
 | 2026-07-07 | `mania-perf-fix`：idle/press 热路径减负 + 叠键 miss `TimeOffset` parity（`MISS-STORED-OFFSET` / `FORCE-MISS-WINDOW`） |
 | 2026-07-07 | `mania-judgement-kernel-d`：`KERNEL-ONE` + `DRAWABLE-THIN`；O2-NOMUTATE；BMS auto-miss stored offset |
+| 2026-07-14 | `DRAWABLE-MICRO-BENCH`：10 列叠 LN PeakKps 20/50/100（Select/Gate/pressTimes，不含 SwapBuffer） |
