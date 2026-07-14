@@ -26,6 +26,8 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             Assert.That(result.FrameCount, Is.EqualTo(2000));
             Assert.That(result.PressCount, Is.GreaterThan(0));
             Assert.That(result.ElapsedMilliseconds, Is.LessThan(5_000), result.ToString());
+            Assert.That(result.AutoMissGateTrueCount, Is.LessThan(result.AutoMissGateCalls),
+                "Empty Hold + miss-early should skip majority of gate evaluates");
         }
 
         [Test]
@@ -56,7 +58,6 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             TestContext.WriteLine($"light: {light}");
             TestContext.WriteLine($"heavy: {heavy}");
 
-            // scratch 复用 + HitMode valid 表缓存后，alive×5 不应使 /press 分配近似线性暴涨。
             Assert.That(heavy.BytesPerPress, Is.LessThan(light.BytesPerPress * 3 + 256),
                 $"Alloc/press blow-up light={light.BytesPerPress:F0} heavy={heavy.BytesPerPress:F0}");
             Assert.That(heavy.BytesPerPress, Is.LessThan(512),
@@ -73,6 +74,45 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             var result = run(100, alivePerColumn: 40, precedence);
             TestContext.WriteLine(result.ToString());
             Assert.That(result.ElapsedMilliseconds, Is.LessThan(5_000), result.ToString());
+        }
+
+        [Test]
+        public void TestBmsPoorSelectFlagsDoNotBlowUpAlloc()
+        {
+            var baseline = run(100, 40, EzEnumJudgePrecedence.Combo);
+            var bms = new ManiaLaneHotPathWorkload
+            {
+                Keys = 10,
+                PeakKps = 100,
+                ConcurrentAlivePerColumn = 40,
+                AliveSpacingMs = 12,
+                DurationMs = 2000,
+                FrameStepMs = 1,
+                Precedence = EzEnumJudgePrecedence.Combo,
+                HitMode = EzEnumHitMode.IIDX_HD,
+                AllowBmsFallbackToEarliest = true,
+                PoorEnabled = true,
+            }.Run();
+
+            TestContext.WriteLine($"baseline: {baseline}");
+            TestContext.WriteLine($"bms: {bms}");
+
+            Assert.That(bms.BytesPerPress, Is.LessThan(512), bms.ToString());
+            Assert.That(bms.BytesPerPress, Is.LessThan(baseline.BytesPerPress * 4 + 256),
+                $"BMS/Poor alloc blow-up baseline={baseline.BytesPerPress:F0} bms={bms.BytesPerPress:F0}");
+            Assert.That(bms.ElapsedMilliseconds, Is.LessThan(5_000), bms.ToString());
+        }
+
+        [Test]
+        public void TestEmptyHoldBodyNeverEvaluatesAutoMiss()
+        {
+            var result = ManiaLaneHotPathWorkload.RunEmptyHoldDeferGuard();
+            TestContext.WriteLine(result.ToString());
+
+            Assert.That(result.AutoMissGateCalls, Is.GreaterThan(0));
+            Assert.That(result.AutoMissGateTrueCount, Is.EqualTo(0),
+                "Empty Hold must stay deferred for entire body (timeOffset < 0)");
+            Assert.That(result.AllocatedBytes, Is.LessThan(64_000), result.ToString());
         }
 
         private static ManiaLaneHotPathWorkloadResult run(int peakKps, int alivePerColumn, EzEnumJudgePrecedence precedence)

@@ -52,7 +52,9 @@
 | **BMS-ROUTE-COL** | [ ] tail `BmsRouteState` 完全列级化 | BMS |
 | **HOLD-TAIL-FAST** | [ ] `Column.OnReleased` → 列级 tail release | LN |
 | **SOUND-DECOUPLE** | [ ] 判定与 `sampleTriggerSource.Play()` 解耦 | 仅 profile 证明阻塞时做 |
-| **DRAWABLE-MICRO-BENCH** | [x] PeakKps × alive；alloc/press 断言（Combo dense &lt;512 B/press） | gate 主导；valid HitResult 表曾每调 `new[]` |
+| **DRAWABLE-MICRO-BENCH** | [x] PeakKps × alive；alloc；BMS/Poor；Empty gateTrue==0 | gate 主导；valid 表曾 `new[]` |
+| **STORE-FRAME-BUDGET** | [x] `DetachedBeatmapStoreFrameBudget` Drain≤24 + 单测 | 选歌 Replace 风暴 |
+| **BDSP-STARTUP-DELAY** | [x] `StartupBackfillDelay` 5s；测试覆写 0 | 选歌开工掉帧 |
 
 ---
 
@@ -99,3 +101,4 @@ flowchart LR
 | 2026-07-07 | `mania-judgement-kernel-d`：`KERNEL-ONE` + `DRAWABLE-THIN`；O2-NOMUTATE；BMS auto-miss stored offset |
 | 2026-07-14 | `DRAWABLE-MICRO-BENCH`：10 列叠 LN PeakKps 20/50/100（Select/Gate/pressTimes，不含 SwapBuffer） |
 | 2026-07-14 | MICRO-BENCH 加深：alive 扫描；MLC scratch / Select Func；`HitModeHelper` valid 表静态化（ResultFor 零分配） |
+| 2026-07-14 | 可测排除：AutoMissGate / BMS-Poor bench / FrameBudget Drain / BDSP delay 覆写 |

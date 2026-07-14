@@ -162,6 +162,7 @@ flowchart TB
 - **DRAWABLE-MICRO-BENCH**：`ManiaLaneHotPathWorkload` / `ManiaLaneHotPathMicroBenchTest` / `BenchmarkManiaLaneHotPath`（10 列 × PeakKps × alive/col 8/24/40；Select+Gate+pressTimes，**不含** SwapBuffer）。
   - **gate 调用量主导**墙钟；CPU 随 alive 近似线性。
   - Combo/Duration 曾因 (1) 每按 `new List`/Sort/`Func`、(2) `IsHitResultAllowed`→`GetHitModeValidHitResults` **每次 `new[]`**（经 `ResultFor`/`SelectFold` 放大）抬高 alloc；已改为 scratch + 静态表 + `IsHitResultValidForMode`。实测 Combo dense ~45 B/press（此前 ~1.8 KB）。
+  - 可测排除：`ManiaAutoMissGateTest`（Empty defer）；Empty-hold gateTrue==0；BMS/Poor Select alloc；`HitModeValidResultsAllocTest`；`DetachedBeatmapStoreFrameBudget` Drain≤24/帧；BDSP `StartupBackfillDelay`=5s（测试覆写 0）。
 
 ---
 
@@ -211,3 +212,4 @@ flowchart TB
 | 2026-07-14 | 批次 7+：`ManiaReplayFrameEdgeParser`；`EzReplayFeedMode` + Race 开关（StreamByClock 不阻塞进局） |
 | 2026-07-14 | 非 Race FPS：Empty 窗 automiss defer；DetachedStore 每帧限流；BDSP 开工延迟 5s；pressTimes 保留窗收紧 |
 | 2026-07-14 | MICRO-BENCH：alive 扫描 + Select overlap scratch / Func 缓存；`GetHitModeValidHitResults` 静态表（斩 ResultFor 热路径 `new[]`） |
+| 2026-07-14 | 可测排除加固：AutoMissGate / Empty defer；BMS/Poor alloc；DetachedStore Drain≤24；BDSP StartupDelay 可覆写 |

@@ -13,7 +13,6 @@ using osu.Game.Rulesets.Mania.Objects.Drawables;
 using osu.Game.Rulesets.Mania.Scoring;
 using osu.Game.Rulesets.Objects;
 using osu.Game.Rulesets.Objects.Types;
-using osu.Game.Rulesets.Scoring;
 
 namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
 {
@@ -41,6 +40,12 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
 
         public EzEnumJudgePrecedence Precedence { get; init; } = EzEnumJudgePrecedence.Combo;
 
+        public EzEnumHitMode HitMode { get; init; } = EzEnumHitMode.Lazer;
+
+        public bool AllowBmsFallbackToEarliest { get; init; }
+
+        public bool PoorEnabled { get; init; }
+
         public ManiaLaneHotPathWorkloadResult Run()
         {
             if (Keys < 1)
@@ -58,13 +63,13 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
             for (int col = 0; col < Keys; col++)
             {
                 var lane = new ManiaLaneController();
-                lane.ConfigureMissCollection(EzEnumHitMode.Lazer, overallDifficulty: 8);
+                lane.ConfigureMissCollection(HitMode, overallDifficulty: 8);
                 pressHistories[col] = new List<double>(PeakKps);
 
                 for (int i = 0; i < ConcurrentAlivePerColumn; i++)
                 {
                     double start = mid - 40 - i * AliveSpacingMs;
-                    var note = createNote(start);
+                    var note = createNote(start, HitMode);
                     lane.Register(note);
 
                     var hold = createHold(start, duration: 400);
@@ -81,6 +86,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
             int frames = 0;
             int presses = 0;
             int gateCalls = 0;
+            int gateTrue = 0;
             int selectCalls = 0;
 
             int gen0Before = GC.CollectionCount(0);
@@ -95,7 +101,10 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
                 {
                     var obj = gateObjects[i];
                     double end = (obj as IHasDuration)?.EndTime ?? obj.StartTime;
-                    ManiaAutoMissGate.ShouldEvaluateAutoMiss(obj, t - end);
+
+                    if (ManiaAutoMissGate.ShouldEvaluateAutoMiss(obj, t - end))
+                        gateTrue++;
+
                     gateCalls++;
                 }
 
@@ -103,7 +112,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
                 {
                     for (int col = 0; col < Keys; col++)
                     {
-                        lanes[col].SelectPressEntry(t, Precedence, allowBmsFallbackToEarliest: false, poorEnabled: false);
+                        lanes[col].SelectPressEntry(t, Precedence, AllowBmsFallbackToEarliest, PoorEnabled);
                         selectCalls++;
                         presses++;
 
@@ -125,22 +134,75 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
                 frames,
                 presses,
                 gateCalls,
+                gateTrue,
                 selectCalls,
                 Keys,
                 PeakKps,
                 ConcurrentAlivePerColumn,
                 Precedence,
+                AllowBmsFallbackToEarliest,
+                PoorEnabled,
                 allocAfter - allocBefore,
                 gen0After - gen0Before);
         }
 
-        private static DrawableNote createNote(double startTime)
+        /// <summary>
+        /// 仅 Empty Hold（EndTime 在仿真窗外）：断言 GateTrueCount==0，排除 body 期漏过 defer。
+        /// </summary>
+        public static ManiaLaneHotPathWorkloadResult RunEmptyHoldDeferGuard(int objectCount = 200, int durationMs = 1000)
+        {
+            var holds = new HoldNote[objectCount];
+
+            for (int i = 0; i < objectCount; i++)
+            {
+                var hold = new HoldNote { StartTime = 0, Duration = durationMs + 500, Column = 0 };
+                hold.ApplyDefaults(new ControlPointInfo(), new BeatmapDifficulty { OverallDifficulty = 8 });
+                holds[i] = hold;
+            }
+
+            int gateCalls = 0;
+            int gateTrue = 0;
+            long allocBefore = GC.GetAllocatedBytesForCurrentThread();
+            var sw = Stopwatch.StartNew();
+
+            for (int t = 0; t < durationMs; t++)
+            {
+                for (int i = 0; i < objectCount; i++)
+                {
+                    if (ManiaAutoMissGate.ShouldEvaluateAutoMiss(holds[i], t - holds[i].EndTime))
+                        gateTrue++;
+                    gateCalls++;
+                }
+            }
+
+            sw.Stop();
+            long allocAfter = GC.GetAllocatedBytesForCurrentThread();
+
+            return new ManiaLaneHotPathWorkloadResult(
+                sw.ElapsedMilliseconds,
+                durationMs,
+                pressCount: 0,
+                gateCalls,
+                gateTrue,
+                selectPressCalls: 0,
+                keys: 0,
+                peakKps: 0,
+                concurrentAlivePerColumn: objectCount,
+                EzEnumJudgePrecedence.Earliest,
+                allowBmsFallbackToEarliest: false,
+                poorEnabled: false,
+                allocAfter - allocBefore,
+                gen0Collections: 0);
+        }
+
+        private static DrawableNote createNote(double startTime, EzEnumHitMode hitMode)
         {
             var note = new Note
             {
                 StartTime = startTime,
-                HitWindows = new ManiaHitWindows(EzEnumHitMode.Lazer)
+                HitWindows = new ManiaHitWindows(hitMode)
             };
+            note.HitWindows.SetDifficulty(8);
 
             var drawable = new DrawableNote();
             drawable.Apply(note);
@@ -179,11 +241,14 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
         public int FrameCount { get; }
         public int PressCount { get; }
         public int AutoMissGateCalls { get; }
+        public int AutoMissGateTrueCount { get; }
         public int SelectPressCalls { get; }
         public int Keys { get; }
         public int PeakKps { get; }
         public int ConcurrentAlivePerColumn { get; }
         public EzEnumJudgePrecedence Precedence { get; }
+        public bool AllowBmsFallbackToEarliest { get; }
+        public bool PoorEnabled { get; }
         public long AllocatedBytes { get; }
         public int Gen0Collections { get; }
 
@@ -191,16 +256,21 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
 
         public double BytesPerPress => PressCount == 0 ? 0 : (double)AllocatedBytes / PressCount;
 
+        public double GateTrueRatio => AutoMissGateCalls == 0 ? 0 : (double)AutoMissGateTrueCount / AutoMissGateCalls;
+
         public ManiaLaneHotPathWorkloadResult(
             long elapsedMilliseconds,
             int frameCount,
             int pressCount,
             int autoMissGateCalls,
+            int autoMissGateTrueCount,
             int selectPressCalls,
             int keys,
             int peakKps,
             int concurrentAlivePerColumn,
             EzEnumJudgePrecedence precedence,
+            bool allowBmsFallbackToEarliest,
+            bool poorEnabled,
             long allocatedBytes,
             int gen0Collections)
         {
@@ -208,19 +278,23 @@ namespace osu.Game.Rulesets.Mania.EzMania.Diagnostics
             FrameCount = frameCount;
             PressCount = pressCount;
             AutoMissGateCalls = autoMissGateCalls;
+            AutoMissGateTrueCount = autoMissGateTrueCount;
             SelectPressCalls = selectPressCalls;
             Keys = keys;
             PeakKps = peakKps;
             ConcurrentAlivePerColumn = concurrentAlivePerColumn;
             Precedence = precedence;
+            AllowBmsFallbackToEarliest = allowBmsFallbackToEarliest;
+            PoorEnabled = poorEnabled;
             AllocatedBytes = allocatedBytes;
             Gen0Collections = gen0Collections;
         }
 
         public override string ToString()
             => $"keys={Keys} peakKps={PeakKps} alive/col={ConcurrentAlivePerColumn} prec={Precedence} "
+               + $"bmsFb={AllowBmsFallbackToEarliest} poor={PoorEnabled} "
                + $"elapsed={ElapsedMilliseconds}ms frames={FrameCount} presses={PressCount} "
-               + $"gate={AutoMissGateCalls} select={SelectPressCalls} "
+               + $"gate={AutoMissGateCalls} gateTrue={AutoMissGateTrueCount} (~{GateTrueRatio:P0}) select={SelectPressCalls} "
                + $"ms/frame={MillisecondsPerFrame:F4} alloc={AllocatedBytes}B (~{BytesPerPress:F0}/press) gen0={Gen0Collections}";
     }
 }
