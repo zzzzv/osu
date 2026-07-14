@@ -11,8 +11,8 @@ using osu.Game.Rulesets.Objects;
 namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 {
     /// <summary>
-    /// 开局一次性对齐谱面物件 <see cref="ManiaHitWindows"/>（HitMode / 非 O2 窗口 / O2 StartTime BPM 基线）。
-    /// Session 与 Drawable 共用。
+    /// 一次性对齐谱面物件 <see cref="ManiaHitWindows"/>（HitMode / 非 O2 窗口 / O2 StartTime BPM 基线）。
+    /// 该入口为纯烘焙，不读写 O2 全局运行态，Session / Race 可安全并发调用。
     /// </summary>
     public static class ManiaWindowBaker
     {
@@ -20,14 +20,22 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         {
             bool isO2Jam = environment.ManiaHitMode == EzEnumHitMode.O2Jam;
 
-            if (isO2Jam)
-                O2HitModeExtension.InitializeRuntime(beatmap);
-
             foreach (var hitObject in beatmap.HitObjects)
-                alignRecursive(hitObject, environment, isO2Jam);
+                alignRecursive(hitObject, beatmap, environment, isO2Jam);
         }
 
-        private static void alignRecursive(HitObject hitObject, IGameplayEnvironment environment, bool isO2Jam)
+        /// <summary>
+        /// 本地游玩入口：除纯窗口烘焙外，初始化 HUD / press-time BPM 所需的 O2 运行态。
+        /// </summary>
+        public static void AlignForLive(IBeatmap beatmap, IGameplayEnvironment environment)
+        {
+            if (environment.ManiaHitMode == EzEnumHitMode.O2Jam)
+                O2HitModeExtension.InitializeRuntime(beatmap);
+
+            Align(beatmap, environment);
+        }
+
+        private static void alignRecursive(HitObject hitObject, IBeatmap beatmap, IGameplayEnvironment environment, bool isO2Jam)
         {
             if (hitObject.HitWindows is ManiaHitWindows maniaHitWindows)
             {
@@ -36,11 +44,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 // O2Jam：按物件 StartTime 写入基线 BPM（auto-miss / note-lock 扫描用）。
                 // 用户触发判定走 press-time BPM，不 mutate 物件窗口。
                 if (isO2Jam)
-                    maniaHitWindows.UpdateO2JamBpmFromTime(hitObject.StartTime);
+                    maniaHitWindows.BPM = O2HitModeExtension.SafeBpm(beatmap.ControlPointInfo.TimingPointAt(hitObject.StartTime).BPM);
             }
 
             foreach (var nested in hitObject.NestedHitObjects)
-                alignRecursive(nested, environment, isO2Jam);
+                alignRecursive(nested, beatmap, environment, isO2Jam);
         }
     }
 }

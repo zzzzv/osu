@@ -119,16 +119,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                         continue;
                 }
 
-                bool o2PillPassed = true;
-                bool o2UpgradeToPerfect = false;
-
-                if (judgementRound.PillModeEnabled && judgementRound.IsO2Jam)
-                {
-                    syncO2GlobalFromState(judgementRound.MutableState);
-                    o2PillPassed = O2HitModeExtension.PillCheckWithBpm(
-                        timeOffsetForJudgement, judgementRound.O2PressBpm, out _, out o2UpgradeToPerfect);
-                }
-
                 double pressBpm = judgementRound.IsO2Jam ? judgementRound.O2PressBpm : hitWindowHelper.BPM;
 
                 HitResult result;
@@ -152,8 +142,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                             PressBpm = pressBpm,
                             FrameStableId = (long)(input.Time * 1000),
                             BmsState = bms != null ? selected.BmsRoute : null,
-                            O2PillCheckPassed = o2PillPassed,
-                            O2UpgradeToPerfect = o2UpgradeToPerfect,
                         });
 
                         if (!tryMapTailEvaluation(tailEval, out result))
@@ -216,8 +204,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                         PressBpm = pressBpm,
                         FrameStableId = (long)(input.Time * 1000),
                         BmsState = bms != null ? selected.BmsRoute : null,
-                        O2PillCheckPassed = o2PillPassed,
-                        O2UpgradeToPerfect = o2UpgradeToPerfect,
                     });
 
                     if (!tryMapNoteEvaluation(noteEval, out result))
@@ -469,12 +455,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 return O2HitModeExtension.GetBPMAtTime(time);
 
             return getBpmAtTime(beatmap, time);
-        }
-
-        private static void syncO2GlobalFromState(ManiaReplayJudgementState state)
-        {
-            O2HitModeExtension.PILL_COUNT.Value = state.O2PillCount;
-            O2HitModeExtension.CoolCombo = state.O2CoolCombo;
         }
 
         private static double getBpmAtTime(IBeatmap beatmap, double time)

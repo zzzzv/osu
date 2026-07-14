@@ -199,7 +199,7 @@ namespace osu.Game.Rulesets.Mania.UI
             gameplayHitMode = hitModeBindable.Value;
 
             JudgementRound = ManiaJudgementRound.Create(ezConfig.ResolveEnvironment(ReplayRunPurpose.ForLive, ReplayScore?.ScoreInfo, ignoreOffset: ReplayScore != null));
-            ManiaWindowBaker.Align(Beatmap, JudgementRound.Environment);
+            ManiaWindowBaker.AlignForLive(Beatmap, JudgementRound.Environment);
             ManiaEnvironmentJudgements.ApplyToBeatmap(Beatmap, JudgementRound.Environment.ManiaHitMode);
 
             hitModeBindable.BindValueChanged(h =>

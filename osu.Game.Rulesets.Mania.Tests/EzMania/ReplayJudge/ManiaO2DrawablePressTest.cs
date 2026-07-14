@@ -29,13 +29,13 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             beatmap.ControlPointInfo.Add(0, new TimingControlPoint { BeatLength = 1000 });
 
             var environment = ReplayJudgeTestConfig.Create(EzEnumHitMode.O2Jam, EzEnumHealthMode.O2JamNormal);
-            ManiaWindowBaker.Align(beatmap, environment);
+            ManiaWindowBaker.AlignForLive(beatmap, environment);
 
             Assert.That(O2HitModeExtension.GetBPMAtTime(1000), Is.EqualTo(75).Within(1e-3));
         }
 
         [Test]
-        public void TestDrawablePressUsesHitWindowsAfterPressTimeBpmSync()
+        public void TestLivePressUsesPressTimeBpm()
         {
             var ruleset = new ManiaRuleset();
             var beatmap = new TestBeatmap(ruleset.RulesetInfo)
@@ -50,24 +50,22 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             beatmap.HitObjects.Add(note);
 
             var environment = ReplayJudgeTestConfig.Create(EzEnumHitMode.O2Jam, EzEnumHealthMode.O2JamNormal);
-            ManiaWindowBaker.Align(beatmap, environment);
+            ManiaWindowBaker.AlignForLive(beatmap, environment);
 
-            var windows = (ManiaHitWindows)note.HitWindows!;
-            windows.UpdateO2JamBpmFromTime(1000);
-
-            var outcome = O2HitModeJudgement.Instance.EvaluateDrawableNotePress(
+            var outcome = O2HitModeJudgement.Instance.EvaluatePress(
                 0,
-                windows,
-                new O2HitModeJudgement.DrawableNoteContext
+                note.HitWindows!,
+                new O2HitModeJudgement.NotePressContext
                 {
-                    CurrentTime = 1000,
-                    PillCheckPassed = true,
-                },
-                new ManiaReplayJudgementState());
+                    RawOffset = 0,
+                    Bpm = O2HitModeExtension.GetBPMAtTime(1000),
+                    UsePressTimeBpmForJudgement = true,
+                    PillModeEnabled = true,
+                    State = new ManiaReplayJudgementState(),
+                });
 
-            Assert.That(outcome, Is.Not.Null);
-            Assert.That(outcome!.Value.Kind, Is.EqualTo(ManiaNoteJudgementOutcomeKind.Apply));
-            Assert.That(outcome.Value.Result, Is.EqualTo(HitResult.Perfect));
+            Assert.That(outcome.Kind, Is.EqualTo(ManiaNoteJudgementOutcomeKind.Apply));
+            Assert.That(outcome.Result, Is.EqualTo(HitResult.Perfect));
         }
 
         [Test]
@@ -101,6 +99,28 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
 
             Assert.That(outcome.Kind, Is.EqualTo(ManiaNoteJudgementOutcomeKind.Apply));
             Assert.That(outcome.Result, Is.EqualTo(HitResult.Perfect));
+        }
+
+        [Test]
+        public void TestSessionWindowBakeDoesNotMutateLivePillState()
+        {
+            var ruleset = new ManiaRuleset();
+            var beatmap = new TestBeatmap(ruleset.RulesetInfo)
+            {
+                BeatmapInfo = { BPM = 120 },
+                ControlPointInfo = new ControlPointInfo(),
+            };
+            beatmap.ControlPointInfo.Add(0, new TimingControlPoint { BeatLength = 500 });
+
+            O2HitModeExtension.PILL_COUNT.Value = 4;
+            O2HitModeExtension.CoolCombo = 9;
+
+            ManiaWindowBaker.Align(
+                beatmap,
+                ReplayJudgeTestConfig.Create(EzEnumHitMode.O2Jam, EzEnumHealthMode.O2JamNormal));
+
+            Assert.That(O2HitModeExtension.PILL_COUNT.Value, Is.EqualTo(4));
+            Assert.That(O2HitModeExtension.CoolCombo, Is.EqualTo(9));
         }
     }
 }

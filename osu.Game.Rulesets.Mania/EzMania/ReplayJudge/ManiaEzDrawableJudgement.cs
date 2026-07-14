@@ -210,12 +210,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             if (!round.IsEzHitMode || round.Strategy == null)
                 return false;
 
-            bool o2PillPassed = true;
-            bool o2Upgrade = false;
-
-            if (userTriggered && round.Strategy is O2HitModeJudgement && round.PillModeEnabled)
-                o2PillPassed = O2HitModeExtension.PillCheckWithBpm(timeOffset, round.O2PressBpm, out _, out o2Upgrade);
-
             var bmsState = round.Strategy is BmsHitModeJudgement ? GetBmsState(drawable) : null;
 
             var result = ManiaJudgementKernel.EvaluateNote(new ManiaJudgementKernel.NoteEvaluationRequest
@@ -229,10 +223,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 FrameStableId = getFrameStableId(drawable),
                 BmsState = bmsState,
                 CheckBmsCanRouteOnPress = userTriggered,
-                O2PillCheckPassed = o2PillPassed,
-                O2UpgradeToPerfect = o2Upgrade,
             });
 
+            publishO2RuntimeState(round);
             return applyNoteEvaluation(drawable, round, result, bmsState, userTriggered);
         }
 
@@ -246,12 +239,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
             if (!round.IsEzHitMode)
                 return false;
-
-            bool o2PillPassed = true;
-            bool o2Upgrade = false;
-
-            if (userTriggered && round.Strategy is O2HitModeJudgement && round.PillModeEnabled)
-                o2PillPassed = O2HitModeExtension.PillCheckWithBpm(timeOffset, round.O2PressBpm, out _, out o2Upgrade);
 
             var bmsState = round.Strategy is BmsHitModeJudgement ? GetBmsState(drawable) : null;
 
@@ -269,9 +256,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 EventTime = drawable.Time.Current,
                 FrameStableId = getFrameStableId(drawable),
                 BmsState = bmsState,
-                O2PillCheckPassed = o2PillPassed,
-                O2UpgradeToPerfect = o2Upgrade,
             });
+
+            publishO2RuntimeState(round);
 
             if (!result.Handled)
                 return false;
@@ -353,5 +340,14 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
         private static long getFrameStableId(DrawableHitObject drawable)
             => (long)(drawable.Time.Current * 1000);
+
+        private static void publishO2RuntimeState(ManiaJudgementRound round)
+        {
+            if (!round.IsO2Jam)
+                return;
+
+            O2HitModeExtension.PILL_COUNT.Value = round.MutableState.O2PillCount;
+            O2HitModeExtension.CoolCombo = round.MutableState.O2CoolCombo;
+        }
     }
 }

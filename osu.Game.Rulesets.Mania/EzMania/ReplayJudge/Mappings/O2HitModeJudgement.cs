@@ -63,89 +63,12 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
 
             public ManiaReplayJudgementState State { get; init; }
 
-            public bool PillCheckPassed { get; init; }
-
-            public bool UpgradeToPerfect { get; init; }
-
             public bool UsePressTimeBpmForJudgement { get; init; }
-        }
-
-        public readonly struct DrawableNoteContext
-        {
-            public double CurrentTime { get; init; }
-
-            public bool PillCheckPassed { get; init; }
-
-            public bool UpgradeToPerfect { get; init; }
-        }
-
-        public readonly struct DrawableTailContext
-        {
-            public double CurrentTime { get; init; }
-
-            public bool PillCheckPassed { get; init; }
-
-            public bool UpgradeToPerfect { get; init; }
-
-            public bool HeadHit { get; init; }
-
-            public bool HoldBroken { get; init; }
-
-            public bool WasHolding { get; init; }
-
-            public bool PillModeEnabled { get; init; }
         }
 
         public sealed class HoldBreakState
         {
             public Func<DrawableHitObject, double, bool>? CheckHittableBackup;
-        }
-
-        public ManiaNoteJudgementOutcome? EvaluateDrawableNotePress(double timeOffset, HitWindows hitWindows, in DrawableNoteContext context, ManiaReplayJudgementState state)
-        {
-            if (!context.PillCheckPassed)
-                return ManiaNoteJudgementOutcome.Ignore;
-
-            var outcome = EvaluatePress(timeOffset, hitWindows, new NotePressContext
-            {
-                RawOffset = timeOffset,
-                Bpm = O2HitModeExtension.GetBPMAtTime(context.CurrentTime),
-                PillModeEnabled = true,
-                PillCheckPassed = true,
-                UpgradeToPerfect = context.UpgradeToPerfect,
-                State = state,
-            });
-
-            return outcome;
-        }
-
-        public HitResult? EvaluateDrawableTailPress(double timeOffset, HitWindows hitWindows, in DrawableTailContext context, ManiaReplayJudgementState state)
-        {
-            if (!context.PillCheckPassed)
-                return null;
-
-            var judge = EvaluateTailJudge(new HoldTailEvaluationContext
-            {
-                RawOffset = timeOffset,
-                TimeOffsetForJudgement = timeOffset,
-                HitWindows = hitWindows,
-                HeadHit = context.HeadHit,
-                HoldBreak = IsHoldBreak(timeOffset, hitWindows),
-                HoldBroken = context.HoldBroken,
-                WasHoldingBeforeRelease = context.WasHolding,
-                PillModeEnabled = context.PillModeEnabled,
-                Bpm = O2HitModeExtension.GetBPMAtTime(context.CurrentTime),
-                State = state,
-                UsePressTimeBpmForJudgement = false,
-            });
-
-            if (judge == O2Judge.None)
-                return null;
-
-            if (context.UpgradeToPerfect)
-                return MapTo(O2Judge.Cool);
-
-            return MapTo(judge);
         }
 
         public ManiaNoteJudgementOutcome EvaluateAutoMiss(double timeOffset, HitWindows hitWindows)
@@ -174,9 +97,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings
 
             if (context.PillModeEnabled)
                 ApplyPillLogic(Math.Abs(context.RawOffset), context.Bpm, context.State, ref judge);
-
-            if (context.UpgradeToPerfect)
-                judge = O2Judge.Cool;
 
             return ManiaNoteJudgementOutcome.ApplyResult(MapTo(judge));
         }

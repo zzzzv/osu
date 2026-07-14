@@ -46,11 +46,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             public bool ForcePoorOnTailHoldBreak { get; init; }
 
             public bool CheckBmsCanRouteOnPress { get; init; }
-
-            /// <summary>Drawable O2 press：已由 <c>PillCheckWithBpm</c> 预检时为 true。</summary>
-            public bool O2PillCheckPassed { get; init; }
-
-            public bool O2UpgradeToPerfect { get; init; }
         }
 
         public readonly struct NoteEvaluationResult
@@ -99,10 +94,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             public long FrameStableId { get; init; }
 
             public BmsHitModeJudgement.BmsRouteState? BmsState { get; init; }
-
-            public bool O2PillCheckPassed { get; init; }
-
-            public bool O2UpgradeToPerfect { get; init; }
         }
 
         public readonly struct HoldTailEvaluationResult
@@ -160,21 +151,15 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
                 if (request.UserTriggered)
                 {
-                    if (round.PillModeEnabled && !request.O2PillCheckPassed)
-                        return NoteEvaluationResult.Ignore;
-
                     var outcome = o2.EvaluatePress(request.TimeOffset, request.HitWindows, new O2HitModeJudgement.NotePressContext
                     {
                         RawOffset = request.TimeOffset,
                         Bpm = pressBpm,
                         UsePressTimeBpmForJudgement = true,
                         PillModeEnabled = round.PillModeEnabled,
-                        PillCheckPassed = !round.PillModeEnabled || request.O2PillCheckPassed,
-                        UpgradeToPerfect = request.O2UpgradeToPerfect,
                         State = round.MutableState,
                     });
 
-                    syncO2HudPillCount(round.MutableState);
                     return NoteEvaluationResult.FromNoteOutcome(outcome);
                 }
 
@@ -258,9 +243,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                     return HoldTailEvaluationResult.HandledNoOp;
                 }
 
-                if (round.PillModeEnabled && !request.O2PillCheckPassed)
-                    return HoldTailEvaluationResult.HandledNoOp;
-
                 var judge = o2.EvaluateTailJudge(new HoldTailEvaluationContext
                 {
                     RawOffset = request.RawOffset,
@@ -276,13 +258,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                     State = round.MutableState,
                 });
 
-                syncO2HudPillCount(round.MutableState);
-
                 if (judge == O2Judge.None)
                     return HoldTailEvaluationResult.HandledNoOp;
-
-                if (request.O2UpgradeToPerfect)
-                    return HoldTailEvaluationResult.FromResult(O2HitModeJudgement.MapTo(O2Judge.Cool));
 
                 return HoldTailEvaluationResult.FromResult(O2HitModeJudgement.MapTo(judge));
             }
@@ -351,7 +328,5 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         private static double resolveO2PressBpm(in HoldTailEvaluationRequest request)
             => request.PressBpm ?? request.Round.O2PressBpm;
 
-        private static void syncO2HudPillCount(ManiaReplayJudgementState state)
-            => O2HitModeExtension.PILL_COUNT.Value = state.O2PillCount;
     }
 }
