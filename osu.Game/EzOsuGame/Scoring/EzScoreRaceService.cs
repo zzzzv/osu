@@ -84,11 +84,13 @@ namespace osu.Game.EzOsuGame.Scoring
         private int timelineBuildVersion;
 
         private Bindable<bool> serviceEnabled = new Bindable<bool>(true);
+        private Bindable<EzReplayFeedMode> feedMode = new Bindable<EzReplayFeedMode>(EzReplayFeedMode.BatchAllEvents);
 
         [BackgroundDependencyLoader]
         private void load(Ez2ConfigManager config)
         {
             serviceEnabled = config.GetBindable<bool>(Ez2Setting.EzScoreRaceServiceEnabled);
+            feedMode = config.GetBindable<EzReplayFeedMode>(Ez2Setting.EzScoreRaceFeedMode);
         }
 
         protected override void LoadComplete()
@@ -543,6 +545,7 @@ namespace osu.Game.EzOsuGame.Scoring
                 unsubscribeScreenHooks();
                 cancelTimelineBuild();
                 serviceEnabled.UnbindAll();
+                feedMode.UnbindAll();
             }
 
             base.Dispose(isDisposing);

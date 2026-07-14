@@ -8,6 +8,7 @@ using osu.Game.Database;
 using osu.Game.EzOsuGame.Analysis;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Localization;
+using osu.Game.EzOsuGame.Scoring;
 using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Overlays;
 using osu.Game.Overlays.Settings;
@@ -66,6 +67,15 @@ namespace osu.Game.EzOsuGame.Overlays
                 {
                     Keywords = new[] { "race", "timeline", "角逐", "时间线", "fps" }
                 },
+                new SettingsItemV2(new FormEnumDropdown<EzReplayFeedMode>
+                {
+                    Current = ezConfig.GetBindable<EzReplayFeedMode>(Ez2Setting.EzScoreRaceFeedMode),
+                    Caption = EZ_SCORE_RACE_FEED_MODE,
+                    HintText = EZ_SCORE_RACE_FEED_MODE_TOOLTIP,
+                })
+                {
+                    Keywords = new[] { "race", "feed", "batch", "stream", "角逐", "预建" }
+                },
             });
         }
 
@@ -123,5 +133,16 @@ namespace osu.Game.EzOsuGame.Overlays
             "When disabled, skips local score queries on song select and ghost timeline builds when entering play."
             + "\nScore race / compare HUD components will not work."
             + "\nUse for A/B isolation of startup-wide FPS regressions across cold launches.");
+
+        internal static readonly LocalisableString EZ_SCORE_RACE_FEED_MODE = new EzLocalizationManager.EzLocalisableString(
+            "角逐时间线喂入模式", "Score Race Timeline Feed Mode");
+
+        internal static readonly LocalisableString EZ_SCORE_RACE_FEED_MODE_TOOLTIP = new EzLocalizationManager.EzLocalisableString(
+            "BatchAllEvents：进局前阻塞直至 ghost timeline 预建完成（默认）。"
+            + "\nStreamByClock：进局不阻塞；timeline 后台就绪后 HUD 再按时钟插值。"
+            + "\n仅在启用角逐服务时生效。",
+            "BatchAllEvents: block PlayerLoader until ghost timelines are prebuilt (default)."
+            + "\nStreamByClock: do not block entering play; HUD interpolates once timelines arrive."
+            + "\nOnly applies when the score-race service is enabled.");
     }
 }

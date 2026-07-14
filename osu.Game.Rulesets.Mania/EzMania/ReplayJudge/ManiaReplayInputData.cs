@@ -7,7 +7,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 {
     /// <summary>
     /// Replay 帧序列解析后的单个输入边沿事件（press / release）。
-    /// 仅由 <see cref="ManiaReplaySession"/> 解析产出，<see cref="ManiaReplaySessionSimulator"/> 消费。
+    /// 由 <see cref="ManiaReplayFrameEdgeParser"/> 产出，<see cref="ManiaReplaySessionSimulator"/> 消费。
     /// </summary>
     internal readonly struct ManiaReplayInputEvent
     {

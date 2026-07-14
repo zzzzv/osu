@@ -51,6 +51,10 @@ namespace osu.Game.EzOsuGame.Scoring
             if (!loaderPreparationActive)
                 return false;
 
+            // StreamByClock：不阻塞进局；timeline 后台就绪后由 HUD 插值接管。
+            if (feedMode.Value == EzReplayFeedMode.StreamByClock)
+                return false;
+
             if (loaderPreparationPending)
                 return true;
 

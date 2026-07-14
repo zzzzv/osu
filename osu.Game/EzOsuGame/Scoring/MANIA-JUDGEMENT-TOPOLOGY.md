@@ -16,10 +16,10 @@
 | **3** | **Fix-1**：`Column.pressTimes` 有界裁剪；`ManiaDrawableMissTiming` 零分配 | 完成 |
 | **4** | **Fix-2**：automiss 更早 gate，减少未进 miss 窗的 `UpdateResult` 入口 | 完成 |
 | **5** | **MLPS 扩充**（Earliest/Combo/Duration/BMS post-Bad）+ MLC 同位置直调；**overlap 边界缓存**（register 时算 max 窗，按不再整列扫） | 完成 |
-| **6** | `ManiaScoreHitEventGenerator` 收口到 `RunHitEventsAsync`；补 HitEvents 路径 p50/p95 bench（目标参考 &lt;10ms） | 待做 |
-| **7+** | ReplayFrame 统一消费上提 `EzReplaySession`；Race `FeedMode`（预建 vs 按 clock 喂入）bench + 开关 — **TODO，本阶段不实现** |  backlog |
+| **6** | `ManiaScoreHitEventGenerator` 收口到 `RunHitEventsAsync`；补 HitEvents 路径 p50/p95 bench（目标参考 &lt;10ms） | 完成 |
+| **7+** | ReplayFrame 边沿解析抽出 + Race `FeedMode`（BatchAllEvents / StreamByClock）开关 | 完成 |
 
-**原则**：先证 P0 疑点（批次 2）再改（3–4）；架构收拢（5）与 parity 测试同批；长期项只记 TODO。
+**原则**：先证 P0 疑点（批次 2）再改（3–4）；架构收拢（5–7）与 parity 测试同批。局内 FPS（Work/SwapBuffer）另案，见后续「热路径下一刀」。
 
 ---
 
@@ -80,7 +80,7 @@ flowchart TB
         AMG[ManiaAutoMissGate]
     end
     subgraph N [N Session]
-        Parse[parseReplay]
+        Parse[FrameEdgeParser]
         Sim[Simulator]
         MLPS[ManiaLanePressSelector]
         FM[applyForcedMisses]
@@ -123,11 +123,10 @@ flowchart TB
 | `Column.pressTimes` | M | 否 | **Fix-1** 有界列表 |
 | `ManiaDrawableMissTiming` | M | 公式=N | **Fix-1** 零分配 |
 | `ManiaAutoMissGate` | M | 门前 | **Fix-2** `ShouldDeferAutoMissUpdate` 跳过 `UpdateResult` |
-| `parseReplay` | N | 否 | 待上提 Ez 层 |
-| `ManiaFramedReplayInputHandler` | M | 否 | 待与统一 ReplayFrame 消费合并 |
-| `ManiaScoreHitEventGenerator` | N | 委托 | **重复 API**，= `RunHitEventsAsync` |
-| `RejudgeHitEvent` | — | 否 | 展示旁路 |
-| `EzScoreRaceService` | N | 预建 timeline | **TODO** FeedMode bench/开关 |
+| `parseReplay` / `ManiaReplayFrameEdgeParser` | N | 否 | Session 边沿解析；Batch / Stream 游标共用 |
+| `ManiaFramedReplayInputHandler` | M | 否 | Drawable 回放帧态喂入；与边沿解析分工（不合并成一类） |
+| `ManiaScoreHitEventGenerator` | — | — | **Obsolete**；请用 `RunHitEventsAsync` |
+| `EzScoreRaceService` | N | 预建 / 流式 | `EzReplayFeedMode`：BatchAllEvents 阻塞进局；StreamByClock 不阻塞 |
 
 **关注**：登记表中 M 专用 / N 专用 多，真正 M+N 少 — 调整拓扑时有意识收拢，不必一次做完。
 
@@ -147,16 +146,19 @@ flowchart TB
 
 ### 5.3 ReplayFrame
 
-- 各场景应能 **直接消费 `ReplayFrame`**；中间层上提 `osu.Game/EzReplaySession`，减少 Mania 内 `parseReplay` 与 `ManiaFramedReplayInputHandler` 分叉。
+- Session：`ManiaReplayFrameEdgeParser`（`ParseAll` / `ManiaReplayFrameEdgeCursor.DrainUntil`）产出边沿；`ManiaReplaySession` 委托之。
+- Drawable 回放仍走 `ManiaFramedReplayInputHandler`（帧态→按键系统）；与边沿解析 **分工保留**。
+- 枚举 `EzReplayFeedMode` 在 `osu.Game/EzOsuGame/Scoring`；Race / Session 共用语义。
 
 ### 5.4 Race
 
 - 预建 timeline + HUD 插值 **不算偏离设计**。
-- **TODO**：`FeedMode` = `BatchAllEvents` / `StreamByClock` + bench（本阶段不实现）。
+- **`Ez2Setting.EzScoreRaceFeedMode`**：`BatchAllEvents`（默认，PlayerLoader 等 timeline）/ `StreamByClock`（进局不阻塞，后台就绪后插值）。
 
 ### 5.5 Generator
 
-- `ManiaScoreHitEventGenerator` = `RunHitEventsAsync` 的 **重复 API**；新代码只调 Service，Generator 待 obsolete。
+- `ManiaScoreHitEventGenerator` 已 **Obsolete**；生产代码走 `ManiaReplaySessionService.RunHitEventsAsync`。
+- Bench：`BenchmarkManiaReplaySession.BenchmarkRunHitEventsAsync`；暖机延迟烟测 `ManiaRunHitEventsLatencyTest`。
 
 ---
 
@@ -201,3 +203,5 @@ flowchart TB
 | 2026-07-13 | 批次 2–3：`ManiaJudgeHotPathTrace` 扩展；Fix-1 有界 pressTimes + 零分配 MissTiming |
 | 2026-07-14 | 批次 4：`DrawableHitObject.ShouldDeferAutoMissUpdate` + `ManiaAutoMissGate` 跳过 automiss 热路径 |
 | 2026-07-14 | 批次 5：MLPS M/N 共用；MLC/Session 直调；overlap max 窗边界缓存 |
+| 2026-07-14 | 批次 6：Generator Obsolete；Graph/测试改 RunHitEventsAsync；HitEvents BDN + 暖机延迟烟测 |
+| 2026-07-14 | 批次 7+：`ManiaReplayFrameEdgeParser`；`EzReplayFeedMode` + Race 开关（StreamByClock 不阻塞进局） |

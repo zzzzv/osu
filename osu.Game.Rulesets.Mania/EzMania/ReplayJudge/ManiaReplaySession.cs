@@ -9,7 +9,6 @@ using osu.Game.Beatmaps;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Scoring;
 using osu.Game.Rulesets.Mania.Objects;
-using osu.Game.Rulesets.Mania.Replays;
 using osu.Game.Rulesets.Mania.Scoring;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Replays;
@@ -135,7 +134,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
             buildColumnMaps(targets, out var pressColumns, out var releaseColumns);
 
-            var inputData = parseReplay(score.Replay, environment);
+            var inputData = parseReplayFrames(score.Replay, environment);
 
             ManiaReplaySessionSimulator.Simulate(
                 beatmap,
@@ -173,89 +172,12 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         }
 
         /// <summary>
-        /// 单次解析 replay 帧序列，同时产出有序输入事件流与每列 press 时间索引。
-        /// 替代原来 <c>ManiaReplayInputParser.Parse</c> + <c>BuildPressTimesByColumn</c> 的两次独立解析。
+        /// ReplayFrame → 边沿（BatchAllEvents）。实现见 <see cref="ManiaReplayFrameEdgeParser"/>。
         /// </summary>
-        private static ManiaReplayInputData parseReplay(Replay replay, IGameplayEnvironment environment)
+        private static ManiaReplayInputData parseReplayFrames(Replay replay, IGameplayEnvironment environment)
         {
-            var frames = replay.Frames.OfType<ManiaReplayFrame>().OrderBy(f => f.Time).ToList();
-            var inputEvents = new List<ManiaReplayInputEvent>(frames.Count * 2);
-            var pressTimes = new Dictionary<int, List<double>>();
             double frameTimeOffset = environment.ApplyInputOffsetViaReplayFrameShift ? environment.OffsetPlusMania : 0;
-
-            var lastActions = new List<ManiaAction>();
-
-            foreach (var frame in frames)
-            {
-                var current = frame.Actions.ToList();
-
-                // 检测新按下（current 有但 lastActions 无）
-                foreach (var action in current)
-                {
-                    if (lastActions.Contains(action))
-                        continue;
-
-                    int column = (int)action;
-
-                    if (column >= 0)
-                    {
-                        double inputTime = frame.Time + frameTimeOffset;
-                        inputEvents.Add(new ManiaReplayInputEvent(inputTime, column, true));
-
-                        if (!pressTimes.TryGetValue(column, out var list))
-                        {
-                            list = new List<double>();
-                            pressTimes[column] = list;
-                        }
-
-                        list.Add(inputTime);
-                    }
-                }
-
-                // 检测释放（lastActions 有但 current 无）
-                foreach (var action in lastActions)
-                {
-                    if (current.Contains(action))
-                        continue;
-
-                    int column = (int)action;
-                    if (column >= 0)
-                        inputEvents.Add(new ManiaReplayInputEvent(frame.Time + frameTimeOffset, column, false));
-                }
-
-                lastActions = current;
-            }
-
-            // 末尾未释放的键补 Release 事件
-            if (lastActions.Count > 0)
-            {
-                double endTime = frames[^1].Time;
-
-                foreach (var action in lastActions)
-                {
-                    int column = (int)action;
-                    if (column >= 0)
-                        inputEvents.Add(new ManiaReplayInputEvent(endTime, column, false));
-                }
-            }
-
-            // 排序：时间升序 → release 优先 → 列索引升序
-            inputEvents.Sort((a, b) =>
-            {
-                int timeComparison = a.Time.CompareTo(b.Time);
-                if (timeComparison != 0)
-                    return timeComparison;
-
-                if (a.IsPress != b.IsPress)
-                    return a.IsPress ? 1 : -1;
-
-                return a.Column.CompareTo(b.Column);
-            });
-
-            foreach (var list in pressTimes.Values)
-                list.Sort();
-
-            return new ManiaReplayInputData(inputEvents, pressTimes);
+            return ManiaReplayFrameEdgeParser.ParseAll(replay, frameTimeOffset);
         }
 
         private static void applyForcedMisses(
