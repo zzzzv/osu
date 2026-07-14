@@ -16,7 +16,6 @@ using osu.Game.EzOsuGame.Scoring;
 using osu.Game.IO.Archives;
 using osu.Game.Online.API.Requests.Responses;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
-using osu.Game.Rulesets.Mania.EzMania.Statistics;
 using osu.Game.Scoring;
 using osu.Game.Scoring.Legacy;
 using osu.Game.Tests;
@@ -66,7 +65,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
                             new LegacyScoreEncoder(score, playableBeatmap).Encode(replayStream);
                             var imported = ImportScoreTest.LoadScoreIntoOsu(osu, score.ScoreInfo, new ByteArrayArchiveReader(replayStream.ToArray(), "replay.osr"));
 
-                            _ = ManiaScoreHitEventGenerator.Instance;
+                            _ = new ManiaReplaySessionService();
 
                             timeline = EzScoreTimelineBuilder.TryBuild(scoreManager, beatmapManager, imported, sharedPlayableBeatmap: playableBeatmap);
                             var databasedScore = scoreManager.GetScore(imported);

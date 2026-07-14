@@ -66,12 +66,12 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
             originalTotalScore = score.TotalScore;
 
             // 帧量化检测：若所有 HitEvent 的 TimeOffset 都是帧间隔（约 16.67ms）的整数倍，
-            // 说明 HitEvents 已被帧量化污染，需要用 ManiaScoreHitEventGenerator 重新生成精确版本。
+            // 说明 HitEvents 已被帧量化污染，需要用 RunHitEventsAsync 重新生成精确版本。
             originalHitEventsOverride = tryDetectAndRegenerateFrameQuantizedEvents(score, beatmap);
         }
 
         /// <summary>
-        /// 检测 HitEvents 是否被帧量化污染，若污染则通过 <see cref="ManiaScoreHitEventGenerator"/>
+        /// 检测 HitEvents 是否被帧量化污染，若污染则通过 <see cref="ManiaReplaySessionService.RunHitEventsAsync"/>
         /// 重新生成精确 HitEvents（不写回 <c>ScoreInfo</c>）。
         /// </summary>
         private static IReadOnlyList<HitEvent>? tryDetectAndRegenerateFrameQuantizedEvents(ScoreInfo score, IBeatmap beatmap)
@@ -89,17 +89,24 @@ namespace osu.Game.Rulesets.Mania.EzMania.Statistics
             if (!allFrameQuantized)
                 return null;
 
-            // 帧量化版本 → 用 ManiaScoreHitEventGenerator 重新生成精确事件
+            // 冗余分支清理：无 Replay 即无法重算
             try
             {
+                if (score.Ruleset.OnlineID != 3)
+                    return null;
+
                 var scoreForBridge = new Score { ScoreInfo = score };
 
-                if (ManiaScoreHitEventGenerator.Instance.Validate(scoreForBridge))
-                {
-                    var precise = ManiaScoreHitEventGenerator.Instance.Generate(scoreForBridge, beatmap);
-                    if (precise.Count > 0)
-                        return precise;
-                }
+                if (scoreForBridge.Replay == null || !ManiaReplayFrameEdgeParser.IsManiaReplay(scoreForBridge.Replay))
+                    return null;
+
+                var precise = new ManiaReplaySessionService()
+                    .RunHitEventsAsync(scoreForBridge, beatmap)
+                    .GetAwaiter()
+                    .GetResult();
+
+                if (precise is { Count: > 0 })
+                    return precise;
             }
             catch
             {

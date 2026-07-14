@@ -1,6 +1,7 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
@@ -12,6 +13,7 @@ using osu.Game.Rulesets.Mania;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
 using osu.Game.Rulesets.Mania.Objects;
 using osu.Game.Rulesets.Mania.Replays;
+using osu.Game.Rulesets.Scoring;
 using osu.Game.Scoring;
 
 namespace osu.Game.Benchmarks
@@ -77,6 +79,31 @@ namespace osu.Game.Benchmarks
         public async Task<Score> BenchmarkJackRunAsync()
         {
             return await sessionService.RunAsync(
+                jackScore.DeepClone(),
+                jackBeatmap,
+                ReplayRunPurpose.ForStored,
+                CancellationToken.None
+            ).ConfigureAwait(true);
+        }
+
+        /// <summary>
+        /// HitEvents 专用出口：相对完整 RunAsync 的延迟基线（目标参考 p50/p95 &lt;10ms，真实谱视密度而定）。
+        /// </summary>
+        [Benchmark]
+        public async Task<List<HitEvent>> BenchmarkRunHitEventsAsync()
+        {
+            return await sessionService.RunHitEventsAsync(
+                score.DeepClone(),
+                beatmap,
+                ReplayRunPurpose.ForStored,
+                CancellationToken.None
+            ).ConfigureAwait(true);
+        }
+
+        [Benchmark]
+        public async Task<List<HitEvent>> BenchmarkJackRunHitEventsAsync()
+        {
+            return await sessionService.RunHitEventsAsync(
                 jackScore.DeepClone(),
                 jackBeatmap,
                 ReplayRunPurpose.ForStored,

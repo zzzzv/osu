@@ -9,7 +9,6 @@ using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Scoring;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge.Mappings;
-using osu.Game.Rulesets.Mania.EzMania.Statistics;
 using osu.Game.Rulesets.Mania.Objects;
 using osu.Game.Rulesets.Scoring;
 using osu.Game.Scoring;
@@ -138,7 +137,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             var (score, beatmap, environment) = LazerTapReplayFixtures.CreateTwoNoteColumnTap();
 
             var sessionEvents = ManiaReplaySession.RunHitEvents(score, beatmap, environment);
-            var generatorEvents = ManiaScoreHitEventGenerator.Instance.Generate(score, beatmap);
+            var generatorEvents = new ManiaReplaySessionService().RunHitEventsAsync(score, beatmap).GetAwaiter().GetResult();
 
             Assert.That(ManiaReplayParityHelper.AreJudgementsEquivalent(generatorEvents, sessionEvents), Is.True,
                 () => $"generator=[{ManiaReplayParityHelper.DescribeJudgements(generatorEvents)}] session=[{ManiaReplayParityHelper.DescribeJudgements(sessionEvents)}]");
@@ -150,7 +149,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             var (score, beatmap, environment) = LazerTapReplayFixtures.CreateSingleHoldPerfect();
 
             var sessionEvents = ManiaReplaySession.RunHitEvents(score, beatmap, environment);
-            var generatorEvents = ManiaScoreHitEventGenerator.Instance.Generate(score, beatmap);
+            var generatorEvents = new ManiaReplaySessionService().RunHitEventsAsync(score, beatmap).GetAwaiter().GetResult();
 
             Assert.That(ManiaReplayParityHelper.AreJudgementsEquivalent(generatorEvents, sessionEvents), Is.True,
                 () => $"generator=[{ManiaReplayParityHelper.DescribeJudgements(generatorEvents)}] session=[{ManiaReplayParityHelper.DescribeJudgements(sessionEvents)}]");
@@ -164,7 +163,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             var (score, beatmap, environment) = LazerTapReplayFixtures.CreateSingleHoldLateRelease();
 
             var sessionEvents = ManiaReplaySession.RunHitEvents(score, beatmap, environment);
-            var generatorEvents = ManiaScoreHitEventGenerator.Instance.Generate(score, beatmap);
+            var generatorEvents = new ManiaReplaySessionService().RunHitEventsAsync(score, beatmap).GetAwaiter().GetResult();
 
             Assert.That(ManiaReplayParityHelper.AreJudgementsEquivalent(generatorEvents, sessionEvents), Is.True,
                 () => $"generator=[{ManiaReplayParityHelper.DescribeJudgements(generatorEvents)}] session=[{ManiaReplayParityHelper.DescribeJudgements(sessionEvents)}]");
@@ -179,7 +178,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             ReplayJudgeTestConfig.ApplyToGlobalConfig(environment);
 
             var sessionEvents = ManiaReplaySession.RunHitEvents(score, beatmap, environment);
-            var generatorEvents = ManiaScoreHitEventGenerator.Instance.Generate(score, beatmap);
+            var generatorEvents = new ManiaReplaySessionService().RunHitEventsAsync(score, beatmap).GetAwaiter().GetResult();
 
             Assert.That(ManiaReplayParityHelper.AreJudgementsEquivalent(generatorEvents, sessionEvents), Is.True,
                 () => $"generator=[{ManiaReplayParityHelper.DescribeJudgements(generatorEvents)}] session=[{ManiaReplayParityHelper.DescribeJudgements(sessionEvents)}]");
@@ -208,7 +207,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
 
             var fromLive = GlobalConfigStore.EzConfig.ResolveEnvironment(ReplayRunPurpose.ForLive, score.ScoreInfo, ignoreOffset: true);
             var fromStored = GlobalConfigStore.EzConfig.ResolveEnvironment(ReplayRunPurpose.ForStored, score.ScoreInfo);
-            var generatorEvents = ManiaScoreHitEventGenerator.Instance.Generate(score, beatmap);
+            var generatorEvents = new ManiaReplaySessionService().RunHitEventsAsync(score, beatmap).GetAwaiter().GetResult();
             var sessionLive = ManiaReplaySession.RunHitEvents(score, beatmap, fromLive);
             var sessionStored = ManiaReplaySession.RunHitEvents(score, beatmap, fromStored);
 
@@ -231,7 +230,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
 
             var sessionEnvironment = GlobalConfigStore.EzConfig.ResolveEnvironment(ReplayRunPurpose.ForLive, score.ScoreInfo, ignoreOffset: true);
             var sessionEvents = ManiaReplaySession.RunHitEvents(score, beatmap, sessionEnvironment);
-            var generatorEvents = ManiaScoreHitEventGenerator.Instance.Generate(score, beatmap);
+            var generatorEvents = new ManiaReplaySessionService().RunHitEventsAsync(score, beatmap).GetAwaiter().GetResult();
 
             Assert.That(ManiaReplayParityHelper.AreJudgementsEquivalent(generatorEvents, sessionEvents), Is.True,
                 () => $"generator=[{ManiaReplayParityHelper.DescribeJudgements(generatorEvents)}] session=[{ManiaReplayParityHelper.DescribeJudgements(sessionEvents)}]");
@@ -302,7 +301,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             var (score, beatmap, environment) = HitModeReplayFixtures.CreateEz2AcHoldHeadGreatSoftened();
 
             var sessionEvents = ManiaReplaySession.RunHitEvents(score, beatmap, environment);
-            var generatorEvents = ManiaScoreHitEventGenerator.Instance.Generate(score, beatmap);
+            var generatorEvents = new ManiaReplaySessionService().RunHitEventsAsync(score, beatmap).GetAwaiter().GetResult();
 
             Assert.That(ManiaReplayParityHelper.AreJudgementsEquivalent(generatorEvents, sessionEvents), Is.True,
                 () => $"generator=[{ManiaReplayParityHelper.DescribeJudgements(generatorEvents)}] session=[{ManiaReplayParityHelper.DescribeJudgements(sessionEvents)}]");
@@ -314,7 +313,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             var (score, beatmap, environment) = HitModeReplayFixtures.CreateO2TwoNoteTap();
 
             var sessionEvents = ManiaReplaySession.RunHitEvents(score, beatmap, environment);
-            var generatorEvents = ManiaScoreHitEventGenerator.Instance.Generate(score, beatmap);
+            var generatorEvents = new ManiaReplaySessionService().RunHitEventsAsync(score, beatmap).GetAwaiter().GetResult();
 
             Assert.That(ManiaReplayParityHelper.AreJudgementsEquivalent(generatorEvents, sessionEvents), Is.True,
                 () => $"generator=[{ManiaReplayParityHelper.DescribeJudgements(generatorEvents)}] session=[{ManiaReplayParityHelper.DescribeJudgements(sessionEvents)}]");
@@ -340,7 +339,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             var (score, beatmap, environment) = HitModeReplayFixtures.CreateEz2AcHoldHeadPerfect();
 
             var sessionEvents = ManiaReplaySession.RunHitEvents(score, beatmap, environment);
-            var generatorEvents = ManiaScoreHitEventGenerator.Instance.Generate(score, beatmap);
+            var generatorEvents = new ManiaReplaySessionService().RunHitEventsAsync(score, beatmap).GetAwaiter().GetResult();
 
             Assert.That(ManiaReplayParityHelper.AreJudgementsEquivalent(generatorEvents, sessionEvents), Is.True,
                 () => $"generator=[{ManiaReplayParityHelper.DescribeJudgements(generatorEvents)}] session=[{ManiaReplayParityHelper.DescribeJudgements(sessionEvents)}]");

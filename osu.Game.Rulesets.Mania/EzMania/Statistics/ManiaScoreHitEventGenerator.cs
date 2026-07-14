@@ -1,38 +1,29 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using osu.Game.Beatmaps;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
-using osu.Game.Rulesets.Mania.Replays;
 using osu.Game.Rulesets.Scoring;
 using osu.Game.Scoring;
 
 namespace osu.Game.Rulesets.Mania.EzMania.Statistics
 {
     /// <summary>
-    /// Mania 成绩 <see cref="HitEvent"/> 生成器；委托 <see cref="ManiaReplaySessionService.RunHitEventsAsync"/> 作为唯一判定源。
+    /// Obsolete 薄壳：请改用 <see cref="ManiaReplaySessionService.RunHitEventsAsync"/> /
+    /// <see cref="osu.Game.EzOsuGame.Scoring.IEzReplaySession.RunHitEventsAsync"/>。
     /// </summary>
+    [Obsolete("Use ManiaReplaySessionService.RunHitEventsAsync / IEzReplaySession.RunHitEventsAsync instead.")]
     public sealed class ManiaScoreHitEventGenerator
     {
         public static ManiaScoreHitEventGenerator Instance { get; } = new ManiaScoreHitEventGenerator();
 
         private static readonly ManiaReplaySessionService session_service = new ManiaReplaySessionService();
 
-        public bool Validate(Score score)
-        {
-            if (score.ScoreInfo.Ruleset.OnlineID != 3)
-                return false;
-
-            var replay = score.Replay;
-
-            if (replay == null || replay.Frames.Count == 0)
-                return false;
-
-            return replay.Frames.All(f => f is ManiaReplayFrame);
-        }
+        public bool Validate(Score score) => ManiaReplayFrameEdgeParser.IsManiaReplay(score.Replay)
+                                            && score.ScoreInfo.Ruleset.OnlineID == 3;
 
         public List<HitEvent> Generate(Score score, IBeatmap playableBeatmap, CancellationToken cancellationToken = default)
         {
