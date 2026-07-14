@@ -122,9 +122,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
         internal static void TryO2HoldUpdate(DrawableHoldNote hold)
         {
-            var round = getJudgementRound(hold);
-
-            if (round.Environment.ManiaHitMode != EzEnumHitMode.O2Jam)
+            // 非 O2：避免每帧走 getJudgementRound（无缓存时还会 Create）。
+            if (hold.EzDrawableManiaRuleset?.JudgementRound is not { IsO2Jam: true })
                 return;
 
             var state = o2_hold_states.GetValue(hold, _ => new O2HitModeJudgement.HoldBreakState());

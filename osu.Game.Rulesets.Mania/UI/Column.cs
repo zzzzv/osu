@@ -462,8 +462,9 @@ namespace osu.Game.Rulesets.Mania.UI
             if (HitModeHelper.IsBMSHitMode(hitMode))
                 BmsHitModeJudgement.ExpandMissCollectionWindows(helper, 1, ref early, ref late);
 
-            // Keep enough history for nearest-press miss offset; floor avoids over-trimming on short maps.
-            return Math.Max(120_000, (early + late) * 4 + 10_000);
+            // Keep enough history for nearest-press miss offset (several miss windows + margin).
+            // Avoid the old 120s floor which retained ~2 minutes of presses per column at high KPS.
+            return Math.Max(15_000, (early + late) * 8 + 5_000);
         }
 
         public override bool ReceivePositionalInputAt(Vector2 screenSpacePos)

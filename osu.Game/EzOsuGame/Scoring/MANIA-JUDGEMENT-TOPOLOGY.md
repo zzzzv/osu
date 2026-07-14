@@ -182,8 +182,9 @@ flowchart TB
 |------|---------|
 | 越久越卡 | `pressTimes` 无限增长 + Miss 快照 |
 | 列多越卡 | 每列未 Judged drawable × 每帧 automiss 入口 |
-| LN 多更卡 | 存活 drawable 多 + hold Update |
-| offset 偏后 | 被动 Miss 配错 press；Fix-1 后复测 |
+| LN 多更卡 | 存活 drawable 多 + hold Update；**Empty 窗现已 defer 到 EndTime** |
+| offset 偏后（不稳/周期/非正态） | 与帧时/Present 抖同源嫌疑；**关 Race 仍矮 → 非粘档主案**；选歌掉帧与 BDSP backfill+carousel Replace 相关 |
+| 选歌 3–5s 掉帧 | `BackgroundDataStoreProcessor` 回填 + `RealmDetachedBeatmapStore` 无界 dequeue（已限流/延迟开工） |
 
 ---
 
@@ -205,3 +206,4 @@ flowchart TB
 | 2026-07-14 | 批次 5：MLPS M/N 共用；MLC/Session 直调；overlap max 窗边界缓存 |
 | 2026-07-14 | 批次 6：Generator Obsolete；Graph/测试改 RunHitEventsAsync；HitEvents BDN + 暖机延迟烟测 |
 | 2026-07-14 | 批次 7+：`ManiaReplayFrameEdgeParser`；`EzReplayFeedMode` + Race 开关（StreamByClock 不阻塞进局） |
+| 2026-07-14 | 非 Race FPS：Empty 窗 automiss defer；DetachedStore 每帧限流；BDSP 开工延迟 5s；pressTimes 保留窗收紧 |

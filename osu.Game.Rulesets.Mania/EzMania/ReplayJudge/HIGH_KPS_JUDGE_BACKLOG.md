@@ -21,7 +21,7 @@
 | **TRACE-JUDGE** | `ManiaJudgeHotPathTrace`（`IsHittable` / `CheckForResult` / O2 BPM / press 计数） | 观测 |
 | **BENCH-KPS** | `BenchmarkManiaReplaySession`：jack 80ms×4K + 三档 `JudgePrecedence` | 观测 |
 | **PERF-IDLE-PRESS** | 增量 lane index、列 press 去重、`KeyBindingInputQueue` 无 `ToList`、O2 press 无 `maniaWindows.BPM` 突变 | 全部 |
-| **AUTO-MISS-GATE** | `ManiaAutoMissGate.ShouldEvaluateAutoMiss` 未进 miss 早窗早退 | 全部 Ez |
+| **AUTO-MISS-GATE** | `ManiaAutoMissGate.ShouldEvaluateAutoMiss` 未进 miss 早窗早退；**Empty 窗（Hold/Body）至 EndTime 前也早退** | 全部 Ez |
 | **O2-PILL-1PASS** | press 路径 `PillCheckWithBpm` + `EvaluatePress(NotePressContext)` | O2Jam |
 | **MISS-STORED-OFFSET** | Drawable 被动 miss / Session end-sweep：`ResolveMissStoredOffset`（列 press 最近邻） | 全部 |
 | **FORCE-MISS-WINDOW** | Session `ForceMissEarlier` 跳过 miss 窗外物件（对齐 `IsUserTriggerJudgeableNow`）；枚举不再预写 `Judged` | Lazer/Classic + Session |

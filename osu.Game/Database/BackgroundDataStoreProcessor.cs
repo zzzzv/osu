@@ -153,6 +153,11 @@ namespace osu.Game.Database
                 {
                     Logger.Log("Beginning background data store processing..");
 
+                    // Let SongSelect settle before Invalidate storms from Ez/official backfill
+                    // (users see a 3–5s FPS cliff when unlimited carousel Replaces land in one burst).
+                    Thread.Sleep(TimeSpan.FromSeconds(5));
+                    sleepIfRequired();
+
                     clearOutdatedStarRatings();
                     clearOutdatedXxyStarRatings();
 
