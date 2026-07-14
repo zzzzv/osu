@@ -123,6 +123,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Helper
             updateRanges();
         }
 
+        // 仅在 updateWindows（冷路径）调用，直接分配即可。
         public double[] GetHitRangeList => new[] { Range305, Range300, Range200, Range100, Range050, Range000 };
 
         private void updateRanges()
@@ -633,20 +634,6 @@ namespace osu.Game.Rulesets.Mania.EzMania.Helper
                 default:
                     return valid_results_lazer_classic;
             }
-        }
-
-        /// <summary>零分配查找：供 HitWindows.IsHitResultAllowed / ResultFor 热路径。</summary>
-        public static bool IsHitResultValidForMode(EzEnumHitMode mode, HitResult result)
-        {
-            var valid = (HitResult[])GetHitModeValidHitResults(mode);
-
-            for (int i = 0; i < valid.Length; i++)
-            {
-                if (valid[i] == result)
-                    return true;
-            }
-
-            return false;
         }
 
         public static IReadOnlyList<HitResult> GetHitModeValidHitResults()

@@ -15,6 +15,7 @@ using osu.Game.Audio;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.Rulesets.Mania.EzMania.Helper;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
+using osu.Game.Rulesets.Mania.Scoring;
 using osu.Game.Rulesets.Objects;
 using osu.Game.Rulesets.Objects.Drawables;
 using osu.Game.Rulesets.Scoring;
@@ -145,8 +146,19 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
             if (Judged)
                 return true;
 
-            double timeOffset = Time.Current - HitObject.GetEndTime();
-            return !ManiaAutoMissGate.ShouldEvaluateAutoMiss(HitObject, timeOffset);
+            var hitObject = HitObject;
+            var windows = hitObject.HitWindows;
+
+            // 内联 Empty / miss-early 早退，避免每帧虚分派到 Gate 再进 helper。
+            if (windows == null || ReferenceEquals(windows, HitWindows.Empty))
+                return Time.Current < hitObject.GetEndTime();
+
+            double timeOffset = Time.Current - hitObject.GetEndTime();
+
+            if (windows is ManiaHitWindows maniaWindows)
+                return timeOffset < -maniaWindows.MissEarlyWindow;
+
+            return !ManiaAutoMissGate.ShouldEvaluateAutoMiss(hitObject, timeOffset);
         }
 
         /// <summary>

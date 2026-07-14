@@ -161,7 +161,7 @@ flowchart TB
 - Bench：`BenchmarkManiaReplaySession.BenchmarkRunHitEventsAsync`；暖机延迟烟测 `ManiaRunHitEventsLatencyTest`。
 - **DRAWABLE-MICRO-BENCH**：`ManiaLaneHotPathWorkload` / `ManiaLaneHotPathMicroBenchTest` / `BenchmarkManiaLaneHotPath`（10 列 × PeakKps × alive/col 8/24/40；Select+Gate+pressTimes，**不含** SwapBuffer）。
   - **gate 调用量主导**墙钟；CPU 随 alive 近似线性。
-  - Combo/Duration 曾因 (1) 每按 `new List`/Sort/`Func`、(2) `IsHitResultAllowed`→`GetHitModeValidHitResults` **每次 `new[]`**（经 `ResultFor`/`SelectFold` 放大）抬高 alloc；已改为 scratch + 静态表 + `IsHitResultValidForMode`。实测 Combo dense ~45 B/press（此前 ~1.8 KB）。
+  - Combo/Duration 曾因 (1) 每按 `new List`/Sort/`Func`、(2) `IsHitResultAllowed`→`GetHitModeValidHitResults` **每次 `new[]`**（经 `ResultFor`/`SelectFold` 放大）抬高 alloc；已改为 scratch + **静态表**（`GetHitModeValidHitResults` 常量数组，`IsHitResultAllowed` 直接扫静态表；曾加的 `IsHitResultValidForMode` switch 副本属冗余步骤，已删）。实测 Combo dense ~45 B/press（此前 ~1.8 KB）。
   - 可测排除：`ManiaAutoMissGateTest`（Empty defer）；Empty-hold gateTrue==0；BMS/Poor Select alloc；`HitModeValidResultsAllocTest`；`DetachedBeatmapStoreFrameBudget` Drain≤24/帧；BDSP `StartupBackfillDelay`=5s（测试覆写 0）。
 
 ---
@@ -187,8 +187,9 @@ flowchart TB
 | 越久越卡 | `pressTimes` 无限增长 + Miss 快照 |
 | 列多越卡 | 每列未 Judged drawable × 每帧 automiss 入口 |
 | LN 多更卡 | 存活 drawable 多 + hold Update；**Empty 窗现已 defer 到 EndTime** |
-| offset 偏后（不稳/周期/非正态） | 与帧时/Present 抖同源嫌疑；**关 Race 仍矮 → 非粘档主案**；选歌掉帧与 BDSP backfill+carousel Replace 相关 |
-| 选歌 3–5s 掉帧 | `BackgroundDataStoreProcessor` 回填 + `RealmDetachedBeatmapStore` 无界 dequeue（已限流/延迟开工） |
+| offset 偏后（不稳/周期/非正态） | 与帧时/Present 抖同源嫌疑；选歌掉帧另线 |
+| **关 Race 冷启仍 ~500（历史 ~1300）** | **判定拓扑批次回归**（Fix-2 Gate / ResultFor 热路径），**非** Race 粘档、非 ColumnBlur/分析 |
+| 选歌 3–5s 掉帧 | `BackgroundDataStoreProcessor` 回填 + `RealmDetachedBeatmapStore` Replace（已限流/延迟；与局内 500 分轨） |
 
 ---
 
@@ -213,3 +214,4 @@ flowchart TB
 | 2026-07-14 | 非 Race FPS：Empty 窗 automiss defer；DetachedStore 每帧限流；BDSP 开工延迟 5s；pressTimes 保留窗收紧 |
 | 2026-07-14 | MICRO-BENCH：alive 扫描 + Select overlap scratch / Func 缓存；`GetHitModeValidHitResults` 静态表（斩 ResultFor 热路径 `new[]`） |
 | 2026-07-14 | 可测排除加固：AutoMissGate / Empty defer；BMS/Poor alloc；DetachedStore Drain≤24；BDSP StartupDelay 可覆写 |
+| 2026-07-14 | 局内 500 回归：烘焙 `MissEarlyWindow`；ShouldDefer 内联；去双重 Gate；`IsHitResultValidForMode` O(1) switch |

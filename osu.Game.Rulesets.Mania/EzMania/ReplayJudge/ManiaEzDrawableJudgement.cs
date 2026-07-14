@@ -204,8 +204,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
             var round = getJudgementRound(drawable);
 
-            if (!userTriggered && !ManiaAutoMissGate.ShouldEvaluateAutoMiss(drawable.HitObject, timeOffset))
-                return true;
+            // UpdateResult(false) 已通过 ShouldDeferAutoMissUpdate；勿再调 Gate（曾每帧 WindowFor）。
+            // 用户按键路径仍可能走 UpdateResult(true)，Gate 不适用。
 
             if (!round.IsEzHitMode || round.Strategy == null)
                 return false;
@@ -242,8 +242,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
             var round = getJudgementRound(drawable);
 
-            if (!userTriggered && !ManiaAutoMissGate.ShouldEvaluateAutoMiss(drawable.HitObject, timeOffset))
-                return true;
+            // 同 Note：automiss 已在 ShouldDefer 过滤。
 
             if (!round.IsEzHitMode)
                 return false;

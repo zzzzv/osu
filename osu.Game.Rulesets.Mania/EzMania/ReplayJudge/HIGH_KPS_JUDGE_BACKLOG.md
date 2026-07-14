@@ -102,3 +102,4 @@ flowchart LR
 | 2026-07-14 | `DRAWABLE-MICRO-BENCH`：10 列叠 LN PeakKps 20/50/100（Select/Gate/pressTimes，不含 SwapBuffer） |
 | 2026-07-14 | MICRO-BENCH 加深：alive 扫描；MLC scratch / Select Func；`HitModeHelper` valid 表静态化（ResultFor 零分配） |
 | 2026-07-14 | 可测排除：AutoMissGate / BMS-Poor bench / FrameBudget Drain / BDSP delay 覆写 |
+| 2026-07-14 | 局内 FPS 回归：MissEarly 烘焙 + ShouldDefer 内联 + ResultFor valid O(1)；二分基线 `f161089f75^` |

@@ -15,7 +15,6 @@ using osu.Game.EzOsuGame.Configuration;
 using osu.Game.Rulesets.Mania.Configuration;
 using osu.Game.Rulesets.Mania.Skinning.Default;
 using osu.Game.Rulesets.Mania.EzMania.Helper;
-using osu.Game.Rulesets.Mania.EzMania.Diagnostics;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
 using osu.Game.Rulesets.Scoring;
 using osu.Game.Rulesets.UI.Scrolling;
@@ -88,9 +87,6 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
 
         protected override void CheckForResult(bool userTriggered, double timeOffset)
         {
-            if (!userTriggered)
-                ManiaJudgeHotPathTrace.RecordCheckForResult();
-
             if (ManiaEzDrawableJudgement.TryHitModeCheckForResult(this, userTriggered, timeOffset))
                 return;
 

@@ -7,6 +7,7 @@ using osu.Game.Beatmaps.ControlPoints;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
 using osu.Game.Rulesets.Mania.Objects;
+using osu.Game.Rulesets.Mania.Objects.Drawables;
 using osu.Game.Rulesets.Mania.Scoring;
 using osu.Game.Rulesets.Scoring;
 
@@ -43,6 +44,7 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             Assert.That(ManiaAutoMissGate.ShouldEvaluateAutoMiss(note, -missEarly - 1), Is.False);
             Assert.That(ManiaAutoMissGate.ShouldEvaluateAutoMiss(note, -missEarly), Is.True);
             Assert.That(ManiaAutoMissGate.ShouldEvaluateAutoMiss(note, 0), Is.True);
+            Assert.That(((ManiaHitWindows)note.HitWindows).MissEarlyWindow, Is.EqualTo(missEarly));
         }
 
         [Test]
@@ -59,6 +61,26 @@ namespace osu.Game.Rulesets.Mania.Tests.EzMania.ReplayJudge
             }
 
             Assert.That(ManiaAutoMissGate.ShouldEvaluateAutoMiss(hold, 0), Is.True);
+        }
+
+        [Test]
+        public void MissEarlyWindowMatchesWindowForApi()
+        {
+            var note = new Note
+            {
+                StartTime = 1000,
+                HitWindows = new ManiaHitWindows(EzEnumHitMode.IIDX_HD)
+            };
+            note.HitWindows.SetDifficulty(8);
+
+            var mania = (ManiaHitWindows)note.HitWindows;
+            Assert.That(mania.MissEarlyWindow, Is.EqualTo(mania.WindowFor(HitResult.Miss, true)));
+            Assert.That(mania.MissLateWindow, Is.EqualTo(mania.WindowFor(HitResult.Miss, false)));
+
+            // Drawables.Apply 仅用于确认烘焙值在 Apply 后仍可用。
+            var drawable = new DrawableNote();
+            drawable.Apply(note);
+            Assert.That(((ManiaHitWindows)note.HitWindows).MissEarlyWindow, Is.GreaterThan(0));
         }
     }
 }
