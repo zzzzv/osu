@@ -16,10 +16,13 @@ namespace osu.Game.EzOsuGame.Overlays.Preview
             ManiaPreviewColumnLayout layout,
             ManiaPreviewData data,
             int totalRows,
-            float panelHeight)
+            float panelHeight,
+            ManiaPreviewThemeStyle theme)
         {
             float laneLineThickness = Math.Max(0.5f, layout.ColumnWidth * 0.004f);
-            float beatLineThickness = Math.Max(0.5f, layout.RowStep * 0.08f);
+            float rowLineThickness = Math.Max(0.5f, layout.RowStep * theme.RowLineThicknessRatio);
+            int rowLineInterval = Math.Max(1, theme.RowLineInterval);
+            float noteHeight = resolveNoteHeight(layout, theme, data.TotalColumns);
 
             for (int col = 0; col < layout.ColumnCount; col++)
             {
@@ -28,17 +31,23 @@ namespace osu.Game.EzOsuGame.Overlays.Preview
                 int rowEnd = Math.Min(totalRows, rowStart + layout.RowsPerColumn);
 
                 // 轨道区底色：轻微提亮，与预览背景区分。
-                quads.Add(new PreviewQuad(panelX, 0, layout.ColumnWidth, panelHeight, Color4.White.Opacity(0.01f)));
-                quads.Add(new PreviewQuad(panelX, 0, 1f, panelHeight, Color4.White.Opacity(0.18f)));
-                quads.Add(new PreviewQuad(panelX + layout.ColumnWidth - 1f, 0, 1f, panelHeight, Color4.White.Opacity(0.18f)));
+                if (theme.ShowColumnBackground)
+                    quads.Add(new PreviewQuad(panelX, 0, layout.ColumnWidth, panelHeight, Color4.White.Opacity(0.01f)));
 
-                ManiaPreviewDrawHelper.AddLaneLines(quads, data, panelX, layout.ColumnWidth, panelHeight, laneLineThickness);
+                if (theme.ShowColumnBorders)
+                {
+                    quads.Add(new PreviewQuad(panelX, 0, 1f, panelHeight, theme.ColumnBorderColour));
+                    quads.Add(new PreviewQuad(panelX + layout.ColumnWidth - 1f, 0, 1f, panelHeight, theme.ColumnBorderColour));
+                }
 
-                for (int row = rowStart + ManiaPreviewFixedLayout.ROWS_PER_BEAT; row <= rowEnd; row += ManiaPreviewFixedLayout.ROWS_PER_BEAT)
+                if (theme.ShowLaneSeparators)
+                    ManiaPreviewDrawHelper.AddLaneLines(quads, data, panelX, layout.ColumnWidth, panelHeight, laneLineThickness, theme.LaneSeparatorColour);
+
+                for (int row = rowStart + rowLineInterval; row <= rowEnd; row += rowLineInterval)
                 {
                     int localRow = row - rowStart;
-                    float y = ManiaPreviewDrawHelper.GetSlotBottomY(localRow, layout.RowStep, panelHeight) - beatLineThickness * 0.5f;
-                    quads.Add(new PreviewQuad(panelX, y, layout.ColumnWidth, beatLineThickness, Color4.White.Opacity(0.2f)));
+                    float y = ManiaPreviewDrawHelper.GetSlotBottomY(localRow, layout.RowStep, panelHeight) - rowLineThickness * 0.5f;
+                    quads.Add(new PreviewQuad(panelX, y, layout.ColumnWidth, rowLineThickness, theme.RowLineColour));
                 }
             }
 
@@ -80,11 +89,31 @@ namespace osu.Game.EzOsuGame.Overlays.Preview
                     layout.ColumnWidth,
                     panelHeight,
                     layout.RowStep,
-                    layout.NoteHeight,
-                    flatNotes: false,
+                    noteHeight,
+                    theme,
                     columnStart,
                     msPerRow);
             }
+        }
+
+        /// <summary>
+        /// 内容空间里的 note 厚度。主题给了高度比例时按「头宽 × 比例」算，不同键数下长宽比一致；
+        /// 再按内容→屏幕的纵向缩放保证不低于主题要求的屏幕高度。
+        /// </summary>
+        private static float resolveNoteHeight(in ManiaPreviewColumnLayout layout, ManiaPreviewThemeStyle theme, int totalColumns)
+        {
+            // 这里的 ColumnWidth 是整个小节栏的宽度，单列宽度要再除以键数。
+            float headWidth = layout.ColumnWidth / Math.Max(1, totalColumns) * theme.NoteWidthRatio;
+
+            float noteHeight = theme.NoteHeightRatio is float ratio
+                ? headWidth * ratio
+                : layout.NoteHeight;
+
+            if (theme.MinNoteScreenHeight <= 0)
+                return noteHeight;
+
+            float verticalScale = layout.FitScale > 0 ? layout.FitScale : 1f;
+            return Math.Max(noteHeight, theme.MinNoteScreenHeight / verticalScale);
         }
     }
 }

@@ -122,8 +122,10 @@ namespace osu.Game.EzOsuGame.Overlays
         private Drawable? pendingPreviewRoot;
         private DrawableRuleset? drawableRuleset;
         private IManiaStaticPreviewRenderer? maniaStaticRenderer;
+        private ManiaPreviewThemeStyle? appliedTheme;
         private PreviewDensityController? densityController;
         private Bindable<double> previewDensity = null!;
+        private Ez2ConfigManager ezConfig = null!;
         private Bindable<EzBeatmapPreviewMode> sharedPreviewModeConfig = null!;
         private Bindable<EzBeatmapPreviewMode> maniaPreviewModeConfig = null!;
         private Bindable<Size>? previewPanelSizeConfig;
@@ -211,7 +213,9 @@ namespace osu.Game.EzOsuGame.Overlays
                                 Colour = Color4.CornflowerBlue,
                                 Anchor = Anchor.TopRight,
                                 Origin = Anchor.TopRight,
-                                Margin = new MarginPadding { Top = 8, Right = 8 }
+                                Margin = new MarginPadding { Top = 8, Right = 8 },
+                                // 主题底色会铺满预览视口，文字要压在舞台层之上。
+                                Depth = float.MinValue
                             },
                             previewModeButtonList = new FillFlowContainer
                             {
@@ -367,6 +371,7 @@ namespace osu.Game.EzOsuGame.Overlays
             sharedPreviewModeConfig = ezConfig.GetBindable<EzBeatmapPreviewMode>(Ez2Setting.BeatmapPreviewMode);
             maniaPreviewModeConfig = ezConfig.GetBindable<EzBeatmapPreviewMode>(Ez2Setting.BeatmapPreviewModeMania);
             previewDensity = ezConfig.GetBindable<double>(Ez2Setting.BeatmapPreviewDensity);
+            this.ezConfig = ezConfig;
             previewPanelSizeConfig = ezConfig.GetBindable<Size>(Ez2Setting.BeatmapPreviewPanelSize);
             restoredPanelSize = previewPanelSizeConfig.Value;
             panelSizeRestorePending = restoredPanelSize.Width > 0 || restoredPanelSize.Height > 0;
@@ -783,6 +788,7 @@ namespace osu.Game.EzOsuGame.Overlays
 
             if (customManiaStaticMode && maniaStaticRenderer != null)
             {
+                syncManiaStaticPreviewTheme();
                 maniaStaticRenderer.SetDensity((float)previewDensity.Value);
                 return;
             }
@@ -1481,6 +1487,27 @@ namespace osu.Game.EzOsuGame.Overlays
             updateProgressDisplay(previewClock.CurrentTime);
         }
 
+        private ManiaPreviewThemeStyle resolvePreviewTheme()
+            => ManiaPreviewThemes.Resolve(ezConfig.Get<EzBeatmapPreviewNoteTheme>(Ez2Setting.BeatmapPreviewNoteTheme));
+
+        /// <summary>
+        /// 预览打开期间设置面板可能改了主题。这里按帧直接读配置（只做字典查找与引用比较，无分配），
+        /// 改完当帧就生效，不需要重开预览或重进选歌界面。
+        /// </summary>
+        private void syncManiaStaticPreviewTheme()
+        {
+            if (maniaStaticRenderer == null)
+                return;
+
+            ManiaPreviewThemeStyle theme = resolvePreviewTheme();
+
+            if (ReferenceEquals(appliedTheme, theme))
+                return;
+
+            appliedTheme = theme;
+            maniaStaticRenderer.SetTheme(theme);
+        }
+
         private void updatePreviewModeButtons()
         {
             var modes = EzBeatmapPreviewModes.GetAvailableModes(currentRuleset);
@@ -1513,6 +1540,9 @@ namespace osu.Game.EzOsuGame.Overlays
             if (renderer == null)
                 return;
 
+            // 先给主题再塞数据：主题变化会在 renderer 内部触发重建，这里只需要一次。
+            appliedTheme = resolvePreviewTheme();
+            renderer.SetTheme(appliedTheme);
             renderer.SetData(data);
             renderer.SetDensity((float)previewDensity.Value);
             renderer.SetCurrentTime(previewClock.CurrentTime);

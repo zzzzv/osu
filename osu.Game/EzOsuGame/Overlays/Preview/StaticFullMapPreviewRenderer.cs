@@ -5,12 +5,15 @@ using System;
 using System.Collections.Generic;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
+using osu.Framework.Graphics.Shapes;
 using osuTK;
+using osuTK.Graphics;
 
 namespace osu.Game.EzOsuGame.Overlays.Preview
 {
     public partial class StaticFullMapPreviewRenderer : CompositeDrawable, IManiaStaticPreviewRenderer
     {
+        private readonly Box backgroundBox;
         private readonly Container scaleContainer;
         private readonly Container content;
         private readonly ManiaPreviewBatchDrawable batchDrawable;
@@ -18,6 +21,7 @@ namespace osu.Game.EzOsuGame.Overlays.Preview
         private ManiaPreviewData data;
         private List<ManiaPreviewLayoutEntry> layoutEntries = new List<ManiaPreviewLayoutEntry>();
         private ManiaPreviewColumnLayout layout;
+        private ManiaPreviewThemeStyle theme = ManiaPreviewThemes.Plain;
 
         private int totalRows = 1;
         private bool hasData;
@@ -30,19 +34,33 @@ namespace osu.Game.EzOsuGame.Overlays.Preview
             RelativeSizeAxes = Axes.Both;
             Masking = true;
 
-            InternalChild = scaleContainer = new Container
+            InternalChild = new Container
             {
-                Anchor = Anchor.Centre,
-                Origin = Anchor.Centre,
                 RelativeSizeAxes = Axes.Both,
-                Child = content = new Container
+                Children = new Drawable[]
                 {
-                    Anchor = Anchor.Centre,
-                    Origin = Anchor.Centre,
-                    RelativeSizeAxes = Axes.None,
-                    Child = batchDrawable = new ManiaPreviewBatchDrawable
+                    // 主题底色铺满整个视口，不随内容缩放，避免缩放后露边。
+                    backgroundBox = new Box
                     {
-                        RelativeSizeAxes = Axes.None,
+                        RelativeSizeAxes = Axes.Both,
+                        Colour = Color4.Black,
+                        Alpha = 0,
+                    },
+                    scaleContainer = new Container
+                    {
+                        Anchor = Anchor.Centre,
+                        Origin = Anchor.Centre,
+                        RelativeSizeAxes = Axes.Both,
+                        Child = content = new Container
+                        {
+                            Anchor = Anchor.Centre,
+                            Origin = Anchor.Centre,
+                            RelativeSizeAxes = Axes.None,
+                            Child = batchDrawable = new ManiaPreviewBatchDrawable
+                            {
+                                RelativeSizeAxes = Axes.None,
+                            }
+                        }
                     }
                 }
             };
@@ -53,7 +71,6 @@ namespace osu.Game.EzOsuGame.Overlays.Preview
             base.UpdateAfterChildren();
 
             if (hasData && (DrawWidth != lastWidth || DrawHeight != lastHeight))
-
                 rebuild();
         }
 
@@ -80,14 +97,31 @@ namespace osu.Game.EzOsuGame.Overlays.Preview
             rebuild();
         }
 
+        public void SetTheme(ManiaPreviewThemeStyle theme)
+        {
+            if (ReferenceEquals(this.theme, theme))
+                return;
+
+            this.theme = theme;
+            applyThemeBackground();
+            rebuild();
+        }
+
         public void SetZoom(bool zoomed)
         {
+        }
+
+        private void applyThemeBackground()
+        {
+            Color4? colour = theme.BackgroundColour;
+
+            backgroundBox.Colour = colour ?? Color4.Black;
+            backgroundBox.Alpha = colour?.A ?? 0;
         }
 
         private void rebuild()
         {
             if (DrawWidth <= 1 || DrawHeight <= 1)
-
                 return;
 
             lastWidth = DrawWidth;
@@ -112,7 +146,7 @@ namespace osu.Game.EzOsuGame.Overlays.Preview
 
             var quads = new List<PreviewQuad>(layoutEntries.Count + layout.ColumnCount * (data.TotalColumns + layout.RowsPerColumn));
 
-            ManiaPreviewColumnRenderer.BuildColumnPanels(quads, layoutEntries, layout, data, totalRows, layout.PanelHeight);
+            ManiaPreviewColumnRenderer.BuildColumnPanels(quads, layoutEntries, layout, data, totalRows, layout.PanelHeight, theme);
 
             batchDrawable.SetQuads(quads);
         }

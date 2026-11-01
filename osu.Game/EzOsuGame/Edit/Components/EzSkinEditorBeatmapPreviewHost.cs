@@ -39,12 +39,14 @@ namespace osu.Game.EzOsuGame.Edit.Components
 
         private DrawableRuleset? drawableRuleset;
         private IManiaStaticPreviewRenderer? maniaStaticRenderer;
+        private ManiaPreviewThemeStyle? appliedTheme;
         private CancellationTokenSource? loadCancellation;
 
         private IBeatmap? playableBeatmap;
         private RulesetInfo? rulesetInfo;
         private EzBeatmapPreviewMode previewMode;
         private Bindable<EzBeatmapPreviewMode>? previewModeBindable;
+        private Ez2ConfigManager? ezConfig;
 
         public double BeatmapMinTime { get; private set; }
 
@@ -66,8 +68,11 @@ namespace osu.Game.EzOsuGame.Edit.Components
         }
 
         [BackgroundDependencyLoader]
-        private void load()
+        private void load(Ez2ConfigManager ezConfig)
         {
+            // 主题按帧直接读配置，设置面板改完立即生效。
+            this.ezConfig = ezConfig;
+
             if (context.PreviewState != null)
             {
                 previewModeBindable = context.PreviewState.Mode.GetBoundCopy();
@@ -210,6 +215,8 @@ namespace osu.Game.EzOsuGame.Edit.Components
             if (renderer == null)
                 return;
 
+            appliedTheme = resolvePreviewTheme();
+            renderer.SetTheme(appliedTheme);
             renderer.SetData(data);
             renderer.SetCurrentTime(previewClock.CurrentTime);
 
@@ -222,12 +229,31 @@ namespace osu.Game.EzOsuGame.Edit.Components
             drawableRuleset = null;
         }
 
+        private ManiaPreviewThemeStyle resolvePreviewTheme()
+            => ManiaPreviewThemes.Resolve(ezConfig?.Get<EzBeatmapPreviewNoteTheme>(Ez2Setting.BeatmapPreviewNoteTheme) ?? EzBeatmapPreviewNoteTheme.Plain);
+
+        private void syncManiaStaticPreviewTheme()
+        {
+            if (maniaStaticRenderer == null)
+                return;
+
+            ManiaPreviewThemeStyle theme = resolvePreviewTheme();
+
+            if (ReferenceEquals(appliedTheme, theme))
+                return;
+
+            appliedTheme = theme;
+            maniaStaticRenderer.SetTheme(theme);
+        }
+
         private bool isDynamicPlayback =>
             (previewModeBindable?.Value ?? previewMode) == EzBeatmapPreviewMode.Dynamic;
 
         protected override void Update()
         {
             base.Update();
+
+            syncManiaStaticPreviewTheme();
 
             if (isDynamicPlayback && drawableRuleset != null && previewClock.IsRunning && previewClock.CurrentTime >= BeatmapMaxTime)
                 previewClock.Seek(BeatmapMinTime);

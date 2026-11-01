@@ -45,5 +45,7 @@ namespace osu.Game.EzOsuGame.Overlays.Preview
         void SetCurrentTime(double time);
 
         void SetDensity(float density);
+
+        void SetTheme(ManiaPreviewThemeStyle theme);
     }
 }

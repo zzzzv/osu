@@ -5,18 +5,23 @@ using System;
 using System.Collections.Generic;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
+using osu.Framework.Graphics.Shapes;
 using osuTK;
+using osuTK.Graphics;
 
 namespace osu.Game.EzOsuGame.Overlays.Preview
 {
     public partial class StaticScrollPreviewRenderer : CompositeDrawable, IManiaStaticPreviewRenderer
     {
+        private readonly Box backgroundBox;
         private readonly Container content;
         private readonly ManiaPreviewBatchDrawable batchDrawable;
 
         private ManiaPreviewData data;
         private List<ManiaPreviewLayoutEntry> layoutEntries = new List<ManiaPreviewLayoutEntry>();
         private ManiaPreviewColumnLayout layout;
+        private ManiaPreviewThemeStyle theme = ManiaPreviewThemes.Plain;
+
         private int totalRows = 1;
         private bool hasData;
         private float density = 1f;
@@ -30,13 +35,27 @@ namespace osu.Game.EzOsuGame.Overlays.Preview
             RelativeSizeAxes = Axes.Both;
             Masking = true;
 
-            InternalChild = content = new Container
+            InternalChild = new Container
             {
-                RelativeSizeAxes = Axes.Y,
-                AutoSizeAxes = Axes.X,
-                Child = batchDrawable = new ManiaPreviewBatchDrawable
+                RelativeSizeAxes = Axes.Both,
+                Children = new Drawable[]
                 {
-                    RelativeSizeAxes = Axes.None,
+                    // 底色铺满视口，横向滚动时不会露边。
+                    backgroundBox = new Box
+                    {
+                        RelativeSizeAxes = Axes.Both,
+                        Colour = Color4.Black,
+                        Alpha = 0,
+                    },
+                    content = new Container
+                    {
+                        RelativeSizeAxes = Axes.Y,
+                        AutoSizeAxes = Axes.X,
+                        Child = batchDrawable = new ManiaPreviewBatchDrawable
+                        {
+                            RelativeSizeAxes = Axes.None,
+                        }
+                    }
                 }
             };
         }
@@ -80,6 +99,16 @@ namespace osu.Game.EzOsuGame.Overlays.Preview
             rebuild();
         }
 
+        public void SetTheme(ManiaPreviewThemeStyle theme)
+        {
+            if (ReferenceEquals(this.theme, theme))
+                return;
+
+            this.theme = theme;
+            applyThemeBackground();
+            rebuild();
+        }
+
         public void AdjustScroll(float delta)
         {
             float maxOffset = getMaxScrollOffset();
@@ -98,6 +127,14 @@ namespace osu.Game.EzOsuGame.Overlays.Preview
         {
             float maxOffset = getMaxScrollOffset();
             return maxOffset > 0 ? scrollOffset / maxOffset : 0;
+        }
+
+        private void applyThemeBackground()
+        {
+            Color4? colour = theme.BackgroundColour;
+
+            backgroundBox.Colour = colour ?? Color4.Black;
+            backgroundBox.Alpha = colour?.A ?? 0;
         }
 
         private float getMaxScrollOffset() => Math.Max(0, content.DrawWidth - DrawWidth);
@@ -123,7 +160,7 @@ namespace osu.Game.EzOsuGame.Overlays.Preview
             batchDrawable.Size = new Vector2(layout.ContentWidth, DrawHeight);
 
             var quads = new List<PreviewQuad>(layoutEntries.Count + layout.ColumnCount * (data.TotalColumns + layout.RowsPerColumn));
-            ManiaPreviewColumnRenderer.BuildColumnPanels(quads, layoutEntries, layout, data, totalRows, DrawHeight);
+            ManiaPreviewColumnRenderer.BuildColumnPanels(quads, layoutEntries, layout, data, totalRows, DrawHeight, theme);
 
             batchDrawable.SetQuads(quads);
             scrollOffset = Math.Clamp(scrollOffset, 0, getMaxScrollOffset());
