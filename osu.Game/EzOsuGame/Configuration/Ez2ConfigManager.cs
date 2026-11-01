@@ -166,6 +166,7 @@ namespace osu.Game.EzOsuGame.Configuration
             SetDefault(Ez2Setting.BeatmapPreviewMode, EzBeatmapPreviewMode.Static);
             SetDefault(Ez2Setting.BeatmapPreviewModeMania, EzBeatmapPreviewMode.StaticFullMap);
             SetDefault(Ez2Setting.BeatmapPreviewDensity, 1.0, 0.1, 5.0, 0.05);
+            SetDefault(Ez2Setting.BeatmapPreviewNoteTheme, EzBeatmapPreviewNoteTheme.Plain);
             // 宽或高 <= 0 表示对应轴未手动调整，打开时使用默认宽度 / 最大高度。
             SetDefault(Ez2Setting.BeatmapPreviewPanelSize, new Size(-1, -1), null);
             SetDefault(Ez2Setting.EditorSyncTimelineSpacing, true);
@@ -1214,6 +1215,9 @@ namespace osu.Game.EzOsuGame.Configuration
         BeatmapPreviewMode,
         BeatmapPreviewModeMania,
         BeatmapPreviewDensity,
+
+        /// <summary>mania 全图 / 卷轴模式下 note 与 LN 的外观主题。</summary>
+        BeatmapPreviewNoteTheme,
 
         /// <summary>已手动调整的谱面预览面板尺寸（像素，分量 &lt;= 0 = 该轴未调整）。</summary>
         BeatmapPreviewPanelSize,

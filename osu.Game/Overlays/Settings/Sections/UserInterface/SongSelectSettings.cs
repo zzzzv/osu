@@ -6,6 +6,8 @@ using osu.Framework.Graphics;
 using osu.Framework.Graphics.UserInterface;
 using osu.Framework.Localisation;
 using osu.Game.Configuration;
+using osu.Game.EzOsuGame.Configuration;
+using osu.Game.EzOsuGame.Localization;
 using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Localisation;
 using osu.Game.Overlays.Mods.Input;
@@ -17,7 +19,7 @@ namespace osu.Game.Overlays.Settings.Sections.UserInterface
         protected override LocalisableString Header => UserInterfaceStrings.SongSelectHeader;
 
         [BackgroundDependencyLoader]
-        private void load(OsuConfigManager config)
+        private void load(OsuConfigManager config, Ez2ConfigManager ezConfig)
         {
             Children = new Drawable[]
             {
@@ -55,6 +57,15 @@ namespace osu.Game.Overlays.Settings.Sections.UserInterface
                     Caption = GameplaySettingsStrings.BackgroundBlur,
                     Current = config.GetBindable<bool>(OsuSetting.SongSelectBackgroundBlur),
                 }),
+                new SettingsItemV2(new FormEnumDropdown<EzBeatmapPreviewNoteTheme>
+                {
+                    Caption = EzSettingsStrings.PREVIEW_NOTE_THEME,
+                    HintText = EzSettingsStrings.PREVIEW_NOTE_THEME_TOOLTIP,
+                    Current = ezConfig.GetBindable<EzBeatmapPreviewNoteTheme>(Ez2Setting.BeatmapPreviewNoteTheme),
+                })
+                {
+                    Keywords = new[] { "preview", "theme", "note", "ln", "hold", "mania", "预览", "主题", "谱面" }
+                },
             };
         }
     }

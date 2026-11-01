@@ -97,6 +97,13 @@ namespace osu.Game.EzOsuGame.Localization
             "开启后，选歌界面沿用主页背景，不再单独铺当前谱面的背景。主页来源是图片、视频或 Pixiv 时，选歌看到的是同一套。",
             "When enabled, song select keeps the main menu background instead of loading the current beatmap background. Picture, video and Pixiv sources match the menu.");
 
+        public static readonly EzLocalizationManager.EzLocalisableString PREVIEW_NOTE_THEME =
+            new EzLocalizationManager.EzLocalisableString("预览主题", "Preview theme");
+
+        public static readonly EzLocalizationManager.EzLocalisableString PREVIEW_NOTE_THEME_TOOLTIP = new EzLocalizationManager.EzLocalisableString(
+            "选歌界面里 mania 全图预览与卷轴预览的 note、LN 外观。静态预览与动态预览使用谱面皮肤，不受影响。",
+            "Note and hold appearance in the song select mania full-map and scroll previews. Static and dynamic previews use the beatmap skin and are unaffected.");
+
         public static readonly EzLocalizationManager.EzLocalisableString HIDE_MAIN_MENU_ONLINE_BANNER =
             new EzLocalizationManager.EzLocalisableString("屏蔽主界面底部新闻广告", "Hide main menu bottom news banner");
 

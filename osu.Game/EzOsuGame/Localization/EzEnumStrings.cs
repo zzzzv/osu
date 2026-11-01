@@ -25,6 +25,9 @@ namespace osu.Game.EzOsuGame.Localization
         public static readonly LocalisableString STATIC_FULL_MAP = new EzLocalizationManager.EzLocalisableString("全图预览", "Full-map Preview");
         public static readonly LocalisableString STATIC_SCROLL = new EzLocalizationManager.EzLocalisableString("卷轴预览", "Scroll Preview");
 
+        public static readonly LocalisableString PREVIEW_THEME_PLAIN = new EzLocalizationManager.EzLocalisableString("朴素", "Plain");
+        public static readonly LocalisableString PREVIEW_THEME_CLASSIC = new EzLocalizationManager.EzLocalisableString("经典", "Classic");
+
         public static readonly LocalisableString JUDGE_PRECEDENCE_COMBO = new EzLocalizationManager.EzLocalisableString("Combo优先(LR2风格)", "By Combo");
         public static readonly LocalisableString JUDGE_PRECEDENCE_DURATION = new EzLocalizationManager.EzLocalisableString("时差优先(raja风格)", "By Duration");
         public static readonly LocalisableString JUDGE_PRECEDENCE_EARLIEST = new EzLocalizationManager.EzLocalisableString("最早note优先(osu风格)", "By Earliest Note");

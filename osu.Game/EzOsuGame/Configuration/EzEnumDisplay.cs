@@ -48,6 +48,15 @@ namespace osu.Game.EzOsuGame.Configuration
         StaticScroll,
     }
 
+    public enum EzBeatmapPreviewNoteTheme
+    {
+        [LocalisableDescription(typeof(EzEnumStrings), nameof(EzEnumStrings.PREVIEW_THEME_PLAIN))]
+        Plain,
+
+        [LocalisableDescription(typeof(EzEnumStrings), nameof(EzEnumStrings.PREVIEW_THEME_CLASSIC))]
+        Classic,
+    }
+
     public enum EzEffectType
     {
         [LocalisableDescription(typeof(EzEnumStrings), nameof(EzEnumStrings.SCALE))]
